@@ -12,25 +12,25 @@
        下：操作エリア（左＝移動スティック／右＝照準・発射・地雷）
      ============================================================ */
   :root{
-    --bg-deep:#1c2416;
-    --bg-mid:#2b3620;
-    --olive:#5b7a3a;
-    --olive-dark:#3d5426;
-    --brick:#a8532f;
-    --brick-dark:#7a3a1f;
-    --steel:#8b93a0;
-    --steel-dark:#5a6270;
-    --amber:#e0a63a;
-    --paper:#e9e2c9;
-    --blood:#c0392b;
-    --mine:#c0392b;
+    --bg-deep:#ffd9ec;
+    --bg-mid:#e3d9ff;
+    --olive:#ffb3d9;
+    --olive-dark:#ff8fc4;
+    --brick:#ffcf9e;
+    --brick-dark:#ffb877;
+    --steel:#c9baf5;
+    --steel-dark:#a898e0;
+    --amber:#ffcf6b;
+    --paper:#7a5c8a;
+    --blood:#ff6f91;
+    --mine:#ff6f91;
   }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{
     margin:0; padding:0; width:100%; height:100%;
-    background:#0d1209;
+    background:linear-gradient(160deg,#ffe3f3 0%,#f0e0ff 45%,#dcebff 100%);
     overflow:hidden;
-    font-family:'Courier New', monospace;
+    font-family:'Hiragino Maru Gothic ProN','Rounded Mplus 1c','Yu Gothic','Comic Sans MS',sans-serif;
     touch-action:none;
     overscroll-behavior:none;
     user-select:none;
@@ -46,28 +46,28 @@
     position:relative;
     flex:0 0 58%;         /* ★画面上部の割合。数値を変えると縦の比率が変わる */
     min-height:0;
-    background:#0a0d06;
+    background:#fff0f8;
     display:flex; align-items:center; justify-content:center;
-    border-bottom:3px solid #000;
+    border-bottom:4px solid #ffd1ea;
   }
-  canvas{ display:block; touch-action:none; background:#3a4326; }
+  canvas{ display:block; touch-action:none; background:#ffeef7; border-radius:14px; }
 
   /* ---- 下段：操作エリア ---- */
   #controls{
     flex:1 1 auto;
     display:flex;
-    background:#161c0f;
+    background:#fff6fb;
   }
   .zone{
     flex:1 1 50%;
     position:relative;
     display:flex; align-items:flex-start; justify-content:center;
-    border-top:1px solid rgba(233,226,201,0.08);
+    border-top:1px solid rgba(255,150,205,0.18);
   }
-  #leftZone{ border-right:2px solid rgba(233,226,201,0.15); }
+  #leftZone{ border-right:2px dashed rgba(255,150,205,0.35); }
   .zone-label{
     margin-top:8px;
-    color:rgba(233,226,201,0.45);
+    color:rgba(150,105,170,0.65);
     font-size:11px;
     letter-spacing:1px;
     pointer-events:none;
@@ -80,23 +80,25 @@
     position:absolute;
     width:104px; height:104px;
     border-radius:50%;
-    border:2px solid rgba(233,226,201,0.5);
-    background:rgba(233,226,201,0.08);
+    border:2px solid rgba(255,150,205,0.6);
+    background:rgba(255,214,236,0.35);
     pointer-events:none;
     z-index:4;
+    box-shadow:0 2px 10px rgba(210,150,230,0.25);
   }
   .joy-stick{
     position:absolute;
     width:46px; height:46px;
     border-radius:50%;
-    background:rgba(224,166,58,0.55);
-    border:2px solid rgba(233,226,201,0.75);
+    background:rgba(178,150,224,0.8);
+    border:3px solid rgba(255,255,255,0.9);
     pointer-events:none;
     z-index:4;
+    box-shadow:0 2px 6px rgba(210,150,230,0.4);
     transition:background 0.15s, transform 0.1s;
   }
-  .joy-stick.fire-ready{ background:rgba(76,175,80,0.65); } /* 発射できる強さになったら緑に */
-  .joy-stick.mine-charging{ background:rgba(192,57,43,0.75); } /* 地雷を設置しようとしている間は赤に */
+  .joy-stick.fire-ready{ background:rgba(178,235,181,0.9); } /* 発射できる強さになったらミントグリーンに */
+  .joy-stick.mine-charging{ background:rgba(255,138,178,0.9); } /* 地雷を設置しようとしている間はコーラルピンクに */
 
   /* ---- HUD（ゲーム画面の上に重ねる文字類） ---- */
   #hud{
@@ -105,22 +107,26 @@
     padding:6px 10px;
     color:var(--paper);
     font-size:12px;
+    font-weight:700;
     letter-spacing:1px;
     pointer-events:none;
-    text-shadow:1px 1px 2px rgba(0,0,0,0.8);
+    text-shadow:1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
     z-index:5;
   }
   #hud .grp{ display:flex; align-items:center; gap:8px; }
-  #lives{ display:flex; gap:3px; }
+  #lives{ display:flex; align-items:center; gap:3px; }
   .heart{ width:14px; height:12px; }
+  .livesCount{ font-size:12px; color:var(--paper); margin-left:2px; }
   #pauseBtn{
     pointer-events:auto;
     width:32px; height:32px;
-    background:rgba(20,26,14,0.55);
-    border:2px solid rgba(233,226,201,0.4);
+    border-radius:50%;
+    background:rgba(255,255,255,0.75);
+    border:2px solid rgba(255,150,205,0.7);
     color:var(--paper);
     font-size:14px;
     display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 6px rgba(210,150,230,0.35);
   }
 
   #stageFlash{
@@ -137,25 +143,25 @@
 
   #stageClearScreen{
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    background:rgba(10,14,7,0.90); color:var(--paper); text-align:center; padding:20px; gap:12px; z-index:25;
+    background:rgba(255,240,250,0.94); color:var(--paper); text-align:center; padding:20px; gap:12px; z-index:25;
     cursor:pointer; touch-action:manipulation;
   }
-  #stageClearScreen .clearTitle{font-size:clamp(24px,7vw,38px); letter-spacing:4px; color:var(--amber); font-weight:700; text-shadow:3px 3px 0 var(--brick-dark);}
+  #stageClearScreen .clearTitle{font-size:clamp(24px,7vw,38px); letter-spacing:4px; color:#ff9ecb; font-weight:700; text-shadow:3px 3px 0 var(--brick-dark);}
   #stageClearScreen .clearStats{font-size:clamp(14px,4vw,18px); line-height:1.9;}
-  #stageClearScreen .nextInfo{font-size:clamp(12px,3.5vw,16px); line-height:1.8; color:#c8d0bd; max-width:390px;}
-  #stageClearScreen .enemyLabel{display:block; margin-top:3px; color:#aab39e;}
+  #stageClearScreen .nextInfo{font-size:clamp(12px,3.5vw,16px); line-height:1.8; color:#8a6f97; max-width:390px;}
+  #stageClearScreen .enemyLabel{display:block; margin-top:3px; color:#a98bb0;}
   #stageClearScreen .enemyIcons{display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:10px 14px; margin-top:7px;}
   #stageClearScreen .enemyIconWrap{display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:58px;}
-  #stageClearScreen .enemyTankIcon{width:clamp(52px,15vw,72px); height:auto; image-rendering:auto; filter:drop-shadow(2px 2px 0 rgba(0,0,0,.45));}
-  #stageClearScreen .enemyCount{font-size:clamp(13px,3.5vw,16px); color:var(--amber); font-weight:700; margin-top:-2px;}
-  #stageClearScreen .tapHint{margin-top:6px; font-size:12px; color:#aab39e; letter-spacing:1px; animation:pulse 1.2s infinite;}
+  #stageClearScreen .enemyTankIcon{width:clamp(52px,15vw,72px); height:auto; image-rendering:auto; filter:drop-shadow(2px 2px 0 rgba(210,150,230,.35));}
+  #stageClearScreen .enemyCount{font-size:clamp(13px,3.5vw,16px); color:#ff9ecb; font-weight:700; margin-top:-2px;}
+  #stageClearScreen .tapHint{margin-top:6px; font-size:12px; color:#a98bb0; letter-spacing:1px; animation:pulse 1.2s infinite;}
   @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
 
   /* ---- オーバーレイ画面（スタート／ポーズ／ゲームオーバー） ---- */
   .overlay{
     position:absolute; inset:0;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
-    background:rgba(10,14,7,0.92);
+    background:rgba(255,240,250,0.94);
     color:var(--paper);
     text-align:center;
     padding:20px;
@@ -166,34 +172,35 @@
   .title{
     font-size:clamp(26px,8vw,44px);
     letter-spacing:5px;
-    color:var(--amber);
-    text-shadow:3px 3px 0 var(--brick-dark), 0 0 22px rgba(224,166,58,0.35);
+    color:#ff9ecb;
+    text-shadow:3px 3px 0 var(--brick-dark), 0 0 22px rgba(255,209,102,0.45);
     font-weight:700;
     margin:0;
   }
   .subtitle{
     font-size:clamp(11px,3.2vw,14px);
-    color:#b7c2a5;
+    color:#8a6f97;
     letter-spacing:1px;
     line-height:1.9;
     max-width:340px;
   }
-  .subtitle b{ color:var(--amber); }
+  .subtitle b{ color:#ff8fc4; }
   .btn{
     font-family:inherit;
     font-size:clamp(15px,4.2vw,19px);
     letter-spacing:3px;
     padding:12px 38px;
+    border-radius:24px;
     background:var(--olive);
-    color:var(--paper);
+    color:#fff;
     border:3px solid var(--olive-dark);
     border-bottom:6px solid var(--olive-dark);
     cursor:pointer;
-    box-shadow:0 0 0 2px rgba(233,226,201,0.15);
+    box-shadow:0 0 0 2px rgba(255,255,255,0.5);
   }
   .btn:active{ border-bottom-width:3px; transform:translateY(3px); }
   .btn.alt{ background:var(--brick); border-color:var(--brick-dark); border-bottom-color:var(--brick-dark); }
-  .tank-emblem{ width:64px; height:64px; }
+  .tank-emblem{ width:64px; height:64px; filter:drop-shadow(0 2px 4px rgba(210,150,230,.4)); }
 </style>
 </head>
 <body>
@@ -214,13 +221,13 @@
     <!-- スタート画面 -->
     <div id="startScreen" class="overlay">
       <svg class="tank-emblem" viewBox="0 0 64 64">
-        <rect x="14" y="26" width="36" height="18" rx="3" fill="#5b7a3a" stroke="#e9e2c9" stroke-width="1.5"/>
-        <rect x="10" y="40" width="44" height="6" rx="2" fill="#3d5426"/>
-        <circle cx="18" cy="46" r="5" fill="#2a2f22" stroke="#e9e2c9" stroke-width="1.2"/>
-        <circle cx="32" cy="46" r="5" fill="#2a2f22" stroke="#e9e2c9" stroke-width="1.2"/>
-        <circle cx="46" cy="46" r="5" fill="#2a2f22" stroke="#e9e2c9" stroke-width="1.2"/>
-        <rect x="30" y="10" width="7" height="20" rx="2" fill="#e0a63a"/>
-        <circle cx="30" cy="30" r="10" fill="#5b7a3a" stroke="#e9e2c9" stroke-width="1.5"/>
+        <rect x="14" y="26" width="36" height="18" rx="6" fill="#ffb3d9" stroke="#fff" stroke-width="1.5"/>
+        <rect x="10" y="40" width="44" height="6" rx="3" fill="#ff8fc4"/>
+        <circle cx="18" cy="46" r="5" fill="#c9baf5" stroke="#fff" stroke-width="1.2"/>
+        <circle cx="32" cy="46" r="5" fill="#c9baf5" stroke="#fff" stroke-width="1.2"/>
+        <circle cx="46" cy="46" r="5" fill="#c9baf5" stroke="#fff" stroke-width="1.2"/>
+        <rect x="30" y="10" width="7" height="20" rx="3" fill="#ffd166"/>
+        <circle cx="30" cy="30" r="10" fill="#ffb3d9" stroke="#fff" stroke-width="1.5"/>
       </svg>
       <h1 class="title">戦車バトル</h1>
       <p class="subtitle">
@@ -249,7 +256,7 @@
 
     <!-- ゲームオーバー画面 -->
     <div id="gameOverScreen" class="overlay hidden">
-      <h1 class="title" style="color:var(--blood); text-shadow:3px 3px 0 #4a1610;">GAME OVER</h1>
+      <h1 class="title" style="color:var(--blood); text-shadow:3px 3px 0 #ffc9dc;">GAME OVER</h1>
       <p class="subtitle">到達ステージ: <b id="finalStage"></b><br>スコア: <b id="finalScore"></b></p>
       <button class="btn" id="retryBtn">もう一度</button>
     </div>
@@ -297,6 +304,8 @@ const BULLET_R = 4;         // 弾の半径（当たり判定）
 const BULLET_SPEED = 80;
 const BULLET_MAX_BOUNCE = 1;// 弾が壁で跳ね返れる回数（0にすると跳ね返らない）
 const ENEMY_FIRE_INTERVAL = 1.2; // ★通常の敵戦車の最低発射間隔（秒）
+const BULLET_SELF_SAFE_TIME = 3.0; // ★自機の弾が発射から何秒間は自分に当たらないか（壁際での自滅防止）
+const ENEMY_DODGE_RADIUS = 55; // ★この距離まで自分以外の弾が近づくと、敵は弾と逆方向へ少し逃げる
 
 // --- 地雷のパラメータ ---
 const MINE_HOLD_TIME = 0.5;     // ★長押しと判定するまでの時間(秒)。短くすると地雷を置きやすくなる
@@ -314,11 +323,11 @@ const MINE_RADIUS = 10;          // ★地雷本体の当たり判定半径（�
 // maxBullets=画面上に同時に出せる自分の弾の最大数（一番強いheavyだけ自機と同じ5発、他は1発）
 // color/dark=見た目の色 / score=倒したときの得点 / r=当たり判定の半径
 const ENEMY_TYPES = {
-  yellow:{ speed:0,  hp:1, color:"#d8b52a", dark:"#8a7116", maxBullets:1, bulletSpeed:80,  score:100, r:14, fastBullet:false, fireInterval:3.0 },
-  brown: { speed:50, hp:1, color:"#8a5a32", dark:"#5d3a20", maxBullets:1, bulletSpeed:80,  score:120, r:14, fastBullet:false, fireInterval:3.0 },
-  green: { speed:50, hp:1, color:"#5f8f45", dark:"#3d612d", maxBullets:1, bulletSpeed:240, score:180, r:14, fastBullet:true  },
-  red:   { speed:50, hp:1, color:"#c43b32", dark:"#7f251f", maxBullets:5, bulletSpeed:80,  score:250, r:15, fastBullet:false, fireInterval:0.2 },
-  black: { speed:100,hp:1, color:"#30343a", dark:"#15171a", maxBullets:2, bulletSpeed:240, score:400, r:16, fastBullet:true, fireInterval:1.0},
+  yellow:{ speed:0,  hp:1, color:"#ffe999", dark:"#f0c95c", maxBullets:1, bulletSpeed:80,  score:100, r:TANK_R, fastBullet:false, fireInterval:10.0, dodge:false },
+  brown: { speed:50, hp:1, color:"#e0c09a", dark:"#c99a68", maxBullets:1, bulletSpeed:80,  score:120, r:TANK_R, fastBullet:false, fireInterval:10.0, dodge:false },
+  green: { speed:50, hp:1, color:"#a8e6b0", dark:"#7ecb8c", maxBullets:1, bulletSpeed:240, score:180, r:TANK_R, fastBullet:true  },
+  red:   { speed:50, hp:1, color:"#ff9aa8", dark:"#e06b7d", maxBullets:5, bulletSpeed:80,  score:250, r:TANK_R, fastBullet:false, fireInterval:0.2 },
+  black: { speed:100,hp:1, color:"#c3aef0", dark:"#a186e0", maxBullets:2, bulletSpeed:240, score:400, r:TANK_R, fastBullet:true, fireInterval:1.0},
 };
 
 /* ================================================================
@@ -530,15 +539,19 @@ function bindZone(el, onStart, onMove, onEnd){
 }
 // ---- 画面全体タップで発射 ----
 // 右側で照準をドラッグしている指を除き、どこをタップしても発射する。
+// ただし移動ボタン（左ゾーン）の位置をタップした場合は発射しない。
 window.addEventListener("touchstart", e=>{
   // 地雷設置後も、照準用の指を離さずに2本目の指でそのまま発射できる。
   // mineArmed は「地雷をもう一度設置しない」ための状態なので、発射禁止には使わない。
   if(!rightJoy.active || !rightJoy.dragged || input.aimMag<=0.35) return;
+  // ★座標で判定する（移動スティックの見た目は#app直下にあり、leftZoneElのDOM子要素では
+  //   ないため、要素のcontains判定ではなく座標の矩形判定で正しく除外する）
+  const leftRect = leftZoneEl.getBoundingClientRect();
   for(const t of e.changedTouches){
-    if(t.identifier !== rightJoy.id){
-      input.fireRequested = true;
-      break;
-    }
+    if(t.identifier === rightJoy.id) continue;
+    if(t.clientX>=leftRect.left && t.clientX<=leftRect.right && t.clientY>=leftRect.top && t.clientY<=leftRect.bottom) continue;
+    input.fireRequested = true;
+    break;
   }
 }, {passive:true, capture:true});
 
@@ -576,6 +589,8 @@ let player = null;
 let stageNum = 1;
 let score = 0;
 let lives = 3;
+const MAX_HEART_ICONS = 5; // ★ハートアイコンで表示する最大数。これを超えたら「×数字」表記にする
+const STAGES_PER_EXTRA_LIFE = 10; // ★このステージ数をクリアするごとにライフが1回復する
 let state = "start"; // start | playing | paused | dying | stageclear_wait | stageclear | gameover
 let stageClearTimer = 0;
 let stageClearDelay = 0;
@@ -604,19 +619,28 @@ function playTone(freq, duration, type="square", volume=0.035, slide=0){
 }
 function playShot(fast=false){
   initAudio();
-  playTone(fast?520:300, fast?0.07:0.09, "square", fast?0.025:0.035, fast?-220:-120);
+  playTone(fast?950:720, fast?0.08:0.1, "sine", fast?0.03:0.04, fast?-260:-180);
 }
-function playHit(){ initAudio(); playTone(180,0.06,"sawtooth",0.025,-80); }
+function playHit(){ initAudio(); playTone(620,0.08,"triangle",0.032,90); }
 function playExplosion(){
   initAudio();
-  playTone(90,0.22,"sawtooth",0.055,-70);
-  setTimeout(()=>playTone(55,0.18,"triangle",0.03,-30),35);
+  playTone(340,0.2,"sine",0.05,-150);
+  setTimeout(()=>playTone(240,0.16,"triangle",0.032,-70),40);
 }
 function playStageClear(){
   initAudio();
-  playTone(523.25,0.12,"square",0.035,0);
-  setTimeout(()=>playTone(659.25,0.12,"square",0.035,0),120);
-  setTimeout(()=>playTone(783.99,0.22,"square",0.04,0),240);
+  playTone(1046.5,0.12,"sine",0.045,0);
+  setTimeout(()=>playTone(1318.5,0.12,"sine",0.045,0),120);
+  setTimeout(()=>playTone(1568.0,0.24,"sine",0.045,0),240);
+}
+// ★10ステージ毎（ライフ回復）のクリア時だけ鳴らす、少し豪華なファンファーレ
+function playMilestoneClear(){
+  initAudio();
+  playTone(1046.5,0.11,"sine",0.045,0);
+  setTimeout(()=>playTone(1318.5,0.11,"sine",0.045,0),110);
+  setTimeout(()=>playTone(1568.0,0.11,"sine",0.045,0),220);
+  setTimeout(()=>playTone(2093.0,0.28,"sine",0.05,0),330);
+  setTimeout(()=>playTone(2637.0,0.32,"triangle",0.04,0),340);
 }
 
 let respawnTimer = 0;
@@ -667,9 +691,10 @@ function makePlayer(x,y){
     r:TANK_R, speed:PLAYER_SPEED, hp:1, alive:true,
     maxBullets:PLAYER_MAX_BULLETS, // 画面上に同時に出せる自分の弾の最大数
     fireCooldown:0, // 次の射撃までの待ち時間
+    fireBuffered:false, // ★発射間隔制限中に押された入力を覚えておく（先行入力）
     invuln:2.0,  // ★復活直後の無敵時間(秒)
     blink:0,
-    color:"#3f78c5", dark:"#234d83",
+    color:"#8ecbff", dark:"#5fa8e8",
   };
 }
 function makeEnemy(type,x,y){
@@ -681,6 +706,7 @@ function makeEnemy(type,x,y){
     maxBullets:t.maxBullets, // 画面上に同時に出せる自分の弾の最大数
     fireCooldown: rand(0, t.fireInterval ?? ENEMY_FIRE_INTERVAL), // 敵ごとに少しずつ発射タイミングをずらす
     color:t.color, dark:t.dark,
+    dodge: t.dodge !== false, // ★弾を避けるかどうか（黄色・茶色はfalseで避けない）
     wanderTimer: rand(0.5,1.5), wanderDir: Math.random()*Math.PI*2,
     stuckTimer:0,
   };
@@ -755,13 +781,14 @@ function spawnBullet(owner){
     y: owner.y + Math.sin(owner.turretAngle)*(owner.r+6),
     vx: Math.cos(owner.turretAngle)*speed,
     vy: Math.sin(owner.turretAngle)*speed,
-    owner, bounces:0, dead:false, trail:[], fastBullet,
+    owner, bounces:0, dead:false, trail:[], fastBullet, age:0,
   });
   playShot(fastBullet);
 }
 function updateBullets(dt){
   for(const b of bullets){
     if(b.dead) continue;
+    b.age += dt;
     b.trail.push({x:b.x,y:b.y});
     if(b.trail.length>5) b.trail.shift();
     b.x += b.vx*dt; b.y += b.vy*dt;
@@ -838,7 +865,12 @@ function updateBullets(dt){
     // 戦車との当たり判定
     for(const t of tanks){
       if(!t.alive) continue;
-      if(t===b.owner && !t.isPlayer) continue;
+      if(t===b.owner){
+        // 敵は自分の弾には絶対に当たらない。
+        if(!t.isPlayer) continue;
+        // ★自機の弾は発射から一定時間は自分に当たらない（壁際で撃って自滅するのを防ぐ）
+        if(b.age < BULLET_SELF_SAFE_TIME) continue;
+      }
       if(t.isPlayer && t.invuln>0 && b.owner!==t) continue;
       const dx=b.x-t.x, dy=b.y-t.y;
       if(dx*dx+dy*dy < (t.r+BULLET_R)*(t.r+BULLET_R)){
@@ -984,20 +1016,20 @@ function spawnExplosion(x,y,scaleF){
   for(let i=0;i<14;i++){
     const a=Math.random()*Math.PI*2, sp=rand(40,180)*scaleF;
     particles.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:rand(0.3,0.6), t:0,
-      color: Math.random()>0.5 ? "#e0a63a":"#c0392b"});
+      color: Math.random()>0.5 ? "#ffd166":"#ff8aa8"});
   }
 }
 function spawnHitFx(x,y){
   for(let i=0;i<5;i++){
     const a=Math.random()*Math.PI*2, sp=rand(30,90);
-    particles.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:rand(0.15,0.3), t:0, color:"#e9e2c9"});
+    particles.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:rand(0.15,0.3), t:0, color:"#ffd9ec"});
   }
 }
 function spawnFastBulletImpactFx(x,y){
-  // 高速弾専用：細い閃光＋青白い火花
+  // 高速弾専用：細い閃光＋淡いパステルブルーの火花
   for(let i=0;i<10;i++){
     const a=Math.random()*Math.PI*2, sp=rand(70,190);
-    particles.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:rand(0.12,0.28), t:0, color:i%2?"#8fe7ff":"#e9fbff"});
+    particles.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:rand(0.12,0.28), t:0, color:i%2?"#b3ecff":"#ffffff"});
   }
   explosions.push({x,y,t:0,dur:0.16,scaleF:0.45, fast:true});
 }
@@ -1024,6 +1056,25 @@ function updateEnemy(t, dt){
     // プレイヤーが見えていれば大まかにプレイヤー方向へ、見えていなければランダムな方向へ
     t.wanderDir = canSeePlayer ? Math.atan2(p.y-t.y, p.x-t.x) + rand(-0.35,0.35) : Math.random()*Math.PI*2;
     t.wanderTimer = rand(0.8,2.0); // ★次に方向転換を検討するまでの間隔
+    t.stuckTimer = 0;
+  }
+
+  // ★自分以外の弾が一定距離まで近づいたら、その弾と逆方向へ少し逃げる（黄色・茶色は避けない）
+  let dodgeDir = null, dodgeDistSq = ENEMY_DODGE_RADIUS*ENEMY_DODGE_RADIUS;
+  if(t.dodge){
+    for(const b of bullets){
+      if(b.dead || b.owner===t) continue;
+      const dx = t.x-b.x, dy = t.y-b.y;
+      const distSq = dx*dx+dy*dy;
+      if(distSq < dodgeDistSq){
+        dodgeDistSq = distSq;
+        dodgeDir = Math.atan2(dy,dx); // 弾から自分への向き＝逃げる方向
+      }
+    }
+  }
+  if(dodgeDir !== null){
+    t.wanderDir = dodgeDir;
+    t.wanderTimer = 0.35; // 少しの間だけ逃げたら、通常の行動に戻る
     t.stuckTimer = 0;
   }
 
@@ -1085,11 +1136,18 @@ function updatePlayer(dt){
 
   // ---- 発射（照準ドラッグ中の2本目のタップ or スペースキー） ----
   // 画面上の弾数に加えて、射撃間隔制限を適用する。
-  const wantFire = input.fireRequested || keys[" "];
+  // ★先行入力：射撃間隔制限（クールダウン）中に発射ボタンが押されても、
+  //   すぐには撃てないだけで入力自体は覚えておき、次に撃てる状態になった
+  //   瞬間に自動的に発射する。ただし画面上の弾が上限（5発）に達している
+  //   ときは、先行入力として記憶しない（＝5発目を撃った後は自動発射しない）。
+  if((input.fireRequested || keys[" "]) && countBullets(player) < player.maxBullets){
+    player.fireBuffered = true;
+  }
   input.fireRequested = false;
-  if(wantFire && gameStartFireLock<=0 && player.fireCooldown<=0 && countBullets(player) < player.maxBullets){
+  if(player.fireBuffered && gameStartFireLock<=0 && player.fireCooldown<=0 && countBullets(player) < player.maxBullets){
     spawnBullet(player);
     player.fireCooldown = PLAYER_FIRE_INTERVAL;
+    player.fireBuffered = false;
   }
 
   // ---- 地雷の長押し判定 ----
@@ -1157,7 +1215,9 @@ function loop(ts){
       stageClearDelay = 0;
       state = "stageclear";
       showStageClear();
-      playStageClear();
+      // ★10ステージ毎のクリア（ライフ回復あり）は専用のファンファーレを鳴らす
+      if(stageNum % STAGES_PER_EXTRA_LIFE === 0) playMilestoneClear();
+      else playStageClear();
     }
   } else if(state==="stageclear"){
     updateFx(dt);
@@ -1193,15 +1253,15 @@ function render(){
   ctx.translate(viewW/2 - cameraX, viewH/2 - cameraY);
 
   // 背景
-  ctx.fillStyle = "#3a4326";
+  ctx.fillStyle = "#ffeef7";
   ctx.fillRect(0,0,WORLD_W,WORLD_H);
-  ctx.strokeStyle = "rgba(0,0,0,0.08)";
+  ctx.strokeStyle = "rgba(210,150,220,0.18)";
   ctx.lineWidth = 1;
   for(let x=0;x<=WORLD_W;x+=TILE){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,WORLD_H); ctx.stroke(); }
   for(let y=0;y<=WORLD_H;y+=TILE){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(WORLD_W,y); ctx.stroke(); }
 
   // 外周の枠
-  ctx.strokeStyle = "#8b93a0";
+  ctx.strokeStyle = "#c9baf5";
   ctx.lineWidth = 6;
   ctx.strokeRect(3,3,WORLD_W-6,WORLD_H-6);
 
@@ -1214,19 +1274,50 @@ function render(){
         const x=c*TILE, y=r*TILE;
         if(v===BRICK){
           const dmg = bricksHp[r][c];
-          ctx.fillStyle = dmg>1 ? "#a8532f" : "#c06a3f";
-          ctx.fillRect(x+1,y+1,TILE-2,TILE-2);
-          ctx.strokeStyle="#5f2e17"; ctx.lineWidth=1;
-          ctx.strokeRect(x+6,y+6,TILE/2-4,TILE/2-8);
-          ctx.strokeRect(x+TILE/2+2,y+6,TILE/2-8,TILE/2-8);
-          ctx.strokeRect(x+6,y+TILE/2+2,TILE/2-4,TILE/2-8);
-          ctx.strokeRect(x+TILE/2+2,y+TILE/2+2,TILE/2-8,TILE/2-8);
+          const base = dmg>1 ? "#f3b57e" : "#ffd2a3";
+          const dark = "#d99a63";
+          const inset = 1;
+          const bx=x+inset, by=y+inset, bw=TILE-inset*2, bh=TILE-inset*2;
+
+          // 木箱本体
+          ctx.fillStyle = base;
+          ctx.fillRect(bx,by,bw,bh);
+
+          // 外枠
+          ctx.strokeStyle = dark; ctx.lineWidth = 1.5;
+          ctx.strokeRect(bx+0.75,by+0.75,bw-1.5,bh-1.5);
+
+          // 板の継ぎ目（上下対称に横線2本）
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(bx, by+bh/3); ctx.lineTo(bx+bw, by+bh/3);
+          ctx.moveTo(bx, by+bh*2/3); ctx.lineTo(bx+bw, by+bh*2/3);
+          ctx.stroke();
+
+          // 対角の補強材（左右・上下対称なX字）
+          ctx.beginPath();
+          ctx.moveTo(bx+3, by+3); ctx.lineTo(bx+bw-3, by+bh-3);
+          ctx.moveTo(bx+bw-3, by+3); ctx.lineTo(bx+3, by+bh-3);
+          ctx.stroke();
+
+          // 四隅の鋲（左右対称に配置）
+          ctx.fillStyle = dark;
+          const nailOffset = 4, nailR = 1.4;
+          const nailPositions = [
+            [bx+nailOffset, by+nailOffset],
+            [bx+bw-nailOffset, by+nailOffset],
+            [bx+nailOffset, by+bh-nailOffset],
+            [bx+bw-nailOffset, by+bh-nailOffset],
+          ];
+          for(const [nx,ny] of nailPositions){
+            ctx.beginPath(); ctx.arc(nx,ny,nailR,0,7); ctx.fill();
+          }
         } else {
-          ctx.fillStyle = "#8b93a0";
+          ctx.fillStyle = "#c9baf5";
           ctx.fillRect(x+1,y+1,TILE-2,TILE-2);
-          ctx.fillStyle = "#5a6270";
+          ctx.fillStyle = "#a898e0";
           ctx.fillRect(x+3,y+3,TILE-6,TILE-6);
-          ctx.fillStyle = "#8b93a0";
+          ctx.fillStyle = "#e6dcff";
           ctx.fillRect(x+TILE/2-3,y+TILE/2-3,6,6);
         }
       }
@@ -1239,11 +1330,11 @@ function render(){
     // 点滅：残り時間が短いほど速く点滅させる
     const visible = !blinking || (Math.floor(m.timeLeft*10)%2===0);
     if(visible){
-      ctx.fillStyle = "#2a2a2a";
+      ctx.fillStyle = "#d9c6ea";
       ctx.beginPath(); ctx.arc(m.x,m.y,10,0,7); ctx.fill();
-      ctx.fillStyle = blinking ? "#ff5555" : "#c0392b";
+      ctx.fillStyle = blinking ? "#ff8aa8" : "#ff6f91";
       ctx.beginPath(); ctx.arc(m.x,m.y,5,0,7); ctx.fill();
-      ctx.strokeStyle="#111"; ctx.lineWidth=2;
+      ctx.strokeStyle="#a898e0"; ctx.lineWidth=2;
       ctx.beginPath(); ctx.arc(m.x,m.y,10,0,7); ctx.stroke();
     }
   }
@@ -1254,22 +1345,24 @@ function render(){
       ctx.save();
       ctx.translate(b.x,b.y);
       ctx.rotate(Math.atan2(b.vy,b.vx));
-      ctx.globalAlpha=0.22; ctx.fillStyle="#7ddcff";
+      ctx.globalAlpha=0.28; ctx.fillStyle="#b3ecff";
       ctx.fillRect(-14,-2,20,4);
-      ctx.globalAlpha=1; ctx.fillStyle="#e9fbff";
+      ctx.globalAlpha=1; ctx.fillStyle="#ffffff";
       ctx.beginPath(); ctx.moveTo(9,0); ctx.lineTo(-5,-4); ctx.lineTo(-2,0); ctx.lineTo(-5,4); ctx.closePath(); ctx.fill();
-      ctx.fillStyle="#62d9ff"; ctx.fillRect(-5,-2,10,4);
+      ctx.fillStyle="#8fe0ff"; ctx.fillRect(-5,-2,10,4);
       ctx.restore();
     } else {
       for(let i=0;i<b.trail.length;i++){
         const pt=b.trail[i];
         ctx.globalAlpha = (i+1)/b.trail.length*0.4;
-        ctx.fillStyle="#e0a63a";
+        ctx.fillStyle="#ffd166";
         ctx.beginPath(); ctx.arc(pt.x,pt.y,BULLET_R*0.7,0,7); ctx.fill();
       }
       ctx.globalAlpha=1;
-      ctx.fillStyle="#f4d47a";
+      ctx.fillStyle="#fff0b3";
       ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_R,0,7); ctx.fill();
+      ctx.strokeStyle="#000000"; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_R,0,7); ctx.stroke();
     }
   }
 
@@ -1296,9 +1389,9 @@ function render(){
     const prog = e.t/e.dur;
     const rad = 10 + prog*30*e.scaleF;
     ctx.globalAlpha = 1-prog;
-    ctx.fillStyle = "#e0a63a";
+    ctx.fillStyle = "#ffd166";
     ctx.beginPath(); ctx.arc(e.x,e.y,rad*0.6,0,7); ctx.fill();
-    ctx.strokeStyle = "#c0392b"; ctx.lineWidth=3;
+    ctx.strokeStyle = "#ff8aa8"; ctx.lineWidth=3;
     ctx.beginPath(); ctx.arc(e.x,e.y,rad,0,7); ctx.stroke();
   }
   ctx.globalAlpha=1;
@@ -1353,8 +1446,8 @@ function drawAimPreview(t){
   ctx.save();
   ctx.setLineDash([4,10]);
   ctx.lineWidth=1.5;
-  ctx.strokeStyle="rgba(150,155,160,0.55)";
-  ctx.fillStyle="rgba(150,155,160,0.65)";
+  ctx.strokeStyle="rgba(190,160,230,0.65)";
+  ctx.fillStyle="rgba(190,160,230,0.8)";
   for(const s of segments){
     ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke();
   }
@@ -1391,9 +1484,9 @@ function drawTank(t){
 
   // 耐久ゲージ（HPが2以上の敵のみ表示）
   if(!t.isPlayer && t.maxHp>1){
-    ctx.fillStyle="rgba(0,0,0,0.5)";
+    ctx.fillStyle="rgba(255,255,255,0.6)";
     ctx.fillRect(-14,-t.r-10,28,4);
-    ctx.fillStyle="#c0392b";
+    ctx.fillStyle="#ff8aa8";
     ctx.fillRect(-14,-t.r-10,28*(t.hp/t.maxHp),4);
   }
 
@@ -1410,11 +1503,20 @@ function updateHud(enemiesLeft){
   stageLabelEl.textContent = `STAGE ${stageNum}  残り${enemiesLeft}`;
   scoreLabelEl.textContent = `SCORE ${score}`;
   livesEl.innerHTML = "";
-  for(let i=0;i<Math.max(lives,0);i++){
+  const safeLives = Math.max(lives,0);
+  // ★ハートは最大5個までアイコン表示。6個以上になったらハート1個＋「×数字」で表記する。
+  const heartCount = safeLives > MAX_HEART_ICONS ? 1 : safeLives;
+  for(let i=0;i<heartCount;i++){
     const s=document.createElementNS("http://www.w3.org/2000/svg","svg");
     s.setAttribute("viewBox","0 0 16 14"); s.setAttribute("class","heart");
-    s.innerHTML = '<path d="M8 13 L2 7.5 C0 5.5 0.5 2 3.5 1.5 C5.5 1.2 7 2.3 8 3.8 C9 2.3 10.5 1.2 12.5 1.5 C15.5 2 16 5.5 14 7.5 Z" fill="#c0392b" stroke="#e9e2c9" stroke-width="0.6"/>';
+    s.innerHTML = '<path d="M8 13 L2 7.5 C0 5.5 0.5 2 3.5 1.5 C5.5 1.2 7 2.3 8 3.8 C9 2.3 10.5 1.2 12.5 1.5 C15.5 2 16 5.5 14 7.5 Z" fill="#ff6f91" stroke="#ffffff" stroke-width="0.8"/>';
     livesEl.appendChild(s);
+  }
+  if(safeLives > MAX_HEART_ICONS){
+    const countEl = document.createElement("span");
+    countEl.className = "livesCount";
+    countEl.textContent = `×${safeLives}`;
+    livesEl.appendChild(countEl);
   }
 }
 const stageFlashEl = document.getElementById("stageFlash");
@@ -1474,6 +1576,11 @@ function getNextLevel(){
 }
 
 function showStageClear(){
+  // ★ステージを10クリアするごとにライフを1回復する。
+  const gotExtraLife = (stageNum % STAGES_PER_EXTRA_LIFE === 0);
+  if(gotExtraLife){
+    lives++;
+  }
   const nextNum = getNextStageNumber();
   const next = getNextLevel();
   const counts = {};
@@ -1486,7 +1593,7 @@ function showStageClear(){
   ).join("");
 
   clearStageTitle.textContent = `STAGE ${stageNum} CLEAR!`;
-  clearStats.innerHTML = `残機：${Math.max(lives,0)}　　スコア：${score}`;
+  clearStats.innerHTML = `残機：${Math.max(lives,0)}　　スコア：${score}` + (gotExtraLife ? `　　<span style="color:var(--amber);">ライフ+1！</span>` : "");
   nextStageInfo.innerHTML = `次のステージ：<b>STAGE ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
   stageClearScreen.classList.remove("hidden");
 }
