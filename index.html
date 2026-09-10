@@ -216,6 +216,7 @@
       <div class="grp"><span id="stageLabel">STAGE 1</span></div>
       <div class="grp"><span id="lives"></span></div>
       <div class="grp"><span id="scoreLabel">SCORE 0　HI 0</span></div>
+      <div class="grp"><span id="maxStageLabel">MAX STAGE 1</span></div>
       <button id="pauseBtn">II</button>
     </div>
     <div id="stageFlash"></div>
@@ -259,7 +260,7 @@
     <!-- ゲームオーバー画面 -->
     <div id="gameOverScreen" class="overlay hidden">
       <h1 class="title" style="color:var(--blood); text-shadow:3px 3px 0 #ffc9dc;">GAME OVER</h1>
-      <p class="subtitle">到達ステージ: <b id="finalStage"></b><br>スコア: <b id="finalScore"></b></p>
+      <p class="subtitle">到達ステージ: <b id="finalStage"></b><br>最大到達ステージ: <b id="finalMaxStage"></b><br>スコア: <b id="finalScore"></b></p>
       <button class="btn" id="retryBtn">もう一度</button>
     </div>
   </div>
@@ -589,6 +590,9 @@ let particles = [];  // 破片エフェクト
 let explosions = []; // 爆発の輪エフェクト
 let player = null;
 let stageNum = 1;
+let lapNum = 1; // 50ステージごとの周回数。一周目は表示しない
+let totalStageProgress = 1; // 現在の通算ステージ番号（1周目1=1、2周目1=51）
+let maxStageProgress = Number(localStorage.getItem("tankBattleMaxStageProgress") || 1);
 let score = 0;
 let highScore = Number(localStorage.getItem("tankBattleHighScore") || 0);
 let lives = 3;
@@ -629,6 +633,13 @@ function playExplosion(){
   initAudio();
   playTone(340,0.2,"sine",0.05,-150);
   setTimeout(()=>playTone(240,0.16,"triangle",0.032,-70),40);
+}
+// 地雷専用：大きすぎない「ポンッ＋キラッ」というパステル調の音
+function playMineExplosion(){
+  initAudio();
+  playTone(180,0.13,"sine",0.045,80);
+  setTimeout(()=>playTone(520,0.10,"triangle",0.028,120),45);
+  setTimeout(()=>playTone(880,0.16,"sine",0.022,-80),90);
 }
 function playStageClear(){
   initAudio();
@@ -986,6 +997,7 @@ function updateMines(dt){
 function explodeMine(m){
   m.exploded = true;
   spawnExplosion(m.x, m.y, 1.3);
+  playMineExplosion();
 
   // 地雷は木箱（BRICK）を破壊できる唯一の手段。
   // 爆風が木箱の四角形に触れていれば、その木箱を消す。
@@ -1507,10 +1519,26 @@ function drawTank(t){
    ================================================================ */
 const stageLabelEl = document.getElementById("stageLabel");
 const scoreLabelEl = document.getElementById("scoreLabel");
+const maxStageLabelEl = document.getElementById("maxStageLabel");
 const livesEl = document.getElementById("lives");
+function formatStageProgress(progress){
+  const n = Math.max(1, Number(progress) || 1);
+  const lap = Math.floor((n - 1) / 50) + 1;
+  const stage = ((n - 1) % 50) + 1;
+  return lap === 1 ? `STAGE ${stage}` : `${lap}周目 STAGE ${stage}`;
+}
+
+function updateMaxStage(){
+  if(totalStageProgress > maxStageProgress){
+    maxStageProgress = totalStageProgress;
+    localStorage.setItem("tankBattleMaxStageProgress", String(maxStageProgress));
+  }
+}
+
 function updateHud(enemiesLeft){
-  stageLabelEl.textContent = `STAGE ${stageNum}  残り${enemiesLeft}`;
+  stageLabelEl.textContent = `${formatStageProgress(totalStageProgress)}  残り${enemiesLeft}`;
   scoreLabelEl.textContent = `SCORE ${score}　HI ${highScore}`;
+  maxStageLabelEl.textContent = `MAX ${formatStageProgress(maxStageProgress)}`;
   livesEl.innerHTML = "";
   const safeLives = Math.max(lives,0);
   // ★ハートは最大5個までアイコン表示。6個以上になったらハート1個＋「×数字」で表記する。
@@ -1610,7 +1638,11 @@ function showStageClear(){
 function startNextStage(){
   if(state !== "stageclear") return;
   const nextNum = getNextStageNumber();
+  const wasLastStage = (stageNum >= 50);
   stageNum = nextNum;
+  if(wasLastStage) lapNum++;
+  totalStageProgress++;
+  updateMaxStage();
   buildLevel(stageNum - 1);
   state = "playing";
   stageClearDelay = 0;
@@ -1632,8 +1664,7 @@ const gameOverScreen = document.getElementById("gameOverScreen");
 const hud = document.getElementById("hud");
 const pauseBtn = document.getElementById("pauseBtn");
 const bgm = document.getElementById("bgm");
-const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-bgm.volume = isMobile ? 0.04 : 0.0833;
+bgm.volume = 0.0833; // ゲーム効果音を邪魔しない控えめな音量
 
 function playBgm(){
   bgm.play().catch(()=>{});
@@ -1661,7 +1692,9 @@ function startGame(){
   initAudio();
   bgm.currentTime = 0;
   playBgm();
-  stageNum = 1; score = 0; lives = 3; // ★初期ライフ数
+  stageNum = 1; lapNum = 1; totalStageProgress = 1;
+  score = 0; lives = 3; // ★初期ライフ数
+  updateMaxStage();
   buildLevel(0);
   stageClearDelay = 0;
   gameStartFireLock = 1.0; // ゲーム開始から1秒間は射撃不可
@@ -1679,7 +1712,8 @@ function showGameOver(){
   }
   state = "gameover";
   stopBgm();
-  document.getElementById("finalStage").textContent = stageNum;
+  document.getElementById("finalStage").textContent = formatStageProgress(totalStageProgress);
+  document.getElementById("finalMaxStage").textContent = formatStageProgress(maxStageProgress);
   document.getElementById("finalScore").textContent = `${score}　（ハイスコア：${highScore}）`;
   gameOverScreen.classList.remove("hidden");
   stageClearScreen.classList.add("hidden");
