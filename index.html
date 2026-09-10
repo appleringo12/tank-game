@@ -215,7 +215,7 @@
     <div id="hud" class="hidden">
       <div class="grp"><span id="stageLabel">STAGE 1</span></div>
       <div class="grp"><span id="lives"></span></div>
-      <div class="grp"><span id="maxStageLabel">MAX STAGE 1</span></div>
+      <div class="grp"><span id="maxStageLabel">MAX CLEAR STAGE 0</span></div>
       <button id="pauseBtn">II</button>
     </div>
     <div id="stageFlash"></div>
@@ -259,7 +259,7 @@
     <!-- ゲームオーバー画面 -->
     <div id="gameOverScreen" class="overlay hidden">
       <h1 class="title" style="color:var(--blood); text-shadow:3px 3px 0 #ffc9dc;">GAME OVER</h1>
-      <p class="subtitle">到達ステージ: <b id="finalStage"></b><br>最大到達ステージ: <b id="finalMaxStage"></b><br>スコア: <b id="finalScore"></b></p>
+      <p class="subtitle">クリアステージ: <b id="finalStage"></b><br>最大クリアステージ: <b id="finalMaxStage"></b><br>スコア: <b id="finalScore"></b></p>
       <button class="btn" id="retryBtn">もう一度</button>
     </div>
   </div>
@@ -436,6 +436,9 @@ const input = {
   aimAngle:0, aiming:false, aimMag:0, // 右スティックの入力状態（角度と強さ）
   fireRequested:false,               // 照準ドラッグ中の2本目のタップでtrueになる
 };
+// ★左スティック（移動）を最後に動かした角度。ミサイルの発射方向はこれを使う
+// （自機の車体の向きは慣性で少し遅れて回転するため、入力した瞬間の向きをそのまま使う）
+let lastMoveAngle = -Math.PI/2;
 
 const MAX_JOY = 46; // スティックが動ける最大半径(px)。見た目の joy-base の半径と合わせる
 
@@ -695,6 +698,7 @@ function buildLevel(idx){
 }
 
 function makePlayer(x,y){
+  lastMoveAngle = -Math.PI/2; // ★ミサイルの発射方向もリセット
   return {
     isPlayer:true, x, y, angle:-Math.PI/2, turretAngle:-Math.PI/2,
     r:TANK_R, speed:PLAYER_SPEED, hp:1, alive:true,
@@ -940,17 +944,23 @@ function onPlayerDeath(){
 /* ================================================================
    ミサイル
    ・右側を長押しする操作をそのまま利用
-   ・発射時点の「自機の車体の向き」を基準に5ブロック先を着弾地点にする
+   ・発射時点の「左スティックを最後に動かした角度」を基準に5ブロック先を着弾地点にする
    ・発射から約2秒で着弾し、爆風で敵・自機・木箱に作用する
    ================================================================ */
+// 指定した角度で今ミサイルを撃った場合の着弾予定地点を計算する（着弾予告の表示にも流用）
+function getMissileTargetPoint(originX, originY, angle){
+  return {
+    x: clamp(originX + Math.cos(angle)*MISSILE_DISTANCE, MISSILE_DISTANCE*0.02, WORLD_W-MISSILE_DISTANCE*0.02),
+    y: clamp(originY + Math.sin(angle)*MISSILE_DISTANCE, MISSILE_DISTANCE*0.02, WORLD_H-MISSILE_DISTANCE*0.02),
+  };
+}
 function fireMissile(){
   if(missiles.length >= MISSILE_MAX_ACTIVE || !player || !player.alive) return false;
-  const angle = player.angle; // ★砲塔ではなく車体の向き
+  const angle = lastMoveAngle; // ★車体の向きではなく、左スティックを最後に動かした角度を使う
   const startX = player.x + Math.cos(angle)*(player.r+5);
   const startY = player.y + Math.sin(angle)*(player.r+5);
-  const targetX = clamp(player.x + Math.cos(angle)*MISSILE_DISTANCE, MISSILE_DISTANCE*0.02, WORLD_W-MISSILE_DISTANCE*0.02);
-  const targetY = clamp(player.y + Math.sin(angle)*MISSILE_DISTANCE, MISSILE_DISTANCE*0.02, WORLD_H-MISSILE_DISTANCE*0.02);
-  missiles.push({x:startX,y:startY,startX,startY,targetX,targetY,angle,time:0,dead:false});
+  const target = getMissileTargetPoint(player.x, player.y, angle);
+  missiles.push({x:startX,y:startY,startX,startY,targetX:target.x,targetY:target.y,angle,time:0,dead:false});
   playMissileLaunch();
   return true;
 }
@@ -974,7 +984,7 @@ function updateMissiles(dt){
 function explodeMissile(m){
   if(m.dead) return;
   m.dead = true;
-  spawnExplosion(m.targetX,m.targetY,1.3);
+  spawnExplosion(m.targetX,m.targetY,2.0); // ★実際の爆風範囲(MISSILE_BLAST_RADIUS)に見た目を合わせて少し大きめに
   // ミサイルらしい着弾音（既存爆発音を少し高めに重ねる）
   playExplosion();
   playTone(260,0.18,"sine",0.045,140);
@@ -994,7 +1004,7 @@ function explodeMissile(m){
   }
   for(const t of tanks){
     if(!t.alive) continue;
-    if(t.isPlayer && t.invuln>0) continue;
+    if(t.isPlayer) continue; // ★ミサイルは自機には当たらない（操作ミスによる自滅防止）
     const dx=t.x-m.targetX, dy=t.y-m.targetY;
     if(dx*dx+dy*dy < blastR*blastR) damageTank(t);
   }
@@ -1110,6 +1120,7 @@ function updatePlayer(dt){
     mx/=len; my/=len;
     const targetAngle = Math.atan2(my,mx);
     player.angle = lerpAngle(player.angle, targetAngle, 1-Math.pow(0.00005,dt));
+    lastMoveAngle = targetAngle; // ★ミサイルの発射方向用に、入力した瞬間の角度をそのまま記録
     player.x += mx*player.speed*dt; // ★PLAYER_SPEEDを変えると移動速度が変わる
     player.y += my*player.speed*dt;
     resolveWallCollision(player);
@@ -1221,6 +1232,7 @@ function respawnPlayer(){
   let sp={x:WORLD_W/2,y:WORLD_H/2};
   for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(lvl.map[r][c]==="P") sp={x:c*TILE+TILE/2,y:r*TILE+TILE/2};
   player.x=sp.x; player.y=sp.y; player.angle=-Math.PI/2; player.turretAngle=-Math.PI/2;
+  lastMoveAngle = -Math.PI/2; // ★ミサイルの発射方向もリセット
   player.hp=1; player.alive=true; player.invuln=2.0;
   if(!tanks.includes(player)) tanks.push(player);
 }
@@ -1365,6 +1377,8 @@ function render(){
 
   // 自機の砲塔方向と、壁で1回反射した弾道を点線で表示
   drawAimPreview(player);
+  // ミサイルの着弾予測地点（二重丸＋十字）
+  drawMissileTargetPreview();
 
   // 戦車
   for(const t of tanks){
@@ -1456,6 +1470,30 @@ function drawAimPreview(t){
   ctx.restore();
 }
 
+// ミサイルの着弾予測地点。砲台の弾道予測線と同じ色の、四角い照準器で表示する
+function drawMissileTargetPreview(){
+  if(!player || !player.alive) return;
+  const tp = getMissileTargetPoint(player.x, player.y, lastMoveAngle);
+  ctx.save();
+  ctx.translate(tp.x, tp.y);
+  ctx.strokeStyle = "rgba(190,160,230,0.65)"; // ★砲台の弾道予測線と同じ色
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([]);
+  const S = 8;  // 四角い枠の半径
+  const L = 4;  // 四隅の線の長さ
+  // 四隅の角（コーナーブラケット）だけを描く照準器
+  ctx.beginPath();
+  ctx.moveTo(-S, -S+L); ctx.lineTo(-S, -S); ctx.lineTo(-S+L, -S);
+  ctx.moveTo(S-L, -S); ctx.lineTo(S, -S); ctx.lineTo(S, -S+L);
+  ctx.moveTo(S, S-L); ctx.lineTo(S, S); ctx.lineTo(S-L, S);
+  ctx.moveTo(-S+L, S); ctx.lineTo(-S, S); ctx.lineTo(-S, S-L);
+  ctx.stroke();
+  // 中心点
+  ctx.fillStyle = "rgba(190,160,230,0.8)";
+  ctx.beginPath(); ctx.arc(0,0,1.6,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
 function drawTank(t){
   ctx.save();
   ctx.translate(t.x,t.y);
@@ -1503,6 +1541,16 @@ function formatStageProgress(progress){
   const stage = ((n - 1) % 50) + 1;
   return lap === 1 ? `STAGE ${stage}` : `${lap}周目 STAGE ${stage}`;
 }
+// ★ゲームオーバー画面の「クリアステージ」表示用。
+//   totalStageProgress／maxStageProgressは「今何ステージ目に挑戦中か」を表す値なので、
+//   実際にクリアした数はそこから1引いたもの（まだ1つもクリアしていなければ0）になる。
+function formatClearedStage(clearedCount){
+  const n = Math.max(0, Number(clearedCount) || 0);
+  if(n === 0) return "STAGE 0";
+  const lap = Math.floor((n - 1) / 50) + 1;
+  const stage = ((n - 1) % 50) + 1;
+  return lap === 1 ? `STAGE ${stage}` : `${lap}周目 STAGE ${stage}`;
+}
 
 function updateMaxStage(){
   if(totalStageProgress > maxStageProgress){
@@ -1513,7 +1561,7 @@ function updateMaxStage(){
 
 function updateHud(enemiesLeft){
   stageLabelEl.textContent = `${formatStageProgress(totalStageProgress)}  残り${enemiesLeft}`;
-  maxStageLabelEl.textContent = `MAX ${formatStageProgress(maxStageProgress)}`;
+  maxStageLabelEl.textContent = `MAX CLEAR ${formatClearedStage(maxStageProgress - 1)}`;
   livesEl.innerHTML = "";
   const safeLives = Math.max(lives,0);
   // ★ハートは最大5個までアイコン表示。6個以上になったらハート1個＋「×数字」で表記する。
@@ -1686,8 +1734,8 @@ function startGame(){
 function showGameOver(){
   state = "gameover";
   stopBgm();
-  document.getElementById("finalStage").textContent = formatStageProgress(totalStageProgress);
-  document.getElementById("finalMaxStage").textContent = formatStageProgress(maxStageProgress);
+  document.getElementById("finalStage").textContent = formatClearedStage(totalStageProgress - 1);
+  document.getElementById("finalMaxStage").textContent = formatClearedStage(maxStageProgress - 1);
   document.getElementById("finalScore").textContent = `${score}`;
   gameOverScreen.classList.remove("hidden");
   stageClearScreen.classList.add("hidden");
