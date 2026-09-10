@@ -80,8 +80,8 @@
     position:absolute;
     width:104px; height:104px;
     border-radius:50%;
-    border:2px solid rgba(255,150,205,0.6);
-    background:rgba(255,214,236,0.35);
+    border:2px solid rgba(201,186,245,0.9);
+    background:rgba(201,186,245,0.35);
     pointer-events:none;
     z-index:4;
     box-shadow:0 2px 10px rgba(210,150,230,0.25);
@@ -90,7 +90,7 @@
     position:absolute;
     width:46px; height:46px;
     border-radius:50%;
-    background:rgba(178,150,224,0.8);
+    background:rgba(201,186,245,0.9);
     border:3px solid rgba(255,255,255,0.9);
     pointer-events:none;
     z-index:4;
@@ -209,11 +209,13 @@
   <!-- ============ 上段：ゲーム画面 ============ -->
   <div id="gameArea">
     <canvas id="game"></canvas>
+    <!-- Flowerbed Fields [Loop] / CC0 -->
+    <audio id="bgm" src="flowerbed_fields.ogg" loop preload="auto"></audio>
 
     <div id="hud" class="hidden">
       <div class="grp"><span id="stageLabel">STAGE 1</span></div>
       <div class="grp"><span id="lives"></span></div>
-      <div class="grp"><span id="scoreLabel">SCORE 0</span></div>
+      <div class="grp"><span id="scoreLabel">SCORE 0　HI 0</span></div>
       <button id="pauseBtn">II</button>
     </div>
     <div id="stageFlash"></div>
@@ -303,7 +305,7 @@ const PLAYER_FIRE_INTERVAL = 0.3; // ★自機の射撃間隔（秒）
 const BULLET_R = 4;         // 弾の半径（当たり判定）
 const BULLET_SPEED = 80;
 const BULLET_MAX_BOUNCE = 1;// 弾が壁で跳ね返れる回数（0にすると跳ね返らない）
-const ENEMY_FIRE_INTERVAL = 1.2; // ★通常の敵戦車の最低発射間隔（秒）
+const ENEMY_FIRE_INTERVAL = 2.4; // ★通常の敵戦車の最低発射間隔（秒）
 const BULLET_SELF_SAFE_TIME = 3.0; // ★自機の弾が発射から何秒間は自分に当たらないか（壁際での自滅防止）
 const ENEMY_DODGE_RADIUS = 55; // ★この距離まで自分以外の弾が近づくと、敵は弾と逆方向へ少し逃げる
 
@@ -327,7 +329,7 @@ const ENEMY_TYPES = {
   brown: { speed:50, hp:1, color:"#e0c09a", dark:"#c99a68", maxBullets:1, bulletSpeed:80,  score:120, r:TANK_R, fastBullet:false, fireInterval:10.0, dodge:false },
   green: { speed:50, hp:1, color:"#a8e6b0", dark:"#7ecb8c", maxBullets:1, bulletSpeed:240, score:180, r:TANK_R, fastBullet:true  },
   red:   { speed:50, hp:1, color:"#ff9aa8", dark:"#e06b7d", maxBullets:5, bulletSpeed:80,  score:250, r:TANK_R, fastBullet:false, fireInterval:0.2 },
-  black: { speed:100,hp:1, color:"#c3aef0", dark:"#a186e0", maxBullets:2, bulletSpeed:240, score:400, r:TANK_R, fastBullet:true, fireInterval:1.0},
+  black: { speed:100,hp:1, color:"#c3aef0", dark:"#a186e0", maxBullets:2, bulletSpeed:240, score:400, r:TANK_R, fastBullet:true, fireInterval:2.0},
 };
 
 /* ================================================================
@@ -588,6 +590,7 @@ let explosions = []; // 爆発の輪エフェクト
 let player = null;
 let stageNum = 1;
 let score = 0;
+let highScore = Number(localStorage.getItem("tankBattleHighScore") || 0);
 let lives = 3;
 const MAX_HEART_ICONS = 5; // ★ハートアイコンで表示する最大数。これを超えたら「×数字」表記にする
 const STAGES_PER_EXTRA_LIFE = 10; // ★このステージ数をクリアするごとにライフが1回復する
@@ -909,7 +912,13 @@ function damageTank(t){
     spawnExplosion(t.x,t.y, t.isPlayer?1.4:1.0);
     playExplosion();
     if(t.isPlayer) onPlayerDeath();
-    else score += ENEMY_TYPES[t.type].score;
+    else {
+      score += ENEMY_TYPES[t.type].score;
+      if(score > highScore){
+        highScore = score;
+        localStorage.setItem("tankBattleHighScore", String(highScore));
+      }
+    }
   } else {
     spawnHitFx(t.x,t.y);
   }
@@ -1501,7 +1510,7 @@ const scoreLabelEl = document.getElementById("scoreLabel");
 const livesEl = document.getElementById("lives");
 function updateHud(enemiesLeft){
   stageLabelEl.textContent = `STAGE ${stageNum}  残り${enemiesLeft}`;
-  scoreLabelEl.textContent = `SCORE ${score}`;
+  scoreLabelEl.textContent = `SCORE ${score}　HI ${highScore}`;
   livesEl.innerHTML = "";
   const safeLives = Math.max(lives,0);
   // ★ハートは最大5個までアイコン表示。6個以上になったらハート1個＋「×数字」で表記する。
@@ -1622,19 +1631,35 @@ const pauseScreen = document.getElementById("pauseScreen");
 const gameOverScreen = document.getElementById("gameOverScreen");
 const hud = document.getElementById("hud");
 const pauseBtn = document.getElementById("pauseBtn");
+const bgm = document.getElementById("bgm");
+bgm.volume = 0.25; // ゲーム効果音を邪魔しない控えめな音量
+
+function playBgm(){
+  bgm.play().catch(()=>{});
+}
+function stopBgm(){
+  bgm.pause();
+}
 
 document.getElementById("startBtn").addEventListener("click", startGame);
 document.getElementById("resumeBtn").addEventListener("click", ()=>{
   pauseScreen.classList.add("hidden"); state="playing";
+  playBgm();
 });
 document.getElementById("restartFromPauseBtn").addEventListener("click", startGame);
 document.getElementById("retryBtn").addEventListener("click", startGame);
 pauseBtn.addEventListener("click", ()=>{
-  if(state==="playing"){ state="paused"; pauseScreen.classList.remove("hidden"); }
+  if(state==="playing"){
+    state="paused";
+    stopBgm();
+    pauseScreen.classList.remove("hidden");
+  }
 });
 
 function startGame(){
   initAudio();
+  bgm.currentTime = 0;
+  playBgm();
   stageNum = 1; score = 0; lives = 3; // ★初期ライフ数
   buildLevel(0);
   stageClearDelay = 0;
@@ -1647,9 +1672,14 @@ function startGame(){
   hud.classList.remove("hidden");
 }
 function showGameOver(){
+  if(score > highScore){
+    highScore = score;
+    localStorage.setItem("tankBattleHighScore", String(highScore));
+  }
   state = "gameover";
+  stopBgm();
   document.getElementById("finalStage").textContent = stageNum;
-  document.getElementById("finalScore").textContent = score;
+  document.getElementById("finalScore").textContent = `${score}　（ハイスコア：${highScore}）`;
   gameOverScreen.classList.remove("hidden");
   stageClearScreen.classList.add("hidden");
   hud.classList.add("hidden");
