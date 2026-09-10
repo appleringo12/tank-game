@@ -9,7 +9,7 @@
      基本レイアウト
      ・画面全体を「縦」に2分割する
        上：ゲーム画面（キャンバス）
-       下：操作エリア（左＝移動スティック／右＝照準・発射・地雷）
+       下：操作エリア（左＝移動スティック／右＝照準・発射・ミサイル）
      ============================================================ */
   :root{
     --bg-deep:#ffd9ec;
@@ -23,7 +23,7 @@
     --amber:#ffcf6b;
     --paper:#7a5c8a;
     --blood:#ff6f91;
-    --mine:#ff6f91;
+    --missile:#ff6f91;
   }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{
@@ -98,7 +98,7 @@
     transition:background 0.15s, transform 0.1s;
   }
   .joy-stick.fire-ready{ background:rgba(178,235,181,0.9); } /* 発射できる強さになったらミントグリーンに */
-  .joy-stick.mine-charging{ background:rgba(255,138,178,0.9); } /* 地雷を設置しようとしている間はコーラルピンクに */
+  .joy-stick.missile-charging{ background:rgba(255,138,178,0.9); } /* ミサイルを発射しようとしている間はコーラルピンクに */
 
   /* ---- HUD（ゲーム画面の上に重ねる文字類） ---- */
   #hud{
@@ -210,7 +210,7 @@
   <div id="gameArea">
     <canvas id="game"></canvas>
     <!-- Flowerbed Fields [Loop] / CC0 -->
-    <audio id="bgm" src="flowerbed_fields.wav" loop preload="auto"></audio>
+    <audio id="bgm" src="flowerbed_fields.ogg" loop preload="auto"></audio>
 
     <div id="hud" class="hidden">
       <div class="grp"><span id="stageLabel">STAGE 1</span></div>
@@ -235,7 +235,7 @@
       <p class="subtitle">
         画面下・左側ドラッグ＝<b>移動</b><br>
         画面下・右側ドラッグ＝<b>照準</b>、そのまま<b>タップ</b>で発射<br>
-        右側を<b>長押し</b>＝<b>地雷を設置</b>（敵が近づくか5秒で爆発）<br>
+        右下側を<b>長押し</b>＝<b>ミサイル発射</b>（約2秒後に着弾）<br>
         弾は壁に1回だけ跳ね返る
       </p>
       <button class="btn" id="startBtn">スタート</button>
@@ -270,7 +270,7 @@
       <div class="zone-label">左側ドラッグ<br>＝移動</div>
     </div>
     <div id="rightZone" class="zone">
-      <div class="zone-label">右側ドラッグ＝照準、ドラッグ中に2本目の指でタップ＝発射<br>長押し＝地雷設置</div>
+      <div class="zone-label">右側ドラッグ＝照準、ドラッグ中に2本目の指でタップ＝発射<br>右下側を長押し＝ミサイル発射</div>
     </div>
   </div>
 
@@ -309,16 +309,13 @@ const ENEMY_FIRE_INTERVAL = 2.4; // ★通常の敵戦車の最低発射間隔�
 const BULLET_SELF_SAFE_TIME = 3.0; // ★自機の弾が発射から何秒間は自分に当たらないか（壁際での自滅防止）
 const ENEMY_DODGE_RADIUS = 55; // ★この距離まで自分以外の弾が近づくと、敵は弾と逆方向へ少し逃げる
 
-// --- 地雷のパラメータ ---
-const MINE_HOLD_TIME = 0.5;     // ★長押しと判定するまでの時間(秒)。短くすると地雷を置きやすくなる
-const MINE_MOVE_DEADZONE = 14;  // これ以上指が動いたら「ドラッグ」とみなし地雷はキャンセルされる(px)
-const MINE_FUSE_TIME = 5.0;     // ★何も起きなければ自然に爆発するまでの時間(秒)
-const MINE_BLINK_TIME = 0.6;    // 爆発の何秒前から点滅させるか(秒)
-const MINE_TRIGGER_RADIUS = 46; // ★この距離まで敵が近づくと起爆する
-const MINE_PROXIMITY_FUSE = 0.7;// 敵が近づいたときに残す起爆までの時間(秒)。点滅が見える程度に余裕を持たせる
-const MINE_BLAST_RADIUS = 62;   // ★爆風の届く範囲。この中の戦車（敵・自機とも）はダメージを受ける
-const MINE_MAX_ACTIVE = 2;      // ★自機が同時に設置できる地雷の最大数
-const MINE_RADIUS = 10;          // ★地雷本体の当たり判定半径（未定義による停止を防止）
+// --- ミサイルのパラメータ ---
+const MISSILE_HOLD_TIME = 0.5;       // ★長押しと判定するまでの時間(秒)
+const MISSILE_MOVE_DEADZONE = 14;    // これ以上指が動いたら長押しをキャンセル(px)
+const MISSILE_FLIGHT_TIME = 2.0;     // ★発射から着弾までの時間(秒)
+const MISSILE_DISTANCE = TILE * 5;   // ★自機の車体が向いている方向へ5ブロック先
+const MISSILE_BLAST_RADIUS = 62;     // ★着弾時の爆風範囲
+const MISSILE_MAX_ACTIVE = 1;        // ★同時に存在できるミサイルは1発まで
 
 // --- 敵の種類ごとのパラメータ ---
 // speed=移動速度 / hp=耐久力（弾を何発で倒せるか）
@@ -428,7 +425,7 @@ resize();
 /* ================================================================
    入力（タッチ操作）まわり
    ・左ゾーン：ドラッグした方向へ戦車が移動する（バーチャルスティック）
-   ・右ゾーン：ドラッグで照準、ドラッグ中に2本目の指でタップすると発射／長押しで地雷設置
+   ・右ゾーン：ドラッグで照準、ドラッグ中に2本目の指でタップすると発射／長押しでミサイル設置
    ================================================================ */
 const keys = {}; // キーボード操作（PCでの動作確認用）
 window.addEventListener("keydown", e=>{ keys[e.key.toLowerCase()]=true; });
@@ -444,8 +441,8 @@ const MAX_JOY = 46; // スティックが動ける最大半径(px)。見た目�
 
 // 左スティック（移動用）の状態
 const leftJoy  = { active:false, id:null, sx:0, sy:0 };
-// 右スティック（照準・発射・地雷用）の状態
-const rightJoy = { active:false, id:null, sx:0, sy:0, holdTime:0, dragged:false, mineArmed:false };
+// 右スティック（照準・発射・ミサイル用）の状態
+const rightJoy = { active:false, id:null, sx:0, sy:0, holdTime:0, dragged:false, missileArmed:false };
 
 const leftZoneEl  = document.getElementById("leftZone");
 const rightZoneEl = document.getElementById("rightZone");
@@ -487,12 +484,12 @@ function leftEnd(id){
   leftBase.classList.add("hidden"); leftStick.classList.add("hidden");
 }
 
-// ---- 右ゾーン（照準／発射／地雷） ----
+// ---- 右ゾーン（照準／発射／ミサイル） ----
 function rightStart(x,y,id){
   // 右側の指は照準専用。発射は画面全体のタップを受け付ける。
   if(rightJoy.active) return;
   rightJoy.active=true; rightJoy.id=id; rightJoy.sx=x; rightJoy.sy=y;
-  rightJoy.holdTime=0; rightJoy.dragged=false; rightJoy.mineArmed=false;
+  rightJoy.holdTime=0; rightJoy.dragged=false; rightJoy.missileArmed=false;
   rightBase.classList.remove("hidden"); rightStick.classList.remove("hidden");
   placeJoy(rightBase, rightStick, x, y, 0, 0);
   input.aiming = true;
@@ -501,7 +498,7 @@ function rightMove(x,y,id){
   if(!rightJoy.active || id!==rightJoy.id) return;
   let dx=x-rightJoy.sx, dy=y-rightJoy.sy;
   const d=Math.hypot(dx,dy);
-  if(d > MINE_MOVE_DEADZONE) rightJoy.dragged = true; // 一定以上動いたら「地雷長押し」は取り消し
+  if(d > MISSILE_MOVE_DEADZONE) rightJoy.dragged = true; // 一定以上動いたら「ミサイル長押し」は取り消し
   if(d>MAX_JOY){ dx=dx/d*MAX_JOY; dy=dy/d*MAX_JOY; }
   placeJoy(rightBase, rightStick, rightJoy.sx, rightJoy.sy, dx, dy);
   input.aimMag = Math.min(d,MAX_JOY)/MAX_JOY;
@@ -514,7 +511,7 @@ function rightEnd(id){
   // 発射は「ドラッグを維持したまま2本目の指でタップ」で行う。
   rightJoy.active=false; input.aimMag=0; input.aiming=false;
   rightBase.classList.add("hidden"); rightStick.classList.add("hidden");
-  rightStick.classList.remove("mine-charging","fire-ready");
+  rightStick.classList.remove("missile-charging","fire-ready");
 }
 
 function bindZone(el, onStart, onMove, onEnd){
@@ -543,8 +540,7 @@ function bindZone(el, onStart, onMove, onEnd){
 // 右側で照準をドラッグしている指を除き、どこをタップしても発射する。
 // ただし移動ボタン（左ゾーン）の位置をタップした場合は発射しない。
 window.addEventListener("touchstart", e=>{
-  // 地雷設置後も、照準用の指を離さずに2本目の指でそのまま発射できる。
-  // mineArmed は「地雷をもう一度設置しない」ための状態なので、発射禁止には使わない。
+  // ミサイル発射後も、照準用の指を離さずに2本目の指でそのまま通常弾を発射できる。
   if(!rightJoy.active || !rightJoy.dragged || input.aimMag<=0.35) return;
   // ★座標で判定する（移動スティックの見た目は#app直下にあり、leftZoneElのDOM子要素では
   //   ないため、要素のcontains判定ではなく座標の矩形判定で正しく除外する）
@@ -584,7 +580,7 @@ let walls = [];      // [row][col] -> EMPTY / BRICK / STEEL
 let bricksHp = [];   // レンガの残り耐久（壊れるまでのヒット数）
 let tanks = [];      // 自機＋敵の配列
 let bullets = [];    // 飛んでいる弾の配列
-let mines = [];      // 設置されている地雷の配列
+let missiles = [];   // 飛行中のミサイルの配列
 let particles = [];  // 破片エフェクト
 let explosions = []; // 爆発の輪エフェクト
 let player = null;
@@ -612,13 +608,14 @@ function initAudio(){
   }
   if(audioCtx && audioCtx.state === "suspended") audioCtx.resume();
 }
+const SFX_VOLUME_MULTIPLIER = 1.25; // 効果音を全体的に約1.25倍
 function playTone(freq, duration, type="square", volume=0.035, slide=0){
   if(!audioCtx) return;
   const now=audioCtx.currentTime;
   const o=audioCtx.createOscillator(), g=audioCtx.createGain();
   o.type=type; o.frequency.setValueAtTime(freq,now);
   if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(20,freq+slide),now+duration);
-  g.gain.setValueAtTime(volume*6,now);
+  g.gain.setValueAtTime(volume*3*SFX_VOLUME_MULTIPLIER,now);
   g.gain.exponentialRampToValueAtTime(0.001,now+duration);
   o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now+duration+0.02);
 }
@@ -632,13 +629,13 @@ function playExplosion(){
   playTone(340,0.2,"sine",0.05,-150);
   setTimeout(()=>playTone(240,0.16,"triangle",0.032,-70),40);
 }
-// 地雷専用：大きすぎない「ポンッ＋キラッ」というパステル調の音
-function playMineExplosion(){
+// ミサイル発射：既存の効果音に合わせた短い上昇音
+function playMissileLaunch(){
   initAudio();
-  playTone(180,0.13,"sine",0.045,80);
-  setTimeout(()=>playTone(520,0.10,"triangle",0.028,120),45);
-  setTimeout(()=>playTone(880,0.16,"sine",0.022,-80),90);
+  playTone(300,0.12,"sine",0.045,260);
+  setTimeout(()=>playTone(620,0.16,"triangle",0.032,420),70);
 }
+
 function playStageClear(){
   initAudio();
   playTone(1046.5,0.12,"sine",0.045,0);
@@ -673,7 +670,7 @@ function buildLevel(idx){
       bricksHp[r].push(v===BRICK?2:0); // ★レンガの硬さ。2=弾2発で破壊。1にすると1発で壊れるようになる
     }
   }
-  tanks=[]; bullets=[]; mines=[]; particles=[]; explosions=[];
+  tanks=[]; bullets=[]; missiles=[]; particles=[]; explosions=[];
 
   let playerSpawn = {x:WORLD_W/2, y:WORLD_H/2};
   const enemySpawns = [];
@@ -823,7 +820,7 @@ function updateBullets(dt){
     const col=Math.floor(b.x/TILE), row=Math.floor(b.y/TILE);
     if(row>=0&&col>=0&&row<ROWS&&col<COLS && walls[row][col]!==EMPTY){
       if(walls[row][col]===BRICK){
-        // 木箱は弾では壊れず、通常弾だけ反射する。破壊は地雷のみ。
+        // 木箱は弾では壊れず、通常弾だけ反射する。破壊はミサイルのみ。
         if(b.fastBullet){
           spawnFastBulletImpactFx(b.x,b.y);
           b.dead=true;
@@ -859,20 +856,6 @@ function updateBullets(dt){
       }
     }
     if(!b.fastBullet && b.bounces > BULLET_MAX_BOUNCE){ b.dead=true; continue; }
-
-    // 地雷との当たり判定：弾が地雷に当たると即時爆発。
-    // ここでは配列自体を変更せず「爆発済み」にするだけにして、
-    // 弾の更新中の配列変更による不安定化を防ぐ。
-    for(const m of mines){
-      if(m.exploded) continue;
-      const dx=b.x-m.x, dy=b.y-m.y;
-      if(dx*dx+dy*dy < (MINE_RADIUS+BULLET_R)*(MINE_RADIUS+BULLET_R)){
-        explodeMine(m);
-        b.dead=true;
-        break;
-      }
-    }
-    if(b.dead) continue;
 
     // 戦車との当たり判定
     for(const t of tanks){
@@ -955,71 +938,65 @@ function onPlayerDeath(){
 }
 
 /* ================================================================
-   地雷
-   ・長押しの成立は入力処理側（rightJoyのholdTime）で判定し、
-     ここでは「爆発までのカウントダウン」と「爆風処理」のみを行う
+   ミサイル
+   ・右側を長押しする操作をそのまま利用
+   ・発射時点の「自機の車体の向き」を基準に5ブロック先を着弾地点にする
+   ・発射から約2秒で着弾し、爆風で敵・自機・木箱に作用する
    ================================================================ */
-function placeMine(x,y){
-  // 地雷設置は必ず1回だけ。設置失敗時も呼び出し元が状態を正しく扱えるようtrue/falseを返す。
-  if(mines.length >= MINE_MAX_ACTIVE) return false;
-  mines.push({ x, y, timeLeft: MINE_FUSE_TIME, exploded:false });
+function fireMissile(){
+  if(missiles.length >= MISSILE_MAX_ACTIVE || !player || !player.alive) return false;
+  const angle = player.angle; // ★砲塔ではなく車体の向き
+  const startX = player.x + Math.cos(angle)*(player.r+5);
+  const startY = player.y + Math.sin(angle)*(player.r+5);
+  const targetX = clamp(player.x + Math.cos(angle)*MISSILE_DISTANCE, MISSILE_DISTANCE*0.02, WORLD_W-MISSILE_DISTANCE*0.02);
+  const targetY = clamp(player.y + Math.sin(angle)*MISSILE_DISTANCE, MISSILE_DISTANCE*0.02, WORLD_H-MISSILE_DISTANCE*0.02);
+  missiles.push({x:startX,y:startY,startX,startY,targetX,targetY,angle,time:0,dead:false});
+  playMissileLaunch();
   return true;
 }
 
-function updateMines(dt){
-  for(const m of mines){
-    if(m.exploded) continue;
-
-    // 敵が近づいたら、起爆までの時間を短く上書きする（＝起爆トリガー）
-    for(const t of tanks){
-      if(t.isPlayer || !t.alive) continue;
-      const dx=t.x-m.x, dy=t.y-m.y;
-      if(dx*dx+dy*dy < MINE_TRIGGER_RADIUS*MINE_TRIGGER_RADIUS){
-        m.timeLeft = Math.min(m.timeLeft, MINE_PROXIMITY_FUSE);
-        break;
-      }
-    }
-
-    m.timeLeft -= dt;
-    if(m.timeLeft <= 0){
-      explodeMine(m);
+function updateMissiles(dt){
+  for(const m of missiles){
+    if(m.dead) continue;
+    m.time += dt;
+    const p = clamp(m.time/MISSILE_FLIGHT_TIME,0,1);
+    // 少し加速して着弾するように見せる
+    const eased = p*p*(3-2*p);
+    m.x = m.startX + (m.targetX-m.startX)*eased;
+    m.y = m.startY + (m.targetY-m.startY)*eased;
+    if(m.time >= MISSILE_FLIGHT_TIME){
+      explodeMissile(m);
     }
   }
-  mines = mines.filter(m=>!m.exploded);
+  missiles = missiles.filter(m=>!m.dead);
 }
 
-function explodeMine(m){
-  m.exploded = true;
-  spawnExplosion(m.x, m.y, 1.3);
-  playMineExplosion();
+function explodeMissile(m){
+  if(m.dead) return;
+  m.dead = true;
+  spawnExplosion(m.targetX,m.targetY,1.3);
+  // ミサイルらしい着弾音（既存爆発音を少し高めに重ねる）
+  playExplosion();
+  playTone(260,0.18,"sine",0.045,140);
 
-  // 地雷は木箱（BRICK）を破壊できる唯一の手段。
-  // 爆風が木箱の四角形に触れていれば、その木箱を消す。
-  const blastR = MINE_BLAST_RADIUS;
-  const minCol = Math.max(0, Math.floor((m.x-blastR)/TILE));
-  const maxCol = Math.min(COLS-1, Math.floor((m.x+blastR)/TILE));
-  const minRow = Math.max(0, Math.floor((m.y-blastR)/TILE));
-  const maxRow = Math.min(ROWS-1, Math.floor((m.y+blastR)/TILE));
-  for(let r=minRow; r<=maxRow; r++){
-    for(let c=minCol; c<=maxCol; c++){
-      if(walls[r][c] !== BRICK) continue;
-      const rx = c*TILE, ry = r*TILE;
-      if(circleRectOverlap(m.x, m.y, blastR, rx, ry, TILE, TILE)){
-        walls[r][c] = EMPTY;
-        bricksHp[r][c] = 0;
-        spawnHitFx(rx + TILE/2, ry + TILE/2);
-      }
+  const blastR = MISSILE_BLAST_RADIUS;
+  const minCol = Math.max(0, Math.floor((m.targetX-blastR)/TILE));
+  const maxCol = Math.min(COLS-1, Math.floor((m.targetX+blastR)/TILE));
+  const minRow = Math.max(0, Math.floor((m.targetY-blastR)/TILE));
+  const maxRow = Math.min(ROWS-1, Math.floor((m.targetY+blastR)/TILE));
+  for(let r=minRow;r<=maxRow;r++) for(let c=minCol;c<=maxCol;c++){
+    if(walls[r][c] !== BRICK) continue;
+    const rx=c*TILE, ry=r*TILE;
+    if(circleRectOverlap(m.targetX,m.targetY,blastR,rx,ry,TILE,TILE)){
+      walls[r][c]=EMPTY; bricksHp[r][c]=0;
+      spawnHitFx(rx+TILE/2,ry+TILE/2);
     }
   }
-
-  // 爆風範囲にいる戦車（自機・敵とも）にダメージ
   for(const t of tanks){
     if(!t.alive) continue;
     if(t.isPlayer && t.invuln>0) continue;
-    const dx=t.x-m.x, dy=t.y-m.y;
-    if(dx*dx+dy*dy < blastR*blastR){
-      damageTank(t);
-    }
+    const dx=t.x-m.targetX, dy=t.y-m.targetY;
+    if(dx*dx+dy*dy < blastR*blastR) damageTank(t);
   }
 }
 
@@ -1165,20 +1142,18 @@ function updatePlayer(dt){
     player.fireBuffered = false;
   }
 
-  // ---- 地雷の長押し判定 ----
-  // 右ゾーンを押していて、まだドラッグしておらず、地雷もまだ設置していないときだけカウント
-  if(rightJoy.active && !rightJoy.dragged && !rightJoy.mineArmed){
+  // ---- ミサイルの長押し判定 ----
+  // 右ゾーンを押していて、まだドラッグしていない間だけカウント。
+  if(rightJoy.active && !rightJoy.dragged && !rightJoy.missileArmed){
     rightJoy.holdTime += dt;
-    // 長押しの進み具合を見た目でわかるように、スティックの見た目を少しずつ変化させる
-    rightStick.classList.toggle("mine-charging", rightJoy.holdTime > MINE_HOLD_TIME*0.4);
-    if(rightJoy.holdTime >= MINE_HOLD_TIME){ // ★MINE_HOLD_TIMEを変えると長押し判定の速さが変わる
-      // このフレームで1回だけ設置。設置成功後は以後のフレームでは絶対に再設置しない。
-      if(placeMine(player.x, player.y)){
-        rightJoy.mineArmed = true;
+    rightStick.classList.toggle("missile-charging", rightJoy.holdTime > MISSILE_HOLD_TIME*0.4);
+    if(rightJoy.holdTime >= MISSILE_HOLD_TIME){
+      if(fireMissile()){
+        rightJoy.missileArmed = true;
         rightJoy.holdTime = 0;
       } else {
-        // 最大数に達している場合も長押し処理を終了して負荷を増やさない。
-        rightJoy.mineArmed = true;
+        // すでにミサイルが飛んでいる場合も、今回の長押しは終了
+        rightJoy.missileArmed = true;
       }
     }
   }
@@ -1204,7 +1179,7 @@ function loop(ts){
       }
     }
     updateBullets(dt);
-    updateMines(dt);
+    updateMissiles(dt);
     updateFx(dt);
     tanks = tanks.filter(t=> t.isPlayer || t.alive);
 
@@ -1216,7 +1191,7 @@ function loop(ts){
       stageClearDelay = 1.0;
     }
   } else if(state==="dying"){
-    updateMines(dt); // 死亡後も地雷は動き続ける（誘爆演出のため）
+    updateMissiles(dt); // 死亡後もミサイルは動き続ける（誘爆演出のため）
     updateFx(dt);
     respawnTimer -= dt;
     if(respawnTimer<=0){
@@ -1339,19 +1314,26 @@ function render(){
     }
   }
 
-  // 地雷（点滅処理つき）
-  for(const m of mines){
-    const blinking = m.timeLeft <= MINE_BLINK_TIME;
-    // 点滅：残り時間が短いほど速く点滅させる
-    const visible = !blinking || (Math.floor(m.timeLeft*10)%2===0);
-    if(visible){
-      ctx.fillStyle = "#d9c6ea";
-      ctx.beginPath(); ctx.arc(m.x,m.y,10,0,7); ctx.fill();
-      ctx.fillStyle = blinking ? "#ff8aa8" : "#ff6f91";
-      ctx.beginPath(); ctx.arc(m.x,m.y,5,0,7); ctx.fill();
-      ctx.strokeStyle="#a898e0"; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.arc(m.x,m.y,10,0,7); ctx.stroke();
-    }
+  // ミサイル：小さな円から大きな円へ伸びる着弾予告＋飛翔体
+  for(const m of missiles){
+    const p=clamp(m.time/MISSILE_FLIGHT_TIME,0,1);
+    ctx.save();
+    ctx.translate(m.x,m.y);
+    ctx.rotate(m.angle);
+    ctx.globalAlpha=0.22; ctx.fillStyle="#b3ecff";
+    ctx.fillRect(-12,-2,18,4);
+    ctx.globalAlpha=1; ctx.fillStyle="#ffffff";
+    ctx.beginPath(); ctx.moveTo(8,0); ctx.lineTo(-4,-4); ctx.lineTo(-2,0); ctx.lineTo(-4,4); ctx.closePath(); ctx.fill();
+    ctx.fillStyle="#ffb3d9"; ctx.fillRect(-5,-2,10,4);
+    ctx.restore();
+
+    // 着弾地点の予告輪。時間とともに小円→大円へ。
+    const rr=3 + p*15;
+    ctx.globalAlpha=0.18 + p*0.22; ctx.fillStyle="#ffd166";
+    ctx.beginPath(); ctx.arc(m.targetX,m.targetY,rr*0.45,0,7); ctx.fill();
+    ctx.globalAlpha=0.65; ctx.strokeStyle="#ff9ecb"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(m.targetX,m.targetY,rr,0,7); ctx.stroke();
+    ctx.globalAlpha=1;
   }
 
   // 弾：通常弾と高速弾でデザインを分ける
