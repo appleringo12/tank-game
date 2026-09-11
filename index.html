@@ -866,7 +866,8 @@ function hasLineOfSight(x0,y0,x1,y1){
 function spawnBullet(owner){
   const enemyType = !owner.isPlayer ? ENEMY_TYPES[owner.type] : null;
   const fastBullet = !!enemyType?.fastBullet;
-  const speed = enemyType?.bulletSpeed ?? BULLET_SPEED;
+  // ★爽快モードでは自機の弾速のみ2倍にする（敵の弾速は変えない）
+  const speed = enemyType?.bulletSpeed ?? (owner.isPlayer && gameMode === "rush" ? BULLET_SPEED*2 : BULLET_SPEED);
   bullets.push({
     x: owner.x + Math.cos(owner.turretAngle)*(owner.r+6),
     y: owner.y + Math.sin(owner.turretAngle)*(owner.r+6),
@@ -1283,7 +1284,7 @@ function updatePlayer(dt){
   input.fireRequested = false;
   if(player.fireBuffered && gameStartFireLock<=0 && player.fireCooldown<=0 && countBullets(player) < player.maxBullets){
     spawnBullet(player);
-    player.fireCooldown = (gameMode === "rush" ? PLAYER_FIRE_INTERVAL/2 : PLAYER_FIRE_INTERVAL);
+    player.fireCooldown = PLAYER_FIRE_INTERVAL; // ★発射間隔は通常モードと爽快モードで同じにする
     player.fireBuffered = false;
   }
 
