@@ -607,7 +607,8 @@ let player = null;
 let stageNum = 1;
 let lapNum = 1; // 50ステージごとの周回数。一周目は表示しない
 let totalStageProgress = 1; // 現在の通算ステージ番号（1周目1=1、2周目1=51）
-let maxStageProgress = Number(localStorage.getItem("tankBattleMaxStageProgress") || 1);
+let maxStageProgress = 1;
+try { maxStageProgress = Number(localStorage.getItem("tankBattleMaxStageProgress") || 1) || 1; } catch(e) { maxStageProgress = 1; }
 let score = 0;
 let lives = 3;
 
@@ -1874,14 +1875,36 @@ function showContinueScreen(){
   continueScreen.classList.remove("hidden");
 }
 
-startBtn.addEventListener("click", ()=>startGame(false));
-continueBtn.addEventListener("click", ()=>startGame(true));
-newGameBtn.addEventListener("click", ()=>startGame(false));
+function safeStartGame(continueGame=false){
+  try { startGame(continueGame); } catch(e) {
+    console.error("startGame error:", e);
+    // 音声やセーブ機能の失敗でゲーム開始まで止めない。
+    try {
+      stageNum=continueGame ? stageNum : 1;
+      lapNum=continueGame ? lapNum : 1;
+      totalStageProgress=continueGame ? totalStageProgress : 1;
+      score=continueGame ? score : 0;
+      lives=continueGame ? lives : 3;
+      buildLevel(stageNum-1);
+      state="playing";
+      startScreen.classList.add("hidden");
+      continueScreen.classList.add("hidden");
+      pauseScreen.classList.add("hidden");
+      gameOverScreen.classList.add("hidden");
+      stageClearScreen.classList.add("hidden");
+      hud.classList.remove("hidden");
+      flashStage(formatStageProgress(totalStageProgress));
+    } catch(e2) { console.error("fallback start error:", e2); }
+  }
+}
+startBtn.onclick = ()=>safeStartGame(false);
+continueBtn.onclick = ()=>safeStartGame(true);
+newGameBtn.onclick = ()=>safeStartGame(false);
 document.getElementById("resumeBtn").addEventListener("click", ()=>{
   pauseScreen.classList.add("hidden"); state="playing"; playBgm();
 });
-document.getElementById("restartFromPauseBtn").addEventListener("click", ()=>startGame(false));
-document.getElementById("retryBtn").addEventListener("click", ()=>startGame(false));
+document.getElementById("restartFromPauseBtn").onclick = ()=>safeStartGame(false);
+document.getElementById("retryBtn").onclick = ()=>safeStartGame(false);
 
 pauseBtn.addEventListener("click", ()=>{
   if(state==="playing"){
@@ -1892,8 +1915,10 @@ pauseBtn.addEventListener("click", ()=>{
 });
 
 function startGame(continueGame=false){
-  initAudio();
-  bgm.currentTime = 0;
+  // まずゲーム状態を初期化する。音声やセーブの問題で開始処理全体が止まらないようにする。
+  state = "playing";
+  try { initAudio(); } catch(e) { console.warn("audio init skipped", e); }
+  try { bgm.currentTime = 0; } catch(e) {}
   const saved = continueGame ? loadContinueData() : null;
   if(saved){
     stageNum = Math.max(1, Math.floor(saved.stageNum));
