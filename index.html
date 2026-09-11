@@ -200,6 +200,10 @@
   }
   .btn:active{ border-bottom-width:3px; transform:translateY(3px); }
   .btn.alt{ background:var(--brick); border-color:var(--brick-dark); border-bottom-color:var(--brick-dark); }
+  #continueScreen{ gap:18px; }
+  #continueStats{ font-size:clamp(17px,5vw,23px); line-height:2; color:var(--paper); font-weight:700; }
+  #continueScreen .continueBtn{ width:min(86vw,390px); min-height:76px; font-size:clamp(20px,6vw,28px); letter-spacing:3px; border-radius:28px; padding:16px 20px; }
+  #continueScreen .continueBtn.alt{ min-height:70px; }
   .tank-emblem{ width:64px; height:64px; filter:drop-shadow(0 2px 4px rgba(210,150,230,.4)); }
 </style>
 </head>
@@ -230,6 +234,15 @@
         弾は壁に1回だけ跳ね返る
       </p>
       <button class="btn" id="startBtn">スタート</button>
+    </div>
+
+    <!-- 続きのセーブデータがあるときだけ表示する専用画面 -->
+    <div id="continueScreen" class="overlay hidden">
+      <h1 class="title">続きから再開</h1>
+      <div class="subtitle">前回のステージクリア時のデータがあります。</div>
+      <div id="continueStats"></div>
+      <button class="btn continueBtn" id="continueBtn">この状態から再開</button>
+      <button class="btn alt continueBtn" id="newGameBtn">最初からプレイ</button>
     </div>
 
     <!-- ステージクリア画面 -->
@@ -597,6 +610,32 @@ let totalStageProgress = 1; // 現在の通算ステージ番号（1周目1=1、
 let maxStageProgress = Number(localStorage.getItem("tankBattleMaxStageProgress") || 1);
 let score = 0;
 let lives = 3;
+
+// ================================================================
+// セーブデータ
+// ステージをクリアした瞬間だけ保存する。
+// 敵の位置・弾・ミサイルなど、その瞬間の戦闘状態は保存しない。
+// ================================================================
+const SAVE_KEY = "tankBattleContinueSaveV1";
+function saveContinueData(data=null){
+  try{
+    const d = data || { stageNum, lapNum, totalStageProgress, lives, score, savedAt: Date.now() };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+  }catch(e){}
+}
+function loadContinueData(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return null;
+    const d = JSON.parse(raw);
+    if(!Number.isFinite(d.stageNum) || !Number.isFinite(d.totalStageProgress) || !Number.isFinite(d.lives) || !Number.isFinite(d.score)) return null;
+    return d;
+  }catch(e){ return null; }
+}
+function clearContinueData(){
+  try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+}
+
 const MAX_HEART_ICONS = 5; // ★ハートアイコンで表示する最大数。これを超えたら「×数字」表記にする
 const STAGES_PER_EXTRA_LIFE = 10; // ★このステージ数をクリアするごとにライフが1回復する
 let state = "start"; // start | playing | paused | dying | stageclear_wait | stageclear | gameover
@@ -1748,6 +1787,17 @@ function showStageClear(){
     lives++;
   }
   const nextNum = getNextStageNumber();
+
+  // ステージクリア成立時だけセーブ。次のステージから再開できる。
+  const wasLastStage = (stageNum >= 50);
+  saveContinueData({
+    stageNum: nextNum,
+    lapNum: wasLastStage ? lapNum + 1 : lapNum,
+    totalStageProgress: totalStageProgress + 1,
+    lives,
+    score,
+    savedAt: Date.now()
+  });
   const next = getNextLevel();
   const counts = {};
   for(const type of (next.enemies || [])){
@@ -1788,30 +1838,49 @@ stageClearScreen.addEventListener("pointerdown", e=>{
    画面の切り替え（スタート／ポーズ／ゲームオーバー）
    ================================================================ */
 const startScreen = document.getElementById("startScreen");
+const continueScreen = document.getElementById("continueScreen");
+const continueStats = document.getElementById("continueStats");
+const continueBtn = document.getElementById("continueBtn");
+const newGameBtn = document.getElementById("newGameBtn");
 const pauseScreen = document.getElementById("pauseScreen");
 const gameOverScreen = document.getElementById("gameOverScreen");
 const hud = document.getElementById("hud");
 const pauseBtn = document.getElementById("pauseBtn");
 const bgm = document.getElementById("bgm");
 const isIPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  // 端末による体感差を補正。iPhoneではBGMをさらに小さくして効果音を聞き取りやすくする。
-  bgm.volume = isIPhone ? 0.025 : (isMobile ? 0.04 : 0.0833); // ゲーム効果音を邪魔しない控えめな音量
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+bgm.volume = isIPhone ? 0.025 : (isMobile ? 0.04 : 0.0833);
 
-function playBgm(){
-  bgm.play().catch(()=>{});
-}
-function stopBgm(){
-  bgm.pause();
+function playBgm(){ bgm.play().catch(()=>{}); }
+function stopBgm(){ bgm.pause(); }
+
+function formatContinueStage(d){
+  const n = Math.max(1, Math.floor(d.totalStageProgress));
+  const lap = Math.max(1, Math.floor(d.lapNum || Math.ceil(n / 50)));
+  const stage = ((n - 1) % 50) + 1;
+  return lap === 1 ? `STAGE ${stage}` : `${lap}周目 STAGE ${stage}`;
 }
 
-document.getElementById("startBtn").addEventListener("click", startGame);
+function showContinueScreen(){
+  const saved = loadContinueData();
+  if(!saved){
+    continueScreen.classList.add("hidden");
+    startScreen.classList.remove("hidden");
+    return;
+  }
+  continueStats.innerHTML = `ステージ：<b>${formatContinueStage(saved)}</b><br>残機：<b>${Math.max(0, Math.floor(saved.lives))}</b><br>スコア：<b>${Math.max(0, Math.floor(saved.score))}</b>`;
+  startScreen.classList.add("hidden");
+  continueScreen.classList.remove("hidden");
+}
+
+continueBtn.addEventListener("click", ()=>startGame(true));
+newGameBtn.addEventListener("click", ()=>startGame(false));
 document.getElementById("resumeBtn").addEventListener("click", ()=>{
-  pauseScreen.classList.add("hidden"); state="playing";
-  playBgm();
+  pauseScreen.classList.add("hidden"); state="playing"; playBgm();
 });
-document.getElementById("restartFromPauseBtn").addEventListener("click", startGame);
-document.getElementById("retryBtn").addEventListener("click", startGame);
+document.getElementById("restartFromPauseBtn").addEventListener("click", ()=>startGame(false));
+document.getElementById("retryBtn").addEventListener("click", ()=>startGame(false));
+
 pauseBtn.addEventListener("click", ()=>{
   if(state==="playing"){
     state="paused";
@@ -1820,25 +1889,44 @@ pauseBtn.addEventListener("click", ()=>{
   }
 });
 
-function startGame(){
+function startGame(continueGame=false){
   initAudio();
   bgm.currentTime = 0;
-  playBgm();
-  stageNum = 1; lapNum = 1; totalStageProgress = 1;
-  score = 0; lives = 3; // ★初期ライフ数
+  const saved = continueGame ? loadContinueData() : null;
+  if(saved){
+    stageNum = Math.max(1, Math.floor(saved.stageNum));
+    lapNum = Math.max(1, Math.floor(saved.lapNum || Math.ceil(saved.totalStageProgress / 50)));
+    totalStageProgress = Math.max(1, Math.floor(saved.totalStageProgress));
+    score = Math.max(0, Math.floor(saved.score));
+    lives = Math.max(1, Math.floor(saved.lives));
+  }else{
+    stageNum = 1; lapNum = 1; totalStageProgress = 1;
+    score = 0; lives = 3;
+    clearContinueData();
+  }
   updateMaxStage();
-  buildLevel(0);
+  buildLevel(stageNum - 1);
   stageClearDelay = 0;
-  gameStartFireLock = 1.0; // ゲーム開始から1秒間は射撃不可
+  gameStartFireLock = 1.0;
   state = "playing";
   startScreen.classList.add("hidden");
+  continueScreen.classList.add("hidden");
   pauseScreen.classList.add("hidden");
   gameOverScreen.classList.add("hidden");
   stageClearScreen.classList.add("hidden");
   hud.classList.remove("hidden");
+  flashStage(formatStageProgress(totalStageProgress));
+  playBgm();
 }
+
+// セーブデータがある場合は、ゲーム開始前に専用の選択画面を表示する。
+if(loadContinueData()) showContinueScreen();
+
 function showGameOver(){
   state = "gameover";
+  clearContinueData();
+  hasContinueSave = false;
+  startBtn.textContent = "スタート";
   stopBgm();
   document.getElementById("finalStage").textContent = formatClearedStage(totalStageProgress - 1);
   document.getElementById("finalMaxStage").textContent = formatClearedStage(maxStageProgress - 1);
