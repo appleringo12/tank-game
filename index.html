@@ -500,13 +500,19 @@ function rightMove(x,y,id){
   placeJoy(rightBase, rightStick, rightJoy.sx, rightJoy.sy, dx, dy);
   input.aimMag = Math.min(d,MAX_JOY)/MAX_JOY;
   if(input.aimMag>0.2){ input.aimAngle = Math.atan2(dy,dx); }
-  rightStick.classList.toggle("fire-ready", input.aimMag>0.55 && rightJoy.dragged);
+  const fireReady = input.aimMag>0.55 && rightJoy.dragged;
+  if(rightJoy.fireReadyVisual !== fireReady){
+    rightJoy.fireReadyVisual = fireReady;
+    rightStick.classList.toggle("fire-ready", fireReady);
+  }
 }
 function rightEnd(id){
   if(!rightJoy.active || id!==rightJoy.id) return;
   // 照準ドラッグを離しただけでは発射しない。
   // 発射は「ドラッグを維持したまま2本目の指でタップ」で行う。
   rightJoy.active=false; input.aimMag=0; input.aiming=false;
+  if(rightJoy.fireReadyVisual){ rightJoy.fireReadyVisual=false; rightStick.classList.remove("fire-ready"); }
+  if(rightJoy.chargingVisual){ rightJoy.chargingVisual=false; rightStick.classList.remove("missile-charging"); }
   // 先行入力中に右指を離した場合は、記憶していたミサイル発射をキャンセルする。
   rightJoy.missilePending=false;
   rightJoy.holdTime=0;
@@ -715,19 +721,23 @@ function makeEnemy(type,x,y){
     r:t.r, speed:t.speed, hp:t.hp, maxHp:t.hp, alive:true,
     spawnX:x, spawnY:y, // 復活時にこの位置へ戻す
     maxBullets:t.maxBullets, // 画面上に同時に出せる自分の弾の最大数
+    bulletCount:0,
     fireCooldown: rand(0, t.fireInterval ?? ENEMY_FIRE_INTERVAL), // 敵ごとに少しずつ発射タイミングをずらす
     color:t.color, dark:t.dark,
     dodge: t.dodge !== false, // ★弾を避けるかどうか（黄色・茶色はfalseで避けない）
     wanderTimer: rand(0.5,1.5), wanderDir: Math.random()*Math.PI*2,
     stuckTimer:0,
+    // AIの重い判断だけ約12.5回/秒に間引く。移動・旋回そのものは毎フレーム更新する。
+    aiThinkTimer: Math.random()*0.08,
+    canSeePlayerCache: false,
+    dodgeDirCache: null,
+    shouldShootCache: false,
   };
 }
 
 // 指定した戦車が今、画面上に出している自分の弾の数を数える
 function countBullets(owner){
-  let n=0;
-  for(const b of bullets){ if(!b.dead && b.owner===owner) n++; }
-  return n;
+  return owner?.bulletCount ?? 0;
 }
 
 /* ================================================================
@@ -794,9 +804,14 @@ function spawnBullet(owner){
     vy: Math.sin(owner.turretAngle)*speed,
     owner, bounces:0, dead:false, trail:[], fastBullet, age:0,
   });
+  owner.bulletCount = (owner.bulletCount || 0) + 1;
   playShot(fastBullet);
 }
 function updateBullets(dt){
+  // 1フレーム中は同じ生存戦車リストを使い回し、各弾ごとの配列走査を減らす。
+  const activeTanks = [];
+  for(const t of tanks){ if(t.alive) activeTanks.push(t); }
+
   for(const b of bullets){
     if(b.dead) continue;
     b.age += dt;
@@ -860,8 +875,7 @@ function updateBullets(dt){
     if(!b.fastBullet && b.bounces > BULLET_MAX_BOUNCE){ b.dead=true; continue; }
 
     // 戦車との当たり判定
-    for(const t of tanks){
-      if(!t.alive) continue;
+    for(const t of activeTanks){
       if(t===b.owner){
         // 敵は自分の弾には絶対に当たらない。
         if(!t.isPlayer) continue;
@@ -896,7 +910,18 @@ function updateBullets(dt){
     }
   }
 
-  bullets = bullets.filter(b=>!b.dead);
+  // 弾配列は毎フレームfilterで作り直さず、その場で詰め直す。
+  // これにより弾数が多い場面の一時オブジェクト生成を抑える。
+  let write = 0;
+  for(let read=0; read<bullets.length; read++){
+    const b = bullets[read];
+    if(b.dead){
+      if(b.owner) b.owner.bulletCount = Math.max(0, (b.owner.bulletCount || 0) - 1);
+      continue;
+    }
+    bullets[write++] = b;
+  }
+  bullets.length = write;
 }
 
 function damageTank(t){
@@ -928,12 +953,18 @@ function onPlayerDeath(){
     t.wanderTimer = rand(0.5,1.5);
     t.wanderDir = Math.random()*Math.PI*2;
     t.stuckTimer = 0;
+    t.aiThinkTimer = 0;
+    t.canSeePlayerCache = false;
+    t.dodgeDirCache = null;
+    t.shouldShootCache = false;
+    t.bulletCount = 0;
     const type = ENEMY_TYPES[t.type];
     t.fireCooldown = rand(0, type.fireInterval ?? ENEMY_FIRE_INTERVAL);
   }
 
   // 画面上の弾をすべて消して、死亡前の弾の状態をリセットする。
   bullets = [];
+  for(const t of tanks) t.bulletCount = 0;
 
   respawnTimer = 1.4; // ★死亡してから復活するまでの待ち時間(秒)
   state = "dying";
@@ -976,7 +1007,13 @@ function updateMissiles(dt){
       explodeMissile(m);
     }
   }
-  missiles = missiles.filter(m=>!m.dead);
+  let missileWrite = 0;
+  for(let missileRead=0; missileRead<missiles.length; missileRead++){
+    const m = missiles[missileRead];
+    if(m.dead) continue;
+    missiles[missileWrite++] = m;
+  }
+  missiles.length = missileWrite;
 }
 
 function explodeMissile(m){
@@ -1035,9 +1072,22 @@ function spawnFastBulletImpactFx(x,y){
 }
 function updateFx(dt){
   for(const p of particles){ p.t+=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.9; p.vy*=0.9; }
-  particles = particles.filter(p=>p.t<p.life);
+  let pw = 0;
+  for(let pr=0; pr<particles.length; pr++){
+    const p = particles[pr];
+    if(p.t >= p.life) continue;
+    particles[pw++] = p;
+  }
+  particles.length = pw;
+
   for(const e of explosions){ e.t+=dt; }
-  explosions = explosions.filter(e=>e.t<e.dur);
+  let ew = 0;
+  for(let er=0; er<explosions.length; er++){
+    const e = explosions[er];
+    if(e.t >= e.dur) continue;
+    explosions[ew++] = e;
+  }
+  explosions.length = ew;
 }
 
 /* ================================================================
@@ -1048,55 +1098,71 @@ function updateFx(dt){
 function updateEnemy(t, dt){
   if(!t.alive) return;
   const p = player;
-  const canSeePlayer = p.alive && hasLineOfSight(t.x,t.y,p.x,p.y);
 
+  // 重いAI判断（視界・弾避け・射撃判断）は約12.5回/秒。
+  // 移動と旋回は下で毎フレーム行うので、プレイヤーの操作感には影響しない。
+  t.aiThinkTimer -= dt;
+  if(t.aiThinkTimer <= 0){
+    t.aiThinkTimer += 0.08;
+    const canSeePlayer = p.alive && hasLineOfSight(t.x,t.y,p.x,p.y);
+    t.canSeePlayerCache = canSeePlayer;
+
+    let dodgeDir = null;
+    let dodgeDistSq = ENEMY_DODGE_RADIUS*ENEMY_DODGE_RADIUS;
+    if(t.dodge){
+      for(const b of bullets){
+        if(b.dead || b.owner===t) continue;
+        const dx = t.x-b.x, dy = t.y-b.y;
+        const distSq = dx*dx+dy*dy;
+        if(distSq < dodgeDistSq){
+          dodgeDistSq = distSq;
+          dodgeDir = Math.atan2(dy,dx);
+        }
+      }
+    }
+    t.dodgeDirCache = dodgeDir;
+
+    t.shouldShootCache = false;
+    if(canSeePlayer && p.invuln<=0 && t.fireCooldown<=0 && countBullets(t) < t.maxBullets){
+      const aimDiff = Math.abs(((Math.atan2(p.y-t.y,p.x-t.x)-t.turretAngle+Math.PI*3)%(Math.PI*2))-Math.PI);
+      t.shouldShootCache = aimDiff < 0.28;
+    }
+  }
+
+  const canSeePlayer = t.canSeePlayerCache;
   t.wanderTimer -= dt;
   t.fireCooldown = Math.max(0, (t.fireCooldown ?? 0) - dt);
   if(t.wanderTimer<=0 || t.stuckTimer>0.4){
     // プレイヤーが見えていれば大まかにプレイヤー方向へ、見えていなければランダムな方向へ
     t.wanderDir = canSeePlayer ? Math.atan2(p.y-t.y, p.x-t.x) + rand(-0.35,0.35) : Math.random()*Math.PI*2;
-    t.wanderTimer = rand(0.8,2.0); // ★次に方向転換を検討するまでの間隔
+    t.wanderTimer = rand(0.8,2.0);
     t.stuckTimer = 0;
   }
 
-  // ★自分以外の弾が一定距離まで近づいたら、その弾と逆方向へ少し逃げる（黄色・茶色は避けない）
-  let dodgeDir = null, dodgeDistSq = ENEMY_DODGE_RADIUS*ENEMY_DODGE_RADIUS;
-  if(t.dodge){
-    for(const b of bullets){
-      if(b.dead || b.owner===t) continue;
-      const dx = t.x-b.x, dy = t.y-b.y;
-      const distSq = dx*dx+dy*dy;
-      if(distSq < dodgeDistSq){
-        dodgeDistSq = distSq;
-        dodgeDir = Math.atan2(dy,dx); // 弾から自分への向き＝逃げる方向
-      }
-    }
-  }
-  if(dodgeDir !== null){
-    t.wanderDir = dodgeDir;
-    t.wanderTimer = 0.35; // 少しの間だけ逃げたら、通常の行動に戻る
+  // AIの弾避け方向もキャッシュ値を使う。
+  if(t.dodgeDirCache !== null){
+    t.wanderDir = t.dodgeDirCache;
+    t.wanderTimer = 0.35;
     t.stuckTimer = 0;
   }
 
   const prevX=t.x, prevY=t.y;
-  t.angle = lerpAngle(t.angle, t.wanderDir, 1-Math.pow(0.001,dt)); // 数値を小さくすると曲がる速さが変わる
+  t.angle = lerpAngle(t.angle, t.wanderDir, 1-Math.pow(0.001,dt));
   t.x += Math.cos(t.angle)*t.speed*dt;
   t.y += Math.sin(t.angle)*t.speed*dt;
   resolveWallCollision(t);
   const moved = Math.hypot(t.x-prevX, t.y-prevY);
-  if(moved < t.speed*dt*0.3) t.stuckTimer += dt; else t.stuckTimer = 0; // 壁にひっかかったら方向転換
+  if(moved < t.speed*dt*0.3) t.stuckTimer += dt; else t.stuckTimer = 0;
 
   if(canSeePlayer){
     t.turretAngle = lerpAngle(t.turretAngle, Math.atan2(p.y-t.y,p.x-t.x), 1-Math.pow(0.0005,dt));
   }
 
-  // 敵は一定間隔で発射できる。
-  if(canSeePlayer && p.invuln<=0 && t.fireCooldown<=0 && countBullets(t) < t.maxBullets){
-    const aimDiff = Math.abs(((Math.atan2(p.y-t.y,p.x-t.x)-t.turretAngle+Math.PI*3)%(Math.PI*2))-Math.PI);
-    if(aimDiff < 0.28){ // ★この角度以内に狙いが合ったら撃つ（ラジアン）
-      spawnBullet(t);
-      t.fireCooldown = t.fireInterval ?? ENEMY_FIRE_INTERVAL;
-    }
+  // 射撃判断はキャッシュ済み。クールダウン自体は毎フレーム更新する。
+  if(t.shouldShootCache && canSeePlayer && p.invuln<=0 && t.fireCooldown<=0 && countBullets(t) < t.maxBullets){
+    spawnBullet(t);
+    t.fireCooldown = t.fireInterval ?? ENEMY_FIRE_INTERVAL;
+    t.shouldShootCache = false;
   }
 }
 
@@ -1157,7 +1223,11 @@ function updatePlayer(dt){
   // ミサイルが撃てるようになった瞬間に最速で自動発射する。
   if(rightJoy.active && !rightJoy.dragged && !rightJoy.missileArmed){
     rightJoy.holdTime += dt;
-    rightStick.classList.toggle("missile-charging", rightJoy.holdTime > MISSILE_HOLD_TIME*0.4);
+    const missileCharging = rightJoy.holdTime > MISSILE_HOLD_TIME*0.4;
+    if(rightJoy.chargingVisual !== missileCharging){
+      rightJoy.chargingVisual = missileCharging;
+      rightStick.classList.toggle("missile-charging", missileCharging);
+    }
     if(rightJoy.holdTime >= MISSILE_HOLD_TIME){
       rightJoy.missilePending = true;
       if(fireMissile(rightJoy.missileAngle)){
@@ -1201,9 +1271,16 @@ function loop(ts){
     updateBullets(dt);
     updateMissiles(dt);
     updateFx(dt);
-    tanks = tanks.filter(t=> t.isPlayer || t.alive);
+    let tankWrite = 0;
+    let enemiesLeft = 0;
+    for(let tankRead=0; tankRead<tanks.length; tankRead++){
+      const tank = tanks[tankRead];
+      if(!tank.isPlayer && !tank.alive) continue;
+      tanks[tankWrite++] = tank;
+      if(!tank.isPlayer) enemiesLeft++;
+    }
+    tanks.length = tankWrite;
 
-    const enemiesLeft = tanks.filter(t=>!t.isPlayer && t.alive).length;
     updateHud(enemiesLeft);
     if(enemiesLeft===0){
       // 最後の敵を倒した瞬間に状態を固定し、約1秒後にだけクリア画面へ移る。
@@ -1568,26 +1645,46 @@ function updateMaxStage(){
   }
 }
 
+let hudEnemyCache = -1;
+let hudLivesCache = -1;
+let hudStageCache = -1;
+let hudMaxCache = -1;
 function updateHud(enemiesLeft){
-  stageLabelEl.textContent = `${formatStageProgress(totalStageProgress)}  残り${enemiesLeft}`;
-  maxStageLabelEl.textContent = `MAX CLEAR ${formatClearedStage(maxStageProgress - 1)}`;
-  livesEl.innerHTML = "";
-  const safeLives = Math.max(lives,0);
-  // ★ハートは最大5個までアイコン表示。6個以上になったらハート1個＋「×数字」で表記する。
-  const heartCount = safeLives > MAX_HEART_ICONS ? 1 : safeLives;
-  for(let i=0;i<heartCount;i++){
-    const s=document.createElementNS("http://www.w3.org/2000/svg","svg");
-    s.setAttribute("viewBox","0 0 16 14"); s.setAttribute("class","heart");
-    s.innerHTML = '<path d="M8 13 L2 7.5 C0 5.5 0.5 2 3.5 1.5 C5.5 1.2 7 2.3 8 3.8 C9 2.3 10.5 1.2 12.5 1.5 C15.5 2 16 5.5 14 7.5 Z" fill="#ff6f91" stroke="#ffffff" stroke-width="0.8"/>';
-    livesEl.appendChild(s);
+  const stageChanged = hudStageCache !== totalStageProgress;
+  const maxChanged = hudMaxCache !== maxStageProgress;
+  const enemyChanged = hudEnemyCache !== enemiesLeft;
+  const livesChanged = hudLivesCache !== lives;
+
+  if(stageChanged || enemyChanged){
+    stageLabelEl.textContent = `${formatStageProgress(totalStageProgress)}  残り${enemiesLeft}`;
+    hudStageCache = totalStageProgress;
+    hudEnemyCache = enemiesLeft;
   }
-  if(safeLives > MAX_HEART_ICONS){
-    const countEl = document.createElement("span");
-    countEl.className = "livesCount";
-    countEl.textContent = `×${safeLives}`;
-    livesEl.appendChild(countEl);
+  if(maxChanged){
+    maxStageLabelEl.textContent = `MAX CLEAR ${formatClearedStage(maxStageProgress - 1)}`;
+    hudMaxCache = maxStageProgress;
+  }
+  if(livesChanged){
+    livesEl.innerHTML = "";
+    const safeLives = Math.max(lives,0);
+    // ★ハートは最大5個までアイコン表示。6個以上になったらハート1個＋「×数字」で表記する。
+    const heartCount = safeLives > MAX_HEART_ICONS ? 1 : safeLives;
+    for(let i=0;i<heartCount;i++){
+      const s=document.createElementNS("http://www.w3.org/2000/svg","svg");
+      s.setAttribute("viewBox","0 0 16 14"); s.setAttribute("class","heart");
+      s.innerHTML = '<path d="M8 13 L2 7.5 C0 5.5 0.5 2 3.5 1.5 C5.5 1.2 7 2.3 8 3.8 C9 2.3 10.5 1.2 12.5 1.5 C15.5 2 16 5.5 14 7.5 Z" fill="#ff6f91" stroke="#ffffff" stroke-width="0.8"/>';
+      livesEl.appendChild(s);
+    }
+    if(safeLives > MAX_HEART_ICONS){
+      const countEl = document.createElement("span");
+      countEl.className = "livesCount";
+      countEl.textContent = `×${safeLives}`;
+      livesEl.appendChild(countEl);
+    }
+    hudLivesCache = lives;
   }
 }
+
 const stageFlashEl = document.getElementById("stageFlash");
 let flashTimer=0;
 function flashStage(text){
