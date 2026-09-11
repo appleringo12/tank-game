@@ -272,7 +272,7 @@
     <!-- ゲームオーバー画面 -->
     <div id="gameOverScreen" class="overlay hidden">
       <h1 class="title" style="color:var(--blood); text-shadow:3px 3px 0 #ffc9dc;">GAME OVER</h1>
-      <p class="subtitle">モード: <b id="finalMode"></b><br>クリアステージ: <b id="finalStage"></b><br>最大クリアステージ: <b id="finalMaxStage"></b><br>スコア: <b id="finalScore"></b><br>ハイスコア: <b id="finalHighScore"></b></p>
+      <p class="subtitle">モード: <b id="finalMode"></b><br>クリアステージ: <b id="finalStage"></b><br>最大クリアステージ: <b id="finalMaxStage"></b></p>
       <button class="btn" id="retryBtn">同じモードでもう一度</button>
       <button class="btn alt" id="gameOverTitleBtn">タイトル画面に戻る</button>
     </div>
@@ -334,13 +334,13 @@ const MISSILE_MAX_ACTIVE = 1;        // ★同時に存在できるミサイル�
 // --- 敵の種類ごとのパラメータ ---
 // speed=移動速度 / hp=耐久力（弾を何発で倒せるか）
 // maxBullets=画面上に同時に出せる自分の弾の最大数（一番強いheavyだけ自機と同じ5発、他は1発）
-// color/dark=見た目の色 / score=倒したときの得点 / r=当たり判定の半径
+// color/dark=見た目の色 / r=当たり判定の半径
 const ENEMY_TYPES = {
-  yellow:{ speed:0,  hp:1, color:"#ffe999", dark:"#f0c95c", maxBullets:1, bulletSpeed:80,  score:100, r:TANK_R, fastBullet:false, fireInterval:10.0, dodge:false },
-  brown: { speed:50, hp:1, color:"#e0c09a", dark:"#c99a68", maxBullets:1, bulletSpeed:80,  score:120, r:TANK_R, fastBullet:false, fireInterval:10.0, dodge:false },
-  green: { speed:50, hp:1, color:"#a8e6b0", dark:"#7ecb8c", maxBullets:1, bulletSpeed:240, score:180, r:TANK_R, fastBullet:true  },
-  red:   { speed:50, hp:1, color:"#ff9aa8", dark:"#e06b7d", maxBullets:5, bulletSpeed:80,  score:250, r:TANK_R, fastBullet:false, fireInterval:0.2 },
-  black: { speed:100,hp:1, color:"#c3aef0", dark:"#a186e0", maxBullets:2, bulletSpeed:240, score:400, r:TANK_R, fastBullet:true, fireInterval:2.0},
+  yellow:{ speed:0,  hp:1, color:"#ffe999", dark:"#f0c95c", maxBullets:1, bulletSpeed:80,  r:TANK_R, fastBullet:false, fireInterval:10.0, dodge:false },
+  brown: { speed:50, hp:1, color:"#e0c09a", dark:"#c99a68", maxBullets:1, bulletSpeed:80,  r:TANK_R, fastBullet:false, fireInterval:10.0, dodge:false },
+  green: { speed:50, hp:1, color:"#a8e6b0", dark:"#7ecb8c", maxBullets:1, bulletSpeed:240, r:TANK_R, fastBullet:true  },
+  red:   { speed:50, hp:1, color:"#ff9aa8", dark:"#e06b7d", maxBullets:5, bulletSpeed:80,  r:TANK_R, fastBullet:false, fireInterval:0.2 },
+  black: { speed:100,hp:1, color:"#c3aef0", dark:"#a186e0", maxBullets:2, bulletSpeed:240, r:TANK_R, fastBullet:true, fireInterval:2.0},
 };
 
 /* ================================================================
@@ -619,7 +619,6 @@ let lapNum = 1; // 50ステージごとの周回数。一周目は表示しな�
 let totalStageProgress = 1; // 現在の通算ステージ番号（1周目1=1、2周目1=51）
 let gameMode = "normal"; // normal=通常モード / rush=爽快モード
 let maxStageProgress = 1;
-let highScore = 0;
 function getModeLabel(mode=gameMode){ return mode === "rush" ? "爽快モード" : "通常モード"; }
 function getModeKey(prefix, mode=gameMode){ return `tankBattle${prefix}_${mode}`; }
 function loadModeRecord(prefix, mode=gameMode, fallback=0){
@@ -627,7 +626,7 @@ function loadModeRecord(prefix, mode=gameMode, fallback=0){
     const v = Number(localStorage.getItem(getModeKey(prefix, mode)));
     if(Number.isFinite(v) && v >= 0) return Math.floor(v);
     if(mode === "normal"){
-      const oldKey = prefix === "MaxStageProgress" ? "tankBattleMaxStageProgress" : "tankBattleHighScore";
+      const oldKey = "tankBattleMaxStageProgress";
       const old = Number(localStorage.getItem(oldKey));
       if(Number.isFinite(old) && old >= 0) return Math.floor(old);
     }
@@ -637,8 +636,7 @@ function loadModeRecord(prefix, mode=gameMode, fallback=0){
 function saveModeRecord(prefix, value, mode=gameMode){
   try{ localStorage.setItem(getModeKey(prefix, mode), String(Math.max(0, Math.floor(Number(value)||0)))); }catch(e){}
 }
-try { maxStageProgress = loadModeRecord("MaxStageProgress", gameMode, 1) || 1; highScore = loadModeRecord("HighScore", gameMode, 0); } catch(e) { maxStageProgress = 1; highScore = 0; }
-let score = 0;
+try { maxStageProgress = loadModeRecord("MaxStageProgress", gameMode, 1) || 1; } catch(e) { maxStageProgress = 1; }
 let lives = 3;
 
 // ================================================================
@@ -649,7 +647,7 @@ let lives = 3;
 const SAVE_KEY = "tankBattleContinueSaveV1";
 function saveContinueData(data=null){
   try{
-    const d = data || { stageNum, lapNum, totalStageProgress, lives, score, savedAt: Date.now() };
+    const d = data || { stageNum, lapNum, totalStageProgress, lives, savedAt: Date.now() };
     localStorage.setItem(SAVE_KEY, JSON.stringify(d));
   }catch(e){}
 }
@@ -658,7 +656,7 @@ function loadContinueData(){
     const raw = localStorage.getItem(SAVE_KEY);
     if(!raw) return null;
     const d = JSON.parse(raw);
-    if(!Number.isFinite(d.stageNum) || !Number.isFinite(d.totalStageProgress) || !Number.isFinite(d.lives) || !Number.isFinite(d.score)) return null;
+    if(!Number.isFinite(d.stageNum) || !Number.isFinite(d.totalStageProgress) || !Number.isFinite(d.lives)) return null;
     d.mode = d.mode === "rush" ? "rush" : "normal";
     return d;
   }catch(e){ return null; }
@@ -1003,7 +1001,6 @@ function damageTank(t){
     playExplosion();
     if(t.isPlayer) onPlayerDeath();
     else {
-      score += ENEMY_TYPES[t.type].score;
     }
   } else {
     spawnHitFx(t.x,t.y);
@@ -1374,7 +1371,7 @@ function loop(ts){
       state = "stageclear";
       showStageClear();
       // ★10ステージ毎のクリア（ライフ回復あり）は専用のファンファーレを鳴らす
-      if(stageNum % STAGES_PER_EXTRA_LIFE === 0) playMilestoneClear();
+      if(lapNum === 1 && stageNum % STAGES_PER_EXTRA_LIFE === 0) playMilestoneClear();
       else playStageClear();
     }
   } else if(state==="stageclear"){
@@ -1715,15 +1712,8 @@ function updateMaxStage(){
     saveModeRecord("MaxStageProgress", maxStageProgress, gameMode);
   }
 }
-function updateHighScore(){
-  if(score > highScore){
-    highScore = score;
-    saveModeRecord("HighScore", highScore, gameMode);
-  }
-}
 function refreshModeRecords(){
   maxStageProgress = loadModeRecord("MaxStageProgress", gameMode, 1) || 1;
-  highScore = loadModeRecord("HighScore", gameMode, 0);
 }
 
 let hudEnemyCache = -1;
@@ -1824,7 +1814,7 @@ function getNextLevel(){
 
 function showStageClear(){
   // ★ステージを10クリアするごとにライフを1回復する。
-  const gotExtraLife = (stageNum % STAGES_PER_EXTRA_LIFE === 0);
+  const gotExtraLife = (lapNum === 1 && stageNum % STAGES_PER_EXTRA_LIFE === 0);
   if(gotExtraLife){
     lives++;
   }
@@ -1833,7 +1823,6 @@ function showStageClear(){
   // ステージクリア成立時だけセーブ。次のステージから再開できる。
   const wasLastStage = (stageNum >= 50);
   updateMaxStage();
-  updateHighScore();
   saveContinueData({
     stageNum: nextNum,
     lapNum: wasLastStage ? lapNum + 1 : lapNum,
@@ -1854,7 +1843,7 @@ function showStageClear(){
   ).join("");
 
   clearStageTitle.textContent = `STAGE ${stageNum} CLEAR!`;
-  clearStats.innerHTML = `残機：${Math.max(lives,0)}　　スコア：${score}` + (gotExtraLife ? `　　<span style="color:var(--amber);">ライフ+1！</span>` : "");
+  clearStats.innerHTML = `残機：${Math.max(lives,0)}` + (gotExtraLife ? `　　<span style="color:var(--amber);">ライフ+1！</span>` : "");
   nextStageInfo.innerHTML = `次のステージ：<b>STAGE ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
   stageClearScreen.classList.remove("hidden");
 }
@@ -1923,7 +1912,7 @@ function showContinueScreen(){
     startScreen.classList.remove("hidden");
     return;
   }
-  continueStats.innerHTML = `モード：<b>${getModeLabel(saved.mode)}</b><br>ステージ：<b>${formatContinueStage(saved)}</b><br>残機：<b>${Math.max(0, Math.floor(saved.lives))}</b><br>スコア：<b>${Math.max(0, Math.floor(saved.score))}</b>`;
+  continueStats.innerHTML = `モード：<b>${getModeLabel(saved.mode)}</b><br>ステージ：<b>${formatContinueStage(saved)}</b><br>残機：<b>${Math.max(0, Math.floor(saved.lives))}</b>`;
   startScreen.classList.add("hidden");
   continueScreen.classList.remove("hidden");
 }
@@ -1943,9 +1932,7 @@ function showTitleScreen(){
 function updateModeStats(){
   const nMax = loadModeRecord("MaxStageProgress", "normal", 1) || 1;
   const rMax = loadModeRecord("MaxStageProgress", "rush", 1) || 1;
-  const nScore = loadModeRecord("HighScore", "normal", 0);
-  const rScore = loadModeRecord("HighScore", "rush", 0);
-  modeStats.innerHTML = `通常：最高 ${formatClearedStage(nMax-1)}　ハイスコア ${nScore}<br>爽快：最高 ${formatClearedStage(rMax-1)}　ハイスコア ${rScore}`;
+  modeStats.innerHTML = `通常：最高 ${formatClearedStage(nMax-1)}<br>爽快：最高 ${formatClearedStage(rMax-1)}`;
 }
 function safeStartGame(continueGame=false, selectedMode=null){
   try { startGame(continueGame, selectedMode); } catch(e) {
@@ -1956,7 +1943,6 @@ function safeStartGame(continueGame=false, selectedMode=null){
       stageNum=continueGame ? stageNum : 1;
       lapNum=continueGame ? lapNum : 1;
       totalStageProgress=continueGame ? totalStageProgress : 1;
-      score=continueGame ? score : 0;
       lives=continueGame ? lives : 3;
       refreshModeRecords();
       buildLevel(stageNum-1);
@@ -2003,13 +1989,12 @@ function startGame(continueGame=false, selectedMode=null){
     stageNum = Math.max(1, Math.floor(saved.stageNum));
     lapNum = Math.max(1, Math.floor(saved.lapNum || Math.ceil(saved.totalStageProgress / 50)));
     totalStageProgress = Math.max(1, Math.floor(saved.totalStageProgress));
-    score = Math.max(0, Math.floor(saved.score));
     lives = Math.max(1, Math.floor(saved.lives));
   }else{
     gameMode = selectedMode === "rush" ? "rush" : "normal";
     refreshModeRecords();
     stageNum = 1; lapNum = 1; totalStageProgress = 1;
-    score = 0; lives = 3;
+    lives = 3;
     clearContinueData();
   }
   updateMaxStage();
@@ -2033,13 +2018,10 @@ if(loadContinueData()) showContinueScreen(); else showTitleScreen();
 function showGameOver(){
   state = "gameover";
   updateMaxStage();
-  updateHighScore();
   clearContinueData();
   stopBgm();
   document.getElementById("finalStage").textContent = formatClearedStage(totalStageProgress - 1);
   document.getElementById("finalMaxStage").textContent = formatClearedStage(maxStageProgress - 1);
-  document.getElementById("finalScore").textContent = `${score}`;
-  document.getElementById("finalHighScore").textContent = `${highScore}`;
   document.getElementById("finalMode").textContent = getModeLabel();
   gameOverScreen.classList.remove("hidden");
   stageClearScreen.classList.add("hidden");
