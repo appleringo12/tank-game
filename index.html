@@ -1696,31 +1696,17 @@ const gameOverScreen = document.getElementById("gameOverScreen");
 const hud = document.getElementById("hud");
 const pauseBtn = document.getElementById("pauseBtn");
 const bgm = document.getElementById("bgm");
-// BGM音量：端末ごとに極端に小さくせず、通常値に統一。
-bgm.volume = 0.0833;
+const isIPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  // 端末による体感差を補正。iPhoneではBGMをさらに小さくして効果音を聞き取りやすくする。
+  bgm.volume = isIPhone ? 0.025 : (isMobile ? 0.04 : 0.0833); // ゲーム効果音を邪魔しない控えめな音量
 
 function playBgm(){
-  if(state !== "playing" && state !== undefined) return;
   bgm.play().catch(()=>{});
 }
 function stopBgm(){
   bgm.pause();
 }
-
-// iPhone/SafariでBGMだけが一時停止した場合に、ゲーム中なら自動復帰する。
-// ポーズ・ゲームオーバー時には復帰させない。
-let bgmResumeTimer = null;
-function resumeBgmIfNeeded(){
-  if(state !== "playing" || !bgm.paused) return;
-  clearTimeout(bgmResumeTimer);
-  bgmResumeTimer = setTimeout(()=>{
-    if(state === "playing" && bgm.paused) playBgm();
-  }, 100);
-}
-bgm.addEventListener("pause", resumeBgmIfNeeded);
-document.addEventListener("visibilitychange", ()=>{
-  if(!document.hidden) resumeBgmIfNeeded();
-});
 
 document.getElementById("startBtn").addEventListener("click", startGame);
 document.getElementById("resumeBtn").addEventListener("click", ()=>{
