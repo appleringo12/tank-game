@@ -222,15 +222,6 @@
 
     <!-- スタート画面 -->
     <div id="startScreen" class="overlay">
-      <svg class="tank-emblem" viewBox="0 0 64 64">
-        <rect x="14" y="26" width="36" height="18" rx="6" fill="#ffb3d9" stroke="#fff" stroke-width="1.5"/>
-        <rect x="10" y="40" width="44" height="6" rx="3" fill="#ff8fc4"/>
-        <circle cx="18" cy="46" r="5" fill="#c9baf5" stroke="#fff" stroke-width="1.2"/>
-        <circle cx="32" cy="46" r="5" fill="#c9baf5" stroke="#fff" stroke-width="1.2"/>
-        <circle cx="46" cy="46" r="5" fill="#c9baf5" stroke="#fff" stroke-width="1.2"/>
-        <rect x="30" y="10" width="7" height="20" rx="3" fill="#ffd166"/>
-        <circle cx="30" cy="30" r="10" fill="#ffb3d9" stroke="#fff" stroke-width="1.5"/>
-      </svg>
       <h1 class="title">戦車バトル</h1>
       <p class="subtitle">
         画面下・左側ドラッグ＝<b>移動</b><br>
@@ -445,7 +436,7 @@ const MAX_JOY = 46; // スティックが動ける最大半径(px)。見た目�
 // 左スティック（移動用）の状態
 const leftJoy  = { active:false, id:null, sx:0, sy:0 };
 // 右スティック（照準・発射・ミサイル用）の状態
-const rightJoy = { active:false, id:null, sx:0, sy:0, holdTime:0, dragged:false, missileArmed:false };
+const rightJoy = { active:false, id:null, sx:0, sy:0, holdTime:0, dragged:false, missileArmed:false, missileAngle:0, missilePending:false, chargingVisual:false };
 
 const leftZoneEl  = document.getElementById("leftZone");
 const rightZoneEl = document.getElementById("rightZone");
@@ -492,7 +483,10 @@ function rightStart(x,y,id){
   // 右側の指は照準専用。発射は画面全体のタップを受け付ける。
   if(rightJoy.active) return;
   rightJoy.active=true; rightJoy.id=id; rightJoy.sx=x; rightJoy.sy=y;
-  rightJoy.holdTime=0; rightJoy.dragged=false; rightJoy.missileArmed=false;
+  rightJoy.holdTime=0; rightJoy.dragged=false; rightJoy.missileArmed=false; rightJoy.missilePending=false; rightJoy.chargingVisual=false;
+  // 右ボタンを押し始めた瞬間の、左スティックの直近の入力角度を保存する。
+  // その後に左スティックを動かしても、この角度のまま発射する。
+  rightJoy.missileAngle = lastMoveAngle;
   rightBase.classList.remove("hidden"); rightStick.classList.remove("hidden");
   placeJoy(rightBase, rightStick, x, y, 0, 0);
   input.aiming = true;
@@ -513,6 +507,11 @@ function rightEnd(id){
   // 照準ドラッグを離しただけでは発射しない。
   // 発射は「ドラッグを維持したまま2本目の指でタップ」で行う。
   rightJoy.active=false; input.aimMag=0; input.aiming=false;
+  // 先行入力中に右指を離した場合は、記憶していたミサイル発射をキャンセルする。
+  rightJoy.missilePending=false;
+  rightJoy.holdTime=0;
+  rightJoy.missileArmed=false;
+  rightJoy.chargingVisual=false;
   rightBase.classList.add("hidden"); rightStick.classList.add("hidden");
   rightStick.classList.remove("missile-charging","fire-ready");
 }
@@ -722,6 +721,8 @@ function makeEnemy(type,x,y){
     dodge: t.dodge !== false, // ★弾を避けるかどうか（黄色・茶色はfalseで避けない）
     wanderTimer: rand(0.5,1.5), wanderDir: Math.random()*Math.PI*2,
     stuckTimer:0,
+    losTimer:0, losCache:false,
+    dodgeTimer:0,
   };
 }
 
@@ -730,6 +731,17 @@ function countBullets(owner){
   let n=0;
   for(const b of bullets){ if(!b.dead && b.owner===owner) n++; }
   return n;
+}
+
+// 1フレーム内に同じ戦車の弾数を何度も走査しないための簡易キャッシュ。
+let playerBulletCountCache = 0;
+function getPlayerBulletCount(){
+  return playerBulletCountCache;
+}
+function refreshBulletCountCache(){
+  let n=0;
+  for(const b of bullets){ if(!b.dead && b.owner===player) n++; }
+  playerBulletCountCache = n;
 }
 
 /* ================================================================
@@ -954,9 +966,9 @@ function getMissileTargetPoint(originX, originY, angle){
     y: clamp(originY + Math.sin(angle)*MISSILE_DISTANCE, MISSILE_DISTANCE*0.02, WORLD_H-MISSILE_DISTANCE*0.02),
   };
 }
-function fireMissile(){
+function fireMissile(angle = rightJoy.missileAngle){
   if(missiles.length >= MISSILE_MAX_ACTIVE || !player || !player.alive) return false;
-  const angle = lastMoveAngle; // ★車体の向きではなく、左スティックを最後に動かした角度を使う
+  // 右ボタンを押し始めた瞬間に保存した「左スティックの直近の角度」を使う。
   const startX = player.x + Math.cos(angle)*(player.r+5);
   const startY = player.y + Math.sin(angle)*(player.r+5);
   const target = getMissileTargetPoint(player.x, player.y, angle);
@@ -1050,7 +1062,14 @@ function updateFx(dt){
 function updateEnemy(t, dt){
   if(!t.alive) return;
   const p = player;
-  const canSeePlayer = p.alive && hasLineOfSight(t.x,t.y,p.x,p.y);
+
+  // 視界判定は毎フレーム行うと壁を多数走査するため、約10回/秒に間引く。
+  t.losTimer -= dt;
+  if(t.losTimer <= 0){
+    t.losCache = p.alive && hasLineOfSight(t.x,t.y,p.x,p.y);
+    t.losTimer = 0.10;
+  }
+  const canSeePlayer = t.losCache;
 
   t.wanderTimer -= dt;
   t.fireCooldown = Math.max(0, (t.fireCooldown ?? 0) - dt);
@@ -1064,15 +1083,22 @@ function updateEnemy(t, dt){
   // ★自分以外の弾が一定距離まで近づいたら、その弾と逆方向へ少し逃げる（黄色・茶色は避けない）
   let dodgeDir = null, dodgeDistSq = ENEMY_DODGE_RADIUS*ENEMY_DODGE_RADIUS;
   if(t.dodge){
-    for(const b of bullets){
-      if(b.dead || b.owner===t) continue;
-      const dx = t.x-b.x, dy = t.y-b.y;
-      const distSq = dx*dx+dy*dy;
-      if(distSq < dodgeDistSq){
-        dodgeDistSq = distSq;
-        dodgeDir = Math.atan2(dy,dx); // 弾から自分への向き＝逃げる方向
+    t.dodgeTimer -= dt;
+    if(t.dodgeTimer <= 0){
+      t.dodgeTimer = 0.10;
+      t.dodgeDirCache = null;
+      let bestDistSq = dodgeDistSq;
+      for(const b of bullets){
+        if(b.dead || b.owner===t) continue;
+        const dx = t.x-b.x, dy = t.y-b.y;
+        const distSq = dx*dx+dy*dy;
+        if(distSq < bestDistSq){
+          bestDistSq = distSq;
+          t.dodgeDirCache = Math.atan2(dy,dx);
+        }
       }
     }
+    dodgeDir = t.dodgeDirCache ?? null;
   }
   if(dodgeDir !== null){
     t.wanderDir = dodgeDir;
@@ -1143,29 +1169,44 @@ function updatePlayer(dt){
   //   すぐには撃てないだけで入力自体は覚えておき、次に撃てる状態になった
   //   瞬間に自動的に発射する。ただし画面上の弾が上限（5発）に達している
   //   ときは、先行入力として記憶しない（＝5発目を撃った後は自動発射しない）。
-  if((input.fireRequested || keys[" "]) && countBullets(player) < player.maxBullets){
+  if((input.fireRequested || keys[" "]) && getPlayerBulletCount() < player.maxBullets){
     player.fireBuffered = true;
   }
   input.fireRequested = false;
-  if(player.fireBuffered && gameStartFireLock<=0 && player.fireCooldown<=0 && countBullets(player) < player.maxBullets){
+  if(player.fireBuffered && gameStartFireLock<=0 && player.fireCooldown<=0 && getPlayerBulletCount() < player.maxBullets){
     spawnBullet(player);
     player.fireCooldown = PLAYER_FIRE_INTERVAL;
     player.fireBuffered = false;
   }
 
-  // ---- ミサイルの長押し判定 ----
-  // 右ゾーンを押していて、まだドラッグしていない間だけカウント。
+  // ---- ミサイルの長押し＋先行入力判定 ----
+  // 右ボタンを押し始めた瞬間から長押し時間を計測する。
+  // 長押し成立時にミサイルが撃てなくても、発射入力と角度を先行入力として保持し、
+  // ミサイルが撃てるようになった瞬間に最速で自動発射する。
   if(rightJoy.active && !rightJoy.dragged && !rightJoy.missileArmed){
     rightJoy.holdTime += dt;
-    rightStick.classList.toggle("missile-charging", rightJoy.holdTime > MISSILE_HOLD_TIME*0.4);
+    const chargingNow = rightJoy.holdTime > MISSILE_HOLD_TIME*0.4;
+    if(chargingNow !== rightJoy.chargingVisual){
+      rightJoy.chargingVisual = chargingNow;
+      rightStick.classList.toggle("missile-charging", chargingNow);
+    }
     if(rightJoy.holdTime >= MISSILE_HOLD_TIME){
-      if(fireMissile()){
+      rightJoy.missilePending = true;
+      if(fireMissile(rightJoy.missileAngle)){
         rightJoy.missileArmed = true;
+        rightJoy.missilePending = false;
         rightJoy.holdTime = 0;
-      } else {
-        // すでにミサイルが飛んでいる場合も、今回の長押しは終了
-        rightJoy.missileArmed = true;
       }
+    }
+  }
+
+  // 長押し成立後に先行入力として待機している場合。
+  // 右指が離されるまで、保存した角度のまま発射可能になるのを待つ。
+  // 通常弾を撃つための2本目の指のタップや、その後の照準操作では先行入力をキャンセルしない。
+  if(rightJoy.active && rightJoy.missilePending && !rightJoy.missileArmed){
+    if(fireMissile(rightJoy.missileAngle)){
+      rightJoy.missileArmed = true;
+      rightJoy.missilePending = false;
     }
   }
 }
@@ -1190,12 +1231,16 @@ function loop(ts){
       }
     }
     updateBullets(dt);
+    refreshBulletCountCache();
     updateMissiles(dt);
     updateFx(dt);
     tanks = tanks.filter(t=> t.isPlayer || t.alive);
 
-    const enemiesLeft = tanks.filter(t=>!t.isPlayer && t.alive).length;
-    updateHud(enemiesLeft);
+    let enemiesLeft = 0;
+    for(const t of tanks){ if(!t.isPlayer && t.alive) enemiesLeft++; }
+    if(enemiesLeft!==hudEnemyCache || lives!==hudLivesCache || totalStageProgress!==hudStageCache || maxStageProgress!==hudMaxCache){
+      updateHud(enemiesLeft);
+    }
     if(enemiesLeft===0){
       // 最後の敵を倒した瞬間に状態を固定し、約1秒後にだけクリア画面へ移る。
       state = "stageclear_wait";
@@ -1224,6 +1269,7 @@ function loop(ts){
     updateFx(dt);
   }
 
+  updateRenderPreviewCache(dt);
   render();
 }
 
@@ -1451,9 +1497,30 @@ function getAimPreviewSegments(t){
   return segments;
 }
 
+let aimPreviewSegmentsCache = [];
+let aimPreviewAccum = 0;
+let missilePreviewCache = null;
+let missilePreviewAccum = 0;
+
+function updateRenderPreviewCache(dt){
+  if(!player || !player.alive) return;
+  aimPreviewAccum += dt;
+  missilePreviewAccum += dt;
+  // 弾道予測は毎フレームでなく約12回/秒。見た目への影響を抑えつつ計算量を大幅削減。
+  if(aimPreviewAccum >= 0.08){
+    aimPreviewAccum = 0;
+    aimPreviewSegmentsCache = getAimPreviewSegments(player);
+  }
+  // ミサイル予告は計算が軽いので約20回/秒にする。
+  if(missilePreviewAccum >= 0.05){
+    missilePreviewAccum = 0;
+    missilePreviewCache = getMissileTargetPoint(player.x, player.y, lastMoveAngle);
+  }
+}
+
 function drawAimPreview(t){
   if(!t.isPlayer || !t.alive) return;
-  const segments=getAimPreviewSegments(t);
+  const segments=(t===player && aimPreviewSegmentsCache.length) ? aimPreviewSegmentsCache : getAimPreviewSegments(t);
   ctx.save();
   ctx.setLineDash([4,10]);
   ctx.lineWidth=1.5;
@@ -1473,7 +1540,7 @@ function drawAimPreview(t){
 // ミサイルの着弾予測地点。砲台の弾道予測線と同じ色の、四角い照準器で表示する
 function drawMissileTargetPreview(){
   if(!player || !player.alive) return;
-  const tp = getMissileTargetPoint(player.x, player.y, lastMoveAngle);
+  const tp = missilePreviewCache || getMissileTargetPoint(player.x, player.y, lastMoveAngle);
   ctx.save();
   ctx.translate(tp.x, tp.y);
   ctx.strokeStyle = "rgba(190,160,230,0.65)"; // ★砲台の弾道予測線と同じ色
@@ -1535,6 +1602,7 @@ const stageLabelEl = document.getElementById("stageLabel");
 const scoreLabelEl = document.getElementById("scoreLabel");
 const maxStageLabelEl = document.getElementById("maxStageLabel");
 const livesEl = document.getElementById("lives");
+let hudEnemyCache = -1, hudLivesCache = -1, hudStageCache = -1, hudMaxCache = -1;
 function formatStageProgress(progress){
   const n = Math.max(1, Number(progress) || 1);
   const lap = Math.floor((n - 1) / 50) + 1;
@@ -1578,6 +1646,10 @@ function updateHud(enemiesLeft){
     countEl.textContent = `×${safeLives}`;
     livesEl.appendChild(countEl);
   }
+  hudEnemyCache = arguments[0];
+  hudLivesCache = lives;
+  hudStageCache = totalStageProgress;
+  hudMaxCache = maxStageProgress;
 }
 const stageFlashEl = document.getElementById("stageFlash");
 let flashTimer=0;
@@ -1687,17 +1759,31 @@ const gameOverScreen = document.getElementById("gameOverScreen");
 const hud = document.getElementById("hud");
 const pauseBtn = document.getElementById("pauseBtn");
 const bgm = document.getElementById("bgm");
-const isIPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  // 端末による体感差を補正。iPhoneではBGMをさらに小さくして効果音を聞き取りやすくする。
-  bgm.volume = isIPhone ? 0.025 : (isMobile ? 0.04 : 0.0833); // ゲーム効果音を邪魔しない控えめな音量
+// BGM音量：端末ごとに極端に小さくせず、通常値に統一。
+bgm.volume = 0.0833;
 
 function playBgm(){
+  if(state !== "playing" && state !== undefined) return;
   bgm.play().catch(()=>{});
 }
 function stopBgm(){
   bgm.pause();
 }
+
+// iPhone/SafariでBGMだけが一時停止した場合に、ゲーム中なら自動復帰する。
+// ポーズ・ゲームオーバー時には復帰させない。
+let bgmResumeTimer = null;
+function resumeBgmIfNeeded(){
+  if(state !== "playing" || !bgm.paused) return;
+  clearTimeout(bgmResumeTimer);
+  bgmResumeTimer = setTimeout(()=>{
+    if(state === "playing" && bgm.paused) playBgm();
+  }, 100);
+}
+bgm.addEventListener("pause", resumeBgmIfNeeded);
+document.addEventListener("visibilitychange", ()=>{
+  if(!document.hidden) resumeBgmIfNeeded();
+});
 
 document.getElementById("startBtn").addEventListener("click", startGame);
 document.getElementById("resumeBtn").addEventListener("click", ()=>{
@@ -1717,7 +1803,6 @@ pauseBtn.addEventListener("click", ()=>{
 function startGame(){
   initAudio();
   bgm.currentTime = 0;
-  playBgm();
   stageNum = 1; lapNum = 1; totalStageProgress = 1;
   score = 0; lives = 3; // ★初期ライフ数
   updateMaxStage();
@@ -1725,6 +1810,7 @@ function startGame(){
   stageClearDelay = 0;
   gameStartFireLock = 1.0; // ゲーム開始から1秒間は射撃不可
   state = "playing";
+  playBgm();
   startScreen.classList.add("hidden");
   pauseScreen.classList.add("hidden");
   gameOverScreen.classList.add("hidden");
