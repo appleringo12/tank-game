@@ -204,6 +204,9 @@
   #continueStats{ font-size:clamp(17px,5vw,23px); line-height:2; color:var(--paper); font-weight:700; }
   #continueScreen .continueBtn{ width:min(86vw,390px); min-height:76px; font-size:clamp(20px,6vw,28px); letter-spacing:3px; border-radius:28px; padding:16px 20px; }
   #continueScreen .continueBtn.alt{ min-height:70px; }
+  #modeStats{ font-size:clamp(15px,4vw,19px); line-height:1.8; color:var(--paper); font-weight:700; margin:2px 0 4px; }
+  #startScreen .modeBtn{ width:min(86vw,390px); min-height:70px; font-size:clamp(20px,6vw,27px); letter-spacing:2px; border-radius:26px; padding:14px 20px; }
+  #startScreen .modeBtn + .modeBtn{ margin-top:10px; }
   .tank-emblem{ width:64px; height:64px; filter:drop-shadow(0 2px 4px rgba(210,150,230,.4)); }
 </style>
 </head>
@@ -233,7 +236,9 @@
         右下側を<b>長押し</b>＝<b>ミサイル発射</b>（約2秒後に着弾）<br>
         弾は壁に1回だけ跳ね返る
       </p>
-      <button class="btn" id="startBtn">スタート</button>
+      <div id="modeStats"></div>
+      <button class="btn modeBtn" id="normalModeBtn">通常モード</button>
+      <button class="btn modeBtn" id="rushModeBtn">爽快モード</button>
     </div>
 
     <!-- 続きのセーブデータがあるときだけ表示する専用画面 -->
@@ -242,7 +247,7 @@
       <div class="subtitle">前回のステージクリア時のデータがあります。</div>
       <div id="continueStats"></div>
       <button class="btn continueBtn" id="continueBtn">この状態から再開</button>
-      <button class="btn alt continueBtn" id="newGameBtn">最初からプレイ</button>
+      <button class="btn alt continueBtn" id="newGameBtn">タイトル画面に戻る</button>
     </div>
 
     <!-- ステージクリア画面 -->
@@ -263,8 +268,9 @@
     <!-- ゲームオーバー画面 -->
     <div id="gameOverScreen" class="overlay hidden">
       <h1 class="title" style="color:var(--blood); text-shadow:3px 3px 0 #ffc9dc;">GAME OVER</h1>
-      <p class="subtitle">クリアステージ: <b id="finalStage"></b><br>最大クリアステージ: <b id="finalMaxStage"></b><br>スコア: <b id="finalScore"></b></p>
-      <button class="btn" id="retryBtn">もう一度</button>
+      <p class="subtitle">モード: <b id="finalMode"></b><br>クリアステージ: <b id="finalStage"></b><br>最大クリアステージ: <b id="finalMaxStage"></b><br>スコア: <b id="finalScore"></b><br>ハイスコア: <b id="finalHighScore"></b></p>
+      <button class="btn" id="retryBtn">同じモードでもう一度</button>
+      <button class="btn alt" id="gameOverTitleBtn">タイトル画面に戻る</button>
     </div>
   </div>
 
@@ -607,8 +613,27 @@ let player = null;
 let stageNum = 1;
 let lapNum = 1; // 50ステージごとの周回数。一周目は表示しない
 let totalStageProgress = 1; // 現在の通算ステージ番号（1周目1=1、2周目1=51）
+let gameMode = "normal"; // normal=通常モード / rush=爽快モード
 let maxStageProgress = 1;
-try { maxStageProgress = Number(localStorage.getItem("tankBattleMaxStageProgress") || 1) || 1; } catch(e) { maxStageProgress = 1; }
+let highScore = 0;
+function getModeLabel(mode=gameMode){ return mode === "rush" ? "爽快モード" : "通常モード"; }
+function getModeKey(prefix, mode=gameMode){ return `tankBattle${prefix}_${mode}`; }
+function loadModeRecord(prefix, mode=gameMode, fallback=0){
+  try{
+    const v = Number(localStorage.getItem(getModeKey(prefix, mode)));
+    if(Number.isFinite(v) && v >= 0) return Math.floor(v);
+    if(mode === "normal"){
+      const oldKey = prefix === "MaxStageProgress" ? "tankBattleMaxStageProgress" : "tankBattleHighScore";
+      const old = Number(localStorage.getItem(oldKey));
+      if(Number.isFinite(old) && old >= 0) return Math.floor(old);
+    }
+  }catch(e){}
+  return fallback;
+}
+function saveModeRecord(prefix, value, mode=gameMode){
+  try{ localStorage.setItem(getModeKey(prefix, mode), String(Math.max(0, Math.floor(Number(value)||0)))); }catch(e){}
+}
+try { maxStageProgress = loadModeRecord("MaxStageProgress", gameMode, 1) || 1; highScore = loadModeRecord("HighScore", gameMode, 0); } catch(e) { maxStageProgress = 1; highScore = 0; }
 let score = 0;
 let lives = 3;
 
@@ -630,6 +655,7 @@ function loadContinueData(){
     if(!raw) return null;
     const d = JSON.parse(raw);
     if(!Number.isFinite(d.stageNum) || !Number.isFinite(d.totalStageProgress) || !Number.isFinite(d.lives) || !Number.isFinite(d.score)) return null;
+    d.mode = d.mode === "rush" ? "rush" : "normal";
     return d;
   }catch(e){ return null; }
 }
@@ -745,7 +771,7 @@ function makePlayer(x,y){
   lastMoveAngle = -Math.PI/2; // ★ミサイルの発射方向もリセット
   return {
     isPlayer:true, x, y, angle:-Math.PI/2, turretAngle:-Math.PI/2,
-    r:TANK_R, speed:PLAYER_SPEED, hp:1, alive:true,
+    r:TANK_R, speed:(gameMode === "rush" ? PLAYER_SPEED*2 : PLAYER_SPEED), hp:1, alive:true,
     maxBullets:PLAYER_MAX_BULLETS, // 画面上に同時に出せる自分の弾の最大数
     fireCooldown:0, // 次の射撃までの待ち時間
     fireBuffered:false, // ★発射間隔制限中に押された入力を覚えておく（先行入力）
@@ -1253,7 +1279,7 @@ function updatePlayer(dt){
   input.fireRequested = false;
   if(player.fireBuffered && gameStartFireLock<=0 && player.fireCooldown<=0 && countBullets(player) < player.maxBullets){
     spawnBullet(player);
-    player.fireCooldown = PLAYER_FIRE_INTERVAL;
+    player.fireCooldown = (gameMode === "rush" ? PLAYER_FIRE_INTERVAL/2 : PLAYER_FIRE_INTERVAL);
     player.fireBuffered = false;
   }
 
@@ -1681,8 +1707,18 @@ function formatClearedStage(clearedCount){
 function updateMaxStage(){
   if(totalStageProgress > maxStageProgress){
     maxStageProgress = totalStageProgress;
-    localStorage.setItem("tankBattleMaxStageProgress", String(maxStageProgress));
+    saveModeRecord("MaxStageProgress", maxStageProgress, gameMode);
   }
+}
+function updateHighScore(){
+  if(score > highScore){
+    highScore = score;
+    saveModeRecord("HighScore", highScore, gameMode);
+  }
+}
+function refreshModeRecords(){
+  maxStageProgress = loadModeRecord("MaxStageProgress", gameMode, 1) || 1;
+  highScore = loadModeRecord("HighScore", gameMode, 0);
 }
 
 let hudEnemyCache = -1;
@@ -1791,12 +1827,15 @@ function showStageClear(){
 
   // ステージクリア成立時だけセーブ。次のステージから再開できる。
   const wasLastStage = (stageNum >= 50);
+  updateMaxStage();
+  updateHighScore();
   saveContinueData({
     stageNum: nextNum,
     lapNum: wasLastStage ? lapNum + 1 : lapNum,
     totalStageProgress: totalStageProgress + 1,
     lives,
     score,
+    mode: gameMode,
     savedAt: Date.now()
   });
   const next = getNextLevel();
@@ -1839,7 +1878,9 @@ stageClearScreen.addEventListener("pointerdown", e=>{
    画面の切り替え（スタート／ポーズ／ゲームオーバー）
    ================================================================ */
 const startScreen = document.getElementById("startScreen");
-const startBtn = document.getElementById("startBtn");
+const modeStats = document.getElementById("modeStats");
+const normalModeBtn = document.getElementById("normalModeBtn");
+const rushModeBtn = document.getElementById("rushModeBtn");
 const continueScreen = document.getElementById("continueScreen");
 const continueStats = document.getElementById("continueStats");
 const continueBtn = document.getElementById("continueBtn");
@@ -1870,21 +1911,40 @@ function showContinueScreen(){
     startScreen.classList.remove("hidden");
     return;
   }
-  continueStats.innerHTML = `ステージ：<b>${formatContinueStage(saved)}</b><br>残機：<b>${Math.max(0, Math.floor(saved.lives))}</b><br>スコア：<b>${Math.max(0, Math.floor(saved.score))}</b>`;
+  continueStats.innerHTML = `モード：<b>${getModeLabel(saved.mode)}</b><br>ステージ：<b>${formatContinueStage(saved)}</b><br>残機：<b>${Math.max(0, Math.floor(saved.lives))}</b><br>スコア：<b>${Math.max(0, Math.floor(saved.score))}</b>`;
   startScreen.classList.add("hidden");
   continueScreen.classList.remove("hidden");
 }
 
-function safeStartGame(continueGame=false){
-  try { startGame(continueGame); } catch(e) {
+function showTitleScreen(){
+  stopBgm();
+  state = "start";
+  startScreen.classList.remove("hidden");
+  continueScreen.classList.add("hidden");
+  pauseScreen.classList.add("hidden");
+  gameOverScreen.classList.add("hidden");
+  stageClearScreen.classList.add("hidden");
+  hud.classList.add("hidden");
+  updateModeStats();
+}
+function updateModeStats(){
+  const nMax = loadModeRecord("MaxStageProgress", "normal", 1) || 1;
+  const rMax = loadModeRecord("MaxStageProgress", "rush", 1) || 1;
+  const nScore = loadModeRecord("HighScore", "normal", 0);
+  const rScore = loadModeRecord("HighScore", "rush", 0);
+  modeStats.innerHTML = `通常：最高 ${formatClearedStage(nMax-1)}　ハイスコア ${nScore}<br>爽快：最高 ${formatClearedStage(rMax-1)}　ハイスコア ${rScore}`;
+}
+function safeStartGame(continueGame=false, selectedMode=null){
+  try { startGame(continueGame, selectedMode); } catch(e) {
     console.error("startGame error:", e);
-    // 音声やセーブ機能の失敗でゲーム開始まで止めない。
     try {
+      if(selectedMode) gameMode = selectedMode;
       stageNum=continueGame ? stageNum : 1;
       lapNum=continueGame ? lapNum : 1;
       totalStageProgress=continueGame ? totalStageProgress : 1;
       score=continueGame ? score : 0;
       lives=continueGame ? lives : 3;
+      refreshModeRecords();
       buildLevel(stageNum-1);
       state="playing";
       startScreen.classList.add("hidden");
@@ -1897,14 +1957,16 @@ function safeStartGame(continueGame=false){
     } catch(e2) { console.error("fallback start error:", e2); }
   }
 }
-startBtn.onclick = ()=>safeStartGame(false);
+normalModeBtn.onclick = ()=>safeStartGame(false, "normal");
+rushModeBtn.onclick = ()=>safeStartGame(false, "rush");
 continueBtn.onclick = ()=>safeStartGame(true);
-newGameBtn.onclick = ()=>safeStartGame(false);
+newGameBtn.onclick = ()=>showTitleScreen();
 document.getElementById("resumeBtn").addEventListener("click", ()=>{
   pauseScreen.classList.add("hidden"); state="playing"; playBgm();
 });
 document.getElementById("restartFromPauseBtn").onclick = ()=>safeStartGame(false);
 document.getElementById("retryBtn").onclick = ()=>safeStartGame(false);
+document.getElementById("gameOverTitleBtn").onclick = ()=>showTitleScreen();
 
 pauseBtn.addEventListener("click", ()=>{
   if(state==="playing"){
@@ -1914,19 +1976,23 @@ pauseBtn.addEventListener("click", ()=>{
   }
 });
 
-function startGame(continueGame=false){
+function startGame(continueGame=false, selectedMode=null){
   // まずゲーム状態を初期化する。音声やセーブの問題で開始処理全体が止まらないようにする。
   state = "playing";
   try { initAudio(); } catch(e) { console.warn("audio init skipped", e); }
   try { bgm.currentTime = 0; } catch(e) {}
   const saved = continueGame ? loadContinueData() : null;
   if(saved){
+    gameMode = saved.mode === "rush" ? "rush" : "normal";
+    refreshModeRecords();
     stageNum = Math.max(1, Math.floor(saved.stageNum));
     lapNum = Math.max(1, Math.floor(saved.lapNum || Math.ceil(saved.totalStageProgress / 50)));
     totalStageProgress = Math.max(1, Math.floor(saved.totalStageProgress));
     score = Math.max(0, Math.floor(saved.score));
     lives = Math.max(1, Math.floor(saved.lives));
   }else{
+    gameMode = selectedMode === "rush" ? "rush" : "normal";
+    refreshModeRecords();
     stageNum = 1; lapNum = 1; totalStageProgress = 1;
     score = 0; lives = 3;
     clearContinueData();
@@ -1947,16 +2013,19 @@ function startGame(continueGame=false){
 }
 
 // セーブデータがある場合は、ゲーム開始前に専用の選択画面を表示する。
-if(loadContinueData()) showContinueScreen();
+if(loadContinueData()) showContinueScreen(); else updateModeStats();
 
 function showGameOver(){
   state = "gameover";
+  updateMaxStage();
+  updateHighScore();
   clearContinueData();
-  startBtn.textContent = "スタート";
   stopBgm();
   document.getElementById("finalStage").textContent = formatClearedStage(totalStageProgress - 1);
   document.getElementById("finalMaxStage").textContent = formatClearedStage(maxStageProgress - 1);
   document.getElementById("finalScore").textContent = `${score}`;
+  document.getElementById("finalHighScore").textContent = `${highScore}`;
+  document.getElementById("finalMode").textContent = getModeLabel();
   gameOverScreen.classList.remove("hidden");
   stageClearScreen.classList.add("hidden");
   hud.classList.add("hidden");
