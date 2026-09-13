@@ -789,6 +789,7 @@ function makeEnemy(type,x,y){
     r:t.r, speed:t.speed, hp:t.hp, maxHp:t.hp, alive:true,
     spawnX:x, spawnY:y, // 復活時にこの位置へ戻す
     maxBullets:t.maxBullets, // 画面上に同時に出せる自分の弾の最大数
+    fireInterval:t.fireInterval, // 敵種類ごとの発射間隔を実際の戦車へ引き継ぐ
     bulletCount:0,
     fireCooldown: rand(0, t.fireInterval ?? ENEMY_FIRE_INTERVAL), // 敵ごとに少しずつ発射タイミングをずらす
     color:t.color, dark:t.dark,
