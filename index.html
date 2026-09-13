@@ -237,7 +237,7 @@
       <p class="subtitle">
         画面下・左側ドラッグ＝<b>移動</b><br>
         画面下・右側ドラッグ＝<b>照準</b>、そのまま<b>タップ</b>で発射<br>
-        右下側を<b>長押し</b>＝<b>ミサイル発射</b>（約2秒後に着弾）<br>
+        右下側を<b>ダブルタップ→そのまま長押し</b>＝<b>ミサイル発射</b>（約2秒後に着弾）<br>
         弾は壁に1回だけ跳ね返る
       </p>
       <div id="modeStats"></div>
@@ -284,7 +284,7 @@
       <div class="zone-label">左側ドラッグ<br>＝移動</div>
     </div>
     <div id="rightZone" class="zone">
-      <div class="zone-label">右側ドラッグ＝照準、ドラッグ中に2本目の指でタップ＝発射<br>右下側を長押し＝ミサイル発射</div>
+      <div class="zone-label">右側ドラッグ＝照準、ドラッグ中に2本目の指でタップ＝発射<br>右下側をダブルタップ→そのまま長押し＝ミサイル発射</div>
     </div>
   </div>
 
@@ -320,14 +320,18 @@ const BULLET_R = 4;         // 弾の半径（当たり判定）
 const BULLET_SPEED = 80;
 const BULLET_MAX_BOUNCE = 1;// 弾が壁で跳ね返れる回数（0にすると跳ね返らない）
 const ENEMY_FIRE_INTERVAL = 2.4; // ★通常の敵戦車の最低発射間隔（秒）
-const BULLET_SELF_SAFE_TIME = 3.0; // ★自機の弾が発射から何秒間は自分に当たらないか（壁際での自滅防止）
+const BULLET_SELF_SAFE_TIME = 1.5; // ★自機の弾が発射から何秒間は自分に当たらないか（壁際での自滅防止）
 const ENEMY_DODGE_RADIUS = 55; // ★この距離まで自分以外の弾が近づくと、敵は弾と逆方向へ少し逃げる
 
 // --- ミサイルのパラメータ ---
 const MISSILE_HOLD_TIME = 0.5;       // ★長押しと判定するまでの時間(秒)
-const MISSILE_MOVE_DEADZONE = 14;    // これ以上指が動いたら長押しをキャンセル(px)
+const MISSILE_MOVE_DEADZONE = 32;
+const MISSILE_LONG_PRESS_DRAG_LIMIT = TILE; // 通常ミサイルの長押し中の最大ドラッグ距離
+    // 1回目のタップ中だけ移動を検出(px)
+const MISSILE_DOUBLE_TAP_TIME = 0.45; // 1回目のタップから2回目を受け付ける時間(秒)
 const MISSILE_FLIGHT_TIME = 2.0;     // ★発射から着弾までの時間(秒)
-const MISSILE_DISTANCE = TILE * 5;   // ★自機の車体が向いている方向へ5ブロック先
+const MISSILE_DISTANCE = TILE * 5;   // ★通常ミサイルの着弾距離（5ブロック）
+const MISSILE_TRIPLE_DISTANCE = MISSILE_DISTANCE / 3; // ★ダブルタップ後の長押しは通常の1/3地点
 const MISSILE_BLAST_RADIUS = 62;     // ★着弾時の爆風範囲
 const MISSILE_MAX_ACTIVE = 1;        // ★同時に存在できるミサイルは1発まで
 
@@ -354,7 +358,7 @@ const ENEMY_TYPES = {
    ・ステージを増やしたい場合は、この配列に要素を追加するだけでOK
    ================================================================ */
 const LEVELS = [
-  { enemies:["brown", "yellow"], map:["............",".1........2.","...##.......","............","............",".......X#...","......P.....","............"] },
+  { enemies:["yellow"], map:["............",".1..........","...##.......","...##.......","............",".......X#...","......P.....","............"] },
   { enemies:["yellow", "brown"], map:["............",".1#X....##2.","............","............","............","..X#....#X..","......P.....","............"] },
   { enemies:["brown", "yellow"], map:["............",".1........2.","..X.........","..#.........",".....#X.....",".........#..","......P..#..","............"] },
   { enemies:["yellow", "brown"], map:["............",".1...#....2.",".....#......",".....X......","............",".......#....","......P#....","............"] },
@@ -453,13 +457,16 @@ const input = {
 // ★左スティック（移動）を最後に動かした角度。ミサイルの発射方向はこれを使う
 // （自機の車体の向きは慣性で少し遅れて回転するため、入力した瞬間の向きをそのまま使う）
 let lastMoveAngle = -Math.PI/2;
+let missileDoubleTapWindow = 0;
+let missileDoubleTapAngle = lastMoveAngle;
+let missileTripleTapWindow = 0;
 
 const MAX_JOY = 46; // スティックが動ける最大半径(px)。見た目の joy-base の半径と合わせる
 
 // 左スティック（移動用）の状態
 const leftJoy  = { active:false, id:null, sx:0, sy:0 };
 // 右スティック（照準・発射・ミサイル用）の状態
-const rightJoy = { active:false, id:null, sx:0, sy:0, holdTime:0, dragged:false, missileArmed:false, missileAngle:0, missilePending:false };
+const rightJoy = { active:false, id:null, sx:0, sy:0, holdTime:0, dragged:false, missileArmed:false, missileAngle:0, missilePending:false, missileTapState:"idle", missileHoldActive:false, missileDragCancelled:false };
 
 const leftZoneEl  = document.getElementById("leftZone");
 const rightZoneEl = document.getElementById("rightZone");
@@ -506,10 +513,20 @@ function rightStart(x,y,id){
   // 右側の指は照準専用。発射は画面全体のタップを受け付ける。
   if(rightJoy.active) return;
   rightJoy.active=true; rightJoy.id=id; rightJoy.sx=x; rightJoy.sy=y;
-  rightJoy.holdTime=0; rightJoy.dragged=false; rightJoy.missileArmed=false; rightJoy.missilePending=false;
-  // 右ボタンを押し始めた瞬間の、左スティックの直近の入力角度を保存する。
-  // その後に左スティックを動かしても、この角度のまま発射する。
-  rightJoy.missileAngle = lastMoveAngle;
+  rightJoy.holdTime=0; rightJoy.dragged=false; rightJoy.missileArmed=false; rightJoy.missilePending=false; rightJoy.missileHoldActive=true; rightJoy.missileDragCancelled=false;
+
+  // 1回目のタップをそのまま長押し → 通常距離。
+  // 1回目を短く離して、受付時間内に2回目を押して長押し → 短距離。
+  const isSecondMissileTap = missileDoubleTapWindow > 0;
+  if(isSecondMissileTap){
+    rightJoy.missileTapState="secondHold";
+    rightJoy.missileAngle=missileDoubleTapAngle;
+    missileDoubleTapWindow=0;
+  } else {
+    rightJoy.missileTapState="first";
+    rightJoy.missileAngle=lastMoveAngle;
+  }
+  missileTripleTapWindow=0;
   rightBase.classList.remove("hidden"); rightStick.classList.remove("hidden");
   placeJoy(rightBase, rightStick, x, y, 0, 0);
   input.aiming = true;
@@ -518,7 +535,14 @@ function rightMove(x,y,id){
   if(!rightJoy.active || id!==rightJoy.id) return;
   let dx=x-rightJoy.sx, dy=y-rightJoy.sy;
   const d=Math.hypot(dx,dy);
-  if(d > MISSILE_MOVE_DEADZONE) rightJoy.dragged = true; // 一定以上動いたら「ミサイル長押し」は取り消し
+  if(rightJoy.missileTapState === "first" && d > MISSILE_MOVE_DEADZONE){ rightJoy.dragged=true; }
+  // 通常距離ミサイルは、開始位置から1タイルを超えてドラッグした時点で
+  // この長押し入力を完全にキャンセルする。以後の長押し判定でも復活させない。
+  if(rightJoy.missileTapState === "first" && d > MISSILE_LONG_PRESS_DRAG_LIMIT){
+    rightJoy.missileDragCancelled = true;
+    rightJoy.missilePending = false;
+    rightJoy.missileHoldActive = false;
+  }
   if(d>MAX_JOY){ dx=dx/d*MAX_JOY; dy=dy/d*MAX_JOY; }
   placeJoy(rightBase, rightStick, rightJoy.sx, rightJoy.sy, dx, dy);
   input.aimMag = Math.min(d,MAX_JOY)/MAX_JOY;
@@ -532,14 +556,25 @@ function rightMove(x,y,id){
 function rightEnd(id){
   if(!rightJoy.active || id!==rightJoy.id) return;
   // 照準ドラッグを離しただけでは発射しない。
-  // 発射は「ドラッグを維持したまま2本目の指でタップ」で行う。
   rightJoy.active=false; input.aimMag=0; input.aiming=false;
   if(rightJoy.fireReadyVisual){ rightJoy.fireReadyVisual=false; rightStick.classList.remove("fire-ready"); }
   if(rightJoy.chargingVisual){ rightJoy.chargingVisual=false; rightStick.classList.remove("missile-charging"); }
-  // 先行入力中に右指を離した場合は、記憶していたミサイル発射をキャンセルする。
+
+  // 1回目の長押し成立前に離したら、次のタップをダブルタップとして受付。
+  // 2回目の長押し成立前に離したら、その入力をキャンセル。
+  // 少しドラッグしていても、ミサイルの連続タップ判定には影響させない。
+  if(rightJoy.missileTapState === "first" && !rightJoy.missileArmed && !rightJoy.missilePending){
+    missileDoubleTapWindow=MISSILE_DOUBLE_TAP_TIME;
+    missileDoubleTapAngle=rightJoy.missileAngle;
+  } else {
+    missileDoubleTapWindow=0;
+  }
+  missileTripleTapWindow=0;
   rightJoy.missilePending=false;
   rightJoy.holdTime=0;
   rightJoy.missileArmed=false;
+  rightJoy.missileDragCancelled=false;
+  rightJoy.missileTapState="idle"; rightJoy.missileHoldActive=false;
   rightBase.classList.add("hidden"); rightStick.classList.add("hidden");
   rightStick.classList.remove("missile-charging","fire-ready");
 }
@@ -571,7 +606,9 @@ function bindZone(el, onStart, onMove, onEnd){
 // ただし移動ボタン（左ゾーン）の位置をタップした場合は発射しない。
 window.addEventListener("touchstart", e=>{
   // ミサイル発射後も、照準用の指を離さずに2本目の指でそのまま通常弾を発射できる。
-  if(!rightJoy.active || !rightJoy.dragged || input.aimMag<=0.35) return;
+  // 通常弾は「照準ドラッグ中」だけでなく、ミサイルのダブルタップ後に
+  // そのまま長押ししている間も、別の指のタップで発射できるようにする。
+  if(!rightJoy.active || (!rightJoy.dragged && !rightJoy.missileHoldActive) || input.aimMag<=0.35) return;
   // ★座標で判定する（移動スティックの見た目は#app直下にあり、leftZoneElのDOM子要素では
   //   ないため、要素のcontains判定ではなく座標の矩形判定で正しく除外する）
   const leftRect = leftZoneEl.getBoundingClientRect();
@@ -694,15 +731,47 @@ function playTone(freq, duration, type="square", volume=0.035, slide=0){
   g.gain.exponentialRampToValueAtTime(0.001,now+duration);
   o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now+duration+0.02);
 }
+
+function playBulletWallReflectSound(){
+  // 壁・障害物で跳ね返ったときの軽い「コツッ」
+  initAudio();
+  playTone(760, 0.045, "triangle", 0.045);
+}
+
+function playBulletImpactSound(isFast){
+  // 通常弾＝「ポスッ」、高速弾＝少し大きめの「ボスッ」
+  initAudio();
+  playTone(isFast ? 170 : 210, 0.075, "sine", isFast ? 0.12 : 0.085);
+}
+
 function playShot(fast=false){
   initAudio();
   playTone(fast?950:720, fast?0.08:0.1, "sine", fast?0.03:0.04, fast?-260:-180);
 }
 function playHit(){ initAudio(); playTone(620,0.08,"triangle",0.032,90); }
 function playExplosion(){
+  // 通常の爆発音（ミサイル以外の爆発用）
   initAudio();
-  playTone(340,0.2,"sine",0.05,-150);
-  setTimeout(()=>playTone(240,0.16,"triangle",0.032,-70),40);
+  playTone(340,0.2,"sine",0.10,-150);
+  setTimeout(()=>playTone(240,0.16,"triangle",0.064,-70),40);
+}
+// ミサイル専用の着弾・爆発音。戦車撃破音とは明確に違う音にする。
+function playMissileExplosion(){
+  initAudio();
+  playTone(150,0.28,"sine",0.075,-70);
+  setTimeout(()=>playTone(280,0.20,"triangle",0.055,180),55);
+  setTimeout(()=>playTone(520,0.11,"sine",0.030,-180),125);
+}
+// 戦車撃破専用音。短く目立つ上昇音＋低音で、ミサイル爆発音と区別する。
+function playTankDefeat(){
+  initAudio();
+  playTone(190,0.13,"square",0.095,150);
+  setTimeout(()=>playTone(420,0.16,"triangle",0.090,220),70);
+  setTimeout(()=>playTone(760,0.20,"sine",0.070,-300),145);
+}
+function playBulletBounce(){
+  initAudio();
+  playTone(900,0.045,"triangle",0.022,-260);
 }
 // ミサイル発射：既存の効果音に合わせた短い上昇音
 function playMissileLaunch(){
@@ -789,7 +858,7 @@ function makeEnemy(type,x,y){
     r:t.r, speed:t.speed, hp:t.hp, maxHp:t.hp, alive:true,
     spawnX:x, spawnY:y, // 復活時にこの位置へ戻す
     maxBullets:t.maxBullets, // 画面上に同時に出せる自分の弾の最大数
-    fireInterval:t.fireInterval, // 敵種類ごとの発射間隔を実際の戦車へ引き継ぐ
+    fireInterval:t.fireInterval, // 敵ごとの発射間隔を実体にも保持
     bulletCount:0,
     fireCooldown: rand(0, t.fireInterval ?? ENEMY_FIRE_INTERVAL), // 敵ごとに少しずつ発射タイミングをずらす
     color:t.color, dark:t.dark,
@@ -799,6 +868,7 @@ function makeEnemy(type,x,y){
     // AIの重い判断だけ約12.5回/秒に間引く。移動・旋回そのものは毎フレーム更新する。
     aiThinkTimer: Math.random()*0.08,
     canSeePlayerCache: false,
+    justSawPlayerTimer: 0,
     dodgeDirCache: null,
     shouldShootCache: false,
   };
@@ -845,6 +915,25 @@ function tanksOverlap(a,b){
   }
 }
 // 敵AIの視界チェック（間に壁があれば見えない）
+// 敵同士の射線チェック：自機へ向かう射線上に別の敵がいる場合は発砲しない。
+function isEnemyBlockingShot(shooter, target){
+  const dx = target.x - shooter.x, dy = target.y - shooter.y;
+  const lenSq = dx*dx + dy*dy;
+  if(lenSq < 0.0001) return false;
+  for(const t of tanks){
+    if(t === shooter || t.isPlayer || !t.alive) continue;
+    const tx = t.x - shooter.x, ty = t.y - shooter.y;
+    const proj = (tx*dx + ty*dy) / lenSq;
+    if(proj <= 0 || proj >= 1) continue;
+    const closestX = shooter.x + dx*proj;
+    const closestY = shooter.y + dy*proj;
+    const ddx = t.x - closestX, ddy = t.y - closestY;
+    const blockR = t.r + BULLET_R;
+    if(ddx*ddx + ddy*ddy <= blockR*blockR) return true;
+  }
+  return false;
+}
+
 function hasLineOfSight(x0,y0,x1,y1){
   const dx=x1-x0, dy=y1-y0;
   const dist=Math.hypot(dx,dy);
@@ -878,7 +967,7 @@ function spawnBullet(owner){
   playShot(fastBullet);
 }
 function updateBullets(dt){
-  // 1フレーム中は同じ生存戦車リストを使い回し、各弾ごとの配列走査を減らす。
+  // 1フレーム中は同じ生存戦車リストを使い回す。
   const activeTanks = [];
   for(const t of tanks){ if(t.alive) activeTanks.push(t); }
 
@@ -887,72 +976,101 @@ function updateBullets(dt){
     b.age += dt;
     b.trail.push({x:b.x,y:b.y});
     if(b.trail.length>5) b.trail.shift();
-    b.x += b.vx*dt; b.y += b.vy*dt;
 
-    // 高速弾は反射しない。外周・壁に当たったら専用エフェクトを出して消える。
+    b.x += b.vx*dt;
+    b.y += b.vy*dt;
+
+    // 高速弾は反射せず、外周の壁に当たったら消える。
     if(b.fastBullet){
-      if(b.x<BULLET_R || b.x>WORLD_W-BULLET_R || b.y<BULLET_R || b.y>WORLD_H-BULLET_R){
-        spawnFastBulletImpactFx(clamp(b.x,BULLET_R,WORLD_W-BULLET_R), clamp(b.y,BULLET_R,WORLD_H-BULLET_R));
-        b.dead=true; continue;
+      if(b.x<BULLET_R || b.x>WORLD_W-BULLET_R ||
+         b.y<BULLET_R || b.y>WORLD_H-BULLET_R){
+        const ix=clamp(b.x,BULLET_R,WORLD_W-BULLET_R);
+        const iy=clamp(b.y,BULLET_R,WORLD_H-BULLET_R);
+        spawnFastBulletImpactFx(ix,iy);
+        playBulletImpactSound(true);
+        b.dead=true;
+        continue;
       }
     } else {
-      // 通常弾は外周で1回まで跳ね返る
-      if(b.x<BULLET_R){ b.x=BULLET_R; b.vx*=-1; b.bounces++; }
-      if(b.x>WORLD_W-BULLET_R){ b.x=WORLD_W-BULLET_R; b.vx*=-1; b.bounces++; }
-      if(b.y<BULLET_R){ b.y=BULLET_R; b.vy*=-1; b.bounces++; }
-      if(b.y>WORLD_H-BULLET_R){ b.y=WORLD_H-BULLET_R; b.vy*=-1; b.bounces++; }
+      // 通常弾は外周で1回まで反射。
+      // ★音は実際に反射した瞬間だけ鳴らす。
+      let reflected=false;
+      if(b.x<BULLET_R){
+        b.x=BULLET_R; b.vx*=-1; b.bounces++; reflected=true;
+      } else if(b.x>WORLD_W-BULLET_R){
+        b.x=WORLD_W-BULLET_R; b.vx*=-1; b.bounces++; reflected=true;
+      }
+      if(b.y<BULLET_R){
+        b.y=BULLET_R; b.vy*=-1; b.bounces++; reflected=true;
+      } else if(b.y>WORLD_H-BULLET_R){
+        b.y=WORLD_H-BULLET_R; b.vy*=-1; b.bounces++; reflected=true;
+      }
+      if(reflected) playBulletWallReflectSound();
     }
 
-    // 壁との当たり判定
+    // タイル（障害物）との当たり判定。
     const col=Math.floor(b.x/TILE), row=Math.floor(b.y/TILE);
     if(row>=0&&col>=0&&row<ROWS&&col<COLS && walls[row][col]!==EMPTY){
       if(walls[row][col]===BRICK){
-        // 木箱は弾では壊れず、通常弾だけ反射する。破壊はミサイルのみ。
+        // 木箱は弾では壊れず、通常弾だけ反射。高速弾は消える。
         if(b.fastBullet){
           spawnFastBulletImpactFx(b.x,b.y);
+          playBulletImpactSound(true);
           b.dead=true;
+          continue;
         } else if(b.bounces < BULLET_MAX_BOUNCE){
           const cxTile=col*TILE+TILE/2, cyTile=row*TILE+TILE/2;
-          if(Math.abs(b.x-cxTile) > Math.abs(b.y-cyTile)) b.vx*=-1; else b.vy*=-1;
+          if(Math.abs(b.x-cxTile) > Math.abs(b.y-cyTile)) b.vx*=-1;
+          else b.vy*=-1;
           b.bounces++;
           b.x += b.vx*dt*2;
           b.y += b.vy*dt*2;
+          playBulletWallReflectSound();
         } else {
           spawnHitFx(b.x,b.y);
+          playBulletImpactSound(false);
           b.dead=true;
         }
         continue;
       } else {
+        // 鉄壁：通常弾だけ跳ね返し、高速弾は消える。
         if(b.fastBullet){
           spawnFastBulletImpactFx(b.x,b.y);
+          playBulletImpactSound(true);
           b.dead=true;
           continue;
         }
-        // 鉄壁：通常弾だけ跳ね返す
         if(b.bounces < BULLET_MAX_BOUNCE){
           const cxTile=col*TILE+TILE/2, cyTile=row*TILE+TILE/2;
-          if(Math.abs(b.x-cxTile) > Math.abs(b.y-cyTile)) b.vx*=-1; else b.vy*=-1;
+          if(Math.abs(b.x-cxTile) > Math.abs(b.y-cyTile)) b.vx*=-1;
+          else b.vy*=-1;
           b.bounces++;
           b.x += b.vx*dt*2;
           b.y += b.vy*dt*2;
+          playBulletWallReflectSound();
         } else {
           spawnHitFx(b.x,b.y);
+          playBulletImpactSound(false);
           b.dead=true;
           continue;
         }
       }
     }
-    if(!b.fastBullet && b.bounces > BULLET_MAX_BOUNCE){ b.dead=true; continue; }
 
-    // 戦車との当たり判定
+    if(!b.fastBullet && b.bounces > BULLET_MAX_BOUNCE){
+      b.dead=true;
+      continue;
+    }
+
+    // 戦車との当たり判定。
     for(const t of activeTanks){
-      if(t===b.owner){
-        // 敵は自分の弾には絶対に当たらない。
-        if(!t.isPlayer) continue;
-        // ★自機の弾は発射から一定時間は自分に当たらない（壁際で撃って自滅するのを防ぐ）
-        if(b.age < BULLET_SELF_SAFE_TIME) continue;
-      }
+      // 自機だけ、自分が発射した弾に限って発射直後は当たらない。
+      // 敵には自己弾の無敵判定を一切入れない。
+      // つまり「プレイヤーの弾→敵」「敵の弾→敵自身を含む全戦車」の
+      // どちらも通常の当たり判定を行う。
+      if(b.owner === player && t === player && b.age < BULLET_SELF_SAFE_TIME) continue;
       if(t.isPlayer && t.invuln>0 && b.owner!==t) continue;
+
       const dx=b.x-t.x, dy=b.y-t.y;
       if(dx*dx+dy*dy < (t.r+BULLET_R)*(t.r+BULLET_R)){
         b.dead=true;
@@ -964,34 +1082,34 @@ function updateBullets(dt){
     }
   }
 
-  // 弾どうしの当たり判定：ぶつかった弾は両方とも消滅する
+  // 弾同士の衝突。
+  // 同じ場所で大量の二重判定をしないよう、各ペアを1回だけ調べる。
   for(let i=0;i<bullets.length;i++){
-    const b1 = bullets[i];
-    if(b1.dead) continue;
+    const a=bullets[i];
+    if(a.dead) continue;
     for(let j=i+1;j<bullets.length;j++){
-      const b2 = bullets[j];
-      if(b2.dead) continue;
-      const dx=b1.x-b2.x, dy=b1.y-b2.y;
-      if(dx*dx+dy*dy < (BULLET_R*2)*(BULLET_R*2)){
-        b1.dead = true; b2.dead = true;
-        spawnHitFx((b1.x+b2.x)/2, (b1.y+b2.y)/2);
+      const b=bullets[j];
+      if(b.dead) continue;
+      const dx=a.x-b.x, dy=a.y-b.y;
+      const rr=BULLET_R*2;
+      if(dx*dx+dy*dy <= rr*rr){
+        const ix=(a.x+b.x)*0.5, iy=(a.y+b.y)*0.5;
+        spawnHitFx(ix,iy);
+        playBulletImpactSound(!!(a.fastBullet || b.fastBullet));
+        a.dead=true;
+        b.dead=true;
         break;
       }
     }
   }
 
-  // 弾配列は毎フレームfilterで作り直さず、その場で詰め直す。
-  // これにより弾数が多い場面の一時オブジェクト生成を抑える。
-  let write = 0;
-  for(let read=0; read<bullets.length; read++){
-    const b = bullets[read];
-    if(b.dead){
-      if(b.owner) b.owner.bulletCount = Math.max(0, (b.owner.bulletCount || 0) - 1);
-      continue;
-    }
-    bullets[write++] = b;
+  // dead弾をまとめて削除し、所有者の弾数も正しく戻す。
+  for(let i=bullets.length-1;i>=0;i--){
+    const b=bullets[i];
+    if(!b.dead) continue;
+    if(b.owner) b.owner.bulletCount=Math.max(0,(b.owner.bulletCount||1)-1);
+    bullets.splice(i,1);
   }
-  bullets.length = write;
 }
 
 function damageTank(t){
@@ -999,17 +1117,66 @@ function damageTank(t){
   if(t.hp<=0){
     t.alive=false;
     spawnExplosion(t.x,t.y, t.isPlayer?1.4:1.0);
-    playExplosion();
-    if(t.isPlayer) onPlayerDeath();
-    else {
+    if(t.isPlayer) {
+      playExplosion();
+      onPlayerDeath();
+    } else {
+      playTankDefeat();
     }
   } else {
     spawnHitFx(t.x,t.y);
   }
 }
 
+function resetPlayerTransientState(){
+  // 自機死亡時に、戦闘中だけ一時的に保持している入力・先行入力・
+  // ミサイル関連の状態をまとめて初期化する。
+  input.fireRequested = false;
+  input.aiming = false;
+  input.aimMag = 0;
+  input.moveX = 0;
+  input.moveY = 0;
+  input.moving = false;
+
+  // 通常弾の先行入力を消す。これが残っていると復活直後に自動発射される。
+  if(player) {
+    player.fireBuffered = false;
+    player.fireCooldown = 0;
+  }
+
+  // ミサイルの発射待ち・ダブルタップ判定・飛行中ミサイルをすべて破棄する。
+  missileDoubleTapWindow = 0;
+  missileTripleTapWindow = 0;
+  missileDoubleTapAngle = lastMoveAngle;
+  missiles = [];
+
+  // 指を押しっぱなしにしたまま復活しても、死亡前の入力が再利用されないようにする。
+  leftJoy.active = false;
+  leftJoy.id = null;
+  rightJoy.active = false;
+  rightJoy.id = null;
+  rightJoy.holdTime = 0;
+  rightJoy.dragged = false;
+  rightJoy.missileArmed = false;
+  rightJoy.missilePending = false;
+  rightJoy.missileDistance = MISSILE_DISTANCE;
+  rightJoy.missileTapState = "idle";
+  rightJoy.missileHoldActive = false;
+  rightJoy.fireReadyVisual = false;
+  rightJoy.chargingVisual = false;
+  rightBase.classList.add("hidden");
+  rightStick.classList.add("hidden");
+  rightStick.classList.remove("fire-ready","missile-charging");
+  leftBase.classList.add("hidden");
+  leftStick.classList.add("hidden");
+
+  // 復活直後の誤射を防ぐため、開始時と同じ1秒の射撃ロックをかける。
+  gameStartFireLock = 1.0;
+}
+
 function onPlayerDeath(){
   lives--;
+  resetPlayerTransientState();
 
   // 死亡時に、倒されずに残っている敵だけ初期位置へ戻す。
   // すでに倒した敵は tanks から除去済みなので復活しない。
@@ -1024,6 +1191,7 @@ function onPlayerDeath(){
     t.stuckTimer = 0;
     t.aiThinkTimer = 0;
     t.canSeePlayerCache = false;
+    t.justSawPlayerTimer = 0;
     t.dodgeDirCache = null;
     t.shouldShootCache = false;
     t.bulletCount = 0;
@@ -1031,7 +1199,7 @@ function onPlayerDeath(){
     t.fireCooldown = rand(0, type.fireInterval ?? ENEMY_FIRE_INTERVAL);
   }
 
-  // 画面上の弾をすべて消して、死亡前の弾の状態をリセットする。
+  // 画面上の弾もすべて消して、死亡前の弾の状態をリセットする。
   bullets = [];
   for(const t of tanks) t.bulletCount = 0;
 
@@ -1046,19 +1214,23 @@ function onPlayerDeath(){
    ・発射から約2秒で着弾し、爆風で敵・自機・木箱に作用する
    ================================================================ */
 // 指定した角度で今ミサイルを撃った場合の着弾予定地点を計算する（着弾予告の表示にも流用）
-function getMissileTargetPoint(originX, originY, angle){
+function getMissileTargetPoint(originX, originY, angle, distance = MISSILE_DISTANCE){
   return {
-    x: clamp(originX + Math.cos(angle)*MISSILE_DISTANCE, MISSILE_DISTANCE*0.02, WORLD_W-MISSILE_DISTANCE*0.02),
-    y: clamp(originY + Math.sin(angle)*MISSILE_DISTANCE, MISSILE_DISTANCE*0.02, WORLD_H-MISSILE_DISTANCE*0.02),
+    x: clamp(originX + Math.cos(angle)*distance, distance*0.02, WORLD_W-distance*0.02),
+    y: clamp(originY + Math.sin(angle)*distance, distance*0.02, WORLD_H-distance*0.02),
   };
 }
-function fireMissile(angle = rightJoy.missileAngle){
+function fireMissile(angle = rightJoy.missileAngle, distance = MISSILE_DISTANCE){
   if(missiles.length >= MISSILE_MAX_ACTIVE || !player || !player.alive) return false;
   // 右ボタンを押し始めた瞬間に保存した「左スティックの直近の角度」を使う。
   const startX = player.x + Math.cos(angle)*(player.r+5);
   const startY = player.y + Math.sin(angle)*(player.r+5);
-  const target = getMissileTargetPoint(player.x, player.y, angle);
-  missiles.push({x:startX,y:startY,startX,startY,targetX:target.x,targetY:target.y,angle,time:0,dead:false});
+  const target = getMissileTargetPoint(player.x, player.y, angle, distance);
+  // トリプルタップの短距離ミサイルは、通常の1/3の時間で着弾する。
+  const flightTime = distance === MISSILE_TRIPLE_DISTANCE
+    ? MISSILE_FLIGHT_TIME / 3
+    : MISSILE_FLIGHT_TIME;
+  missiles.push({x:startX,y:startY,startX,startY,targetX:target.x,targetY:target.y,angle,time:0,flightTime,dead:false});
   playMissileLaunch();
   return true;
 }
@@ -1067,12 +1239,12 @@ function updateMissiles(dt){
   for(const m of missiles){
     if(m.dead) continue;
     m.time += dt;
-    const p = clamp(m.time/MISSILE_FLIGHT_TIME,0,1);
+    const p = clamp(m.time/m.flightTime,0,1);
     // 少し加速して着弾するように見せる
     const eased = p*p*(3-2*p);
     m.x = m.startX + (m.targetX-m.startX)*eased;
     m.y = m.startY + (m.targetY-m.startY)*eased;
-    if(m.time >= MISSILE_FLIGHT_TIME){
+    if(m.time >= m.flightTime){
       explodeMissile(m);
     }
   }
@@ -1089,9 +1261,8 @@ function explodeMissile(m){
   if(m.dead) return;
   m.dead = true;
   spawnExplosion(m.targetX,m.targetY,2.0); // ★実際の爆風範囲(MISSILE_BLAST_RADIUS)に見た目を合わせて少し大きめに
-  // ミサイルらしい着弾音（既存爆発音を少し高めに重ねる）
-  playExplosion();
-  playTone(260,0.18,"sine",0.045,140);
+  // ミサイル専用の着弾・爆発音
+  playMissileExplosion();
 
   const blastR = MISSILE_BLAST_RADIUS;
   const minCol = Math.max(0, Math.floor((m.targetX-blastR)/TILE));
@@ -1174,6 +1345,11 @@ function updateEnemy(t, dt){
   if(t.aiThinkTimer <= 0){
     t.aiThinkTimer += 0.08;
     const canSeePlayer = p.alive && hasLineOfSight(t.x,t.y,p.x,p.y);
+    // 遮蔽物から出て自機を新しく認識した瞬間は、0.5秒間だけ射撃を待つ。
+    // すでに見えている状態が継続している場合は、このタイマーを再スタートしない。
+    if(canSeePlayer && !t.canSeePlayerCache){
+      t.justSawPlayerTimer = 0.5;
+    }
     t.canSeePlayerCache = canSeePlayer;
 
     let dodgeDir = null;
@@ -1192,7 +1368,7 @@ function updateEnemy(t, dt){
     t.dodgeDirCache = dodgeDir;
 
     t.shouldShootCache = false;
-    if(canSeePlayer && p.invuln<=0 && t.fireCooldown<=0 && countBullets(t) < t.maxBullets){
+    if(canSeePlayer && t.justSawPlayerTimer<=0 && !isEnemyBlockingShot(t,p) && p.invuln<=0 && t.fireCooldown<=0 && countBullets(t) < t.maxBullets){
       const aimDiff = Math.abs(((Math.atan2(p.y-t.y,p.x-t.x)-t.turretAngle+Math.PI*3)%(Math.PI*2))-Math.PI);
       t.shouldShootCache = aimDiff < 0.28;
     }
@@ -1201,6 +1377,7 @@ function updateEnemy(t, dt){
   const canSeePlayer = t.canSeePlayerCache;
   t.wanderTimer -= dt;
   t.fireCooldown = Math.max(0, (t.fireCooldown ?? 0) - dt);
+  t.justSawPlayerTimer = Math.max(0, (t.justSawPlayerTimer ?? 0) - dt);
   if(t.wanderTimer<=0 || t.stuckTimer>0.4){
     // プレイヤーが見えていれば大まかにプレイヤー方向へ、見えていなければランダムな方向へ
     t.wanderDir = canSeePlayer ? Math.atan2(p.y-t.y, p.x-t.x) + rand(-0.35,0.35) : Math.random()*Math.PI*2;
@@ -1228,7 +1405,7 @@ function updateEnemy(t, dt){
   }
 
   // 射撃判断はキャッシュ済み。クールダウン自体は毎フレーム更新する。
-  if(t.shouldShootCache && canSeePlayer && p.invuln<=0 && t.fireCooldown<=0 && countBullets(t) < t.maxBullets){
+  if(t.shouldShootCache && canSeePlayer && t.justSawPlayerTimer<=0 && !isEnemyBlockingShot(t,p) && p.invuln<=0 && t.fireCooldown<=0 && countBullets(t) < t.maxBullets){
     spawnBullet(t);
     t.fireCooldown = t.fireInterval ?? ENEMY_FIRE_INTERVAL;
     t.shouldShootCache = false;
@@ -1286,11 +1463,14 @@ function updatePlayer(dt){
     player.fireBuffered = false;
   }
 
-  // ---- ミサイルの長押し＋先行入力判定 ----
+  missileDoubleTapWindow = Math.max(0, missileDoubleTapWindow - dt);
+  missileTripleTapWindow = Math.max(0, missileTripleTapWindow - dt);
+
+  // ---- ミサイル：通常長押し／ダブルタップ後の長押し＋先行入力判定 ----
   // 右ボタンを押し始めた瞬間から長押し時間を計測する。
   // 長押し成立時にミサイルが撃てなくても、発射入力と角度を先行入力として保持し、
   // ミサイルが撃てるようになった瞬間に最速で自動発射する。
-  if(rightJoy.active && !rightJoy.dragged && !rightJoy.missileArmed){
+  if(rightJoy.active && rightJoy.missileHoldActive && !rightJoy.missileArmed && !rightJoy.missileDragCancelled){
     rightJoy.holdTime += dt;
     const missileCharging = rightJoy.holdTime > MISSILE_HOLD_TIME*0.4;
     if(rightJoy.chargingVisual !== missileCharging){
@@ -1299,7 +1479,11 @@ function updatePlayer(dt){
     }
     if(rightJoy.holdTime >= MISSILE_HOLD_TIME){
       rightJoy.missilePending = true;
-      if(fireMissile(rightJoy.missileAngle)){
+      const missileDistance = rightJoy.missileTapState === "secondHold"
+        ? MISSILE_TRIPLE_DISTANCE
+        : MISSILE_DISTANCE;
+      rightJoy.missileDistance = missileDistance;
+      if(fireMissile(rightJoy.missileAngle, missileDistance)){
         rightJoy.missileArmed = true;
         rightJoy.missilePending = false;
         rightJoy.holdTime = 0;
@@ -1310,8 +1494,12 @@ function updatePlayer(dt){
   // 長押し成立後に先行入力として待機している場合。
   // 右指が離されるまで、保存した角度のまま発射可能になるのを待つ。
   // 通常弾を撃つための2本目の指のタップや、その後の照準操作では先行入力をキャンセルしない。
-  if(rightJoy.active && rightJoy.missilePending && !rightJoy.missileArmed){
-    if(fireMissile(rightJoy.missileAngle)){
+  if(rightJoy.active && rightJoy.missilePending && !rightJoy.missileArmed && !rightJoy.missileDragCancelled){
+    const missileDistance = rightJoy.missileTapState === "secondHold"
+      ? MISSILE_TRIPLE_DISTANCE
+      : MISSILE_DISTANCE;
+    rightJoy.missileDistance = missileDistance;
+    if(fireMissile(rightJoy.missileAngle, missileDistance)){
       rightJoy.missileArmed = true;
       rightJoy.missilePending = false;
     }
@@ -1341,17 +1529,17 @@ function loop(ts){
     updateMissiles(dt);
     updateFx(dt);
     let tankWrite = 0;
-    let enemiesLeft = 0;
+    let hasEnemy = false;
     for(let tankRead=0; tankRead<tanks.length; tankRead++){
       const tank = tanks[tankRead];
       if(!tank.isPlayer && !tank.alive) continue;
       tanks[tankWrite++] = tank;
-      if(!tank.isPlayer) enemiesLeft++;
+      if(!tank.isPlayer) hasEnemy = true;
     }
     tanks.length = tankWrite;
 
-    updateHud(enemiesLeft);
-    if(enemiesLeft===0){
+    updateHud();
+    if(!hasEnemy){
       // 最後の敵を倒した瞬間に状態を固定し、約1秒後にだけクリア画面へ移る。
       state = "stageclear_wait";
       stageClearDelay = 1.0;
@@ -1389,12 +1577,26 @@ function respawnPlayer(){
   player.x=sp.x; player.y=sp.y; player.angle=-Math.PI/2; player.turretAngle=-Math.PI/2;
   lastMoveAngle = -Math.PI/2; // ★ミサイルの発射方向もリセット
   player.hp=1; player.alive=true; player.invuln=2.0;
+  player.fireBuffered=false;
+  player.fireCooldown=0;
+  input.fireRequested=false;
+  gameStartFireLock=1.0;
   if(!tanks.includes(player)) tanks.push(player);
 }
 
 /* ================================================================
    描画
    ================================================================ */
+function getStageBackgroundColor(){
+  // ステージ番号は1〜50を周回するため、2周目以降も同じ10ステージ区分を適用する。
+  const stage = ((stageNum - 1) % 50) + 1;
+  if(stage <= 10) return "#fffafc";       // 1〜10：白
+  if(stage <= 20) return "#ffebf3";       // 11〜20：ピンク
+  if(stage <= 30) return "#dff3bd";       // 21〜30：黄緑
+  if(stage <= 40) return "#cfefff";       // 31〜40：水色
+  return "#ddd2f7";                       // 41〜50：薄紫
+}
+
 function render(){
   ctx.save();
   ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -1410,7 +1612,7 @@ function render(){
   ctx.translate(viewW/2 - cameraX, viewH/2 - cameraY);
 
   // 背景
-  ctx.fillStyle = "#ffeef7";
+  ctx.fillStyle = getStageBackgroundColor();
   ctx.fillRect(0,0,WORLD_W,WORLD_H);
   ctx.strokeStyle = "rgba(210,150,220,0.18)";
   ctx.lineWidth = 1;
@@ -1724,13 +1926,12 @@ let hudMaxCache = -1;
 function updateHud(enemiesLeft){
   const stageChanged = hudStageCache !== totalStageProgress;
   const maxChanged = hudMaxCache !== maxStageProgress;
-  const enemyChanged = hudEnemyCache !== enemiesLeft;
   const livesChanged = hudLivesCache !== lives;
 
-  if(stageChanged || enemyChanged){
-    stageLabelEl.textContent = `${formatStageProgress(totalStageProgress)}  残り${enemiesLeft}`;
+  if(stageChanged){
+    stageLabelEl.textContent = formatStageProgress(totalStageProgress);
     hudStageCache = totalStageProgress;
-    hudEnemyCache = enemiesLeft;
+    hudEnemyCache = -1;
   }
   if(maxChanged){
     maxStageLabelEl.textContent = `MAX CLEAR ${formatClearedStage(maxStageProgress - 1)}`;
@@ -1965,7 +2166,7 @@ document.getElementById("resumeBtn").addEventListener("click", ()=>{
   pauseScreen.classList.add("hidden"); state="playing"; playBgm();
 });
 document.getElementById("restartFromPauseBtn").onclick = ()=>showTitleScreen();
-document.getElementById("retryBtn").onclick = ()=>safeStartGame(false);
+document.getElementById("retryBtn").onclick = ()=>safeStartGame(false, gameMode);
 document.getElementById("gameOverTitleBtn").onclick = ()=>showTitleScreen();
 
 pauseBtn.addEventListener("click", ()=>{
