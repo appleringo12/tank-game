@@ -343,7 +343,7 @@ const ENEMY_TYPES = {
   yellow:{ speed:0,  hp:1, color:"#ffe999", dark:"#f0c95c", maxBullets:1, bulletSpeed:80,  r:TANK_R, fastBullet:false, fireInterval:10.0, dodge:false },
   brown: { speed:50, hp:1, color:"#e0c09a", dark:"#c99a68", maxBullets:1, bulletSpeed:80,  r:TANK_R, fastBullet:false, fireInterval:10.0, dodge:false },
   green: { speed:50, hp:1, color:"#a8e6b0", dark:"#7ecb8c", maxBullets:1, bulletSpeed:240, r:TANK_R, fastBullet:true  },
-  red:   { speed:50, hp:1, color:"#ff9aa8", dark:"#e06b7d", maxBullets:5, bulletSpeed:80,  r:TANK_R, fastBullet:false, fireInterval:0.5 },
+  red:   { speed:50, hp:1, color:"#ff9aa8", dark:"#e06b7d", maxBullets:5, bulletSpeed:80,  r:TANK_R, fastBullet:false, fireInterval:1.0 },
   black: { speed:100,hp:1, color:"#c3aef0", dark:"#a186e0", maxBullets:2, bulletSpeed:240, r:TANK_R, fastBullet:true, fireInterval:2.0},
 };
 
@@ -720,7 +720,7 @@ function initAudio(){
   }
   if(audioCtx && audioCtx.state === "suspended") audioCtx.resume();
 }
-const SFX_VOLUME_MULTIPLIER = 1.25; // 効果音を全体的に約1.25倍
+const SFX_VOLUME_MULTIPLIER = 2.5; // 効果音を全体的に現在の2倍
 function playTone(freq, duration, type="square", volume=0.035, slide=0){
   if(!audioCtx) return;
   const now=audioCtx.currentTime;
