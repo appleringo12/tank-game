@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ffd9ec">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ぷち戦車">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>ぷち戦車</title>
 <style>
   /* ============================================================
@@ -2231,6 +2237,16 @@ function showGameOver(){
 
 requestAnimationFrame(loop);
 })();
+</script>
+<script>
+// PWA: オフライン用Service Workerを登録
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch(err => {
+      console.warn("Service Worker registration failed:", err);
+    });
+  });
+}
 </script>
 </body>
 </html>
