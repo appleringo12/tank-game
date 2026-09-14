@@ -236,7 +236,13 @@
   .btn.info{ background:var(--steel); border-color:var(--steel-dark); border-bottom-color:var(--steel-dark); }
 
   /* ---- ゲーム説明画面 ---- */
-  #howToPlayScreen{ z-index:26; overflow-y:auto; padding-top:28px; padding-bottom:28px; }
+  #howToPlayScreen{
+    z-index:26;
+    overflow-y:auto;
+    justify-content:flex-start; /* .overlayのcenter配置だと、はみ出た内容が上に隠れてしまうため上詰めにする */
+    padding-top:max(28px, env(safe-area-inset-top, 0px) + 12px);
+    padding-bottom:28px;
+  }
   #howToPlayScreen .subtitle{ text-align:left; max-width:380px; }
   #howToPlayScreen .subtitle .sectionTitle{ display:block; margin:14px 0 4px; color:var(--olive-dark); font-weight:700; font-size:13px; letter-spacing:1px; }
   #howToPlayScreen .subtitle .sectionTitle:first-child{ margin-top:0; }
@@ -2164,7 +2170,10 @@ const gameOverScreen = document.getElementById("gameOverScreen");
 const howToPlayScreen = document.getElementById("howToPlayScreen");
 const howToPlayBtn = document.getElementById("howToPlayBtn");
 const howToPlayCloseBtn = document.getElementById("howToPlayCloseBtn");
-howToPlayBtn.addEventListener("click", ()=>{ howToPlayScreen.classList.remove("hidden"); });
+howToPlayBtn.addEventListener("click", ()=>{
+  howToPlayScreen.classList.remove("hidden");
+  howToPlayScreen.scrollTop = 0; // 常に一番上から表示する
+});
 howToPlayCloseBtn.addEventListener("click", ()=>{ howToPlayScreen.classList.add("hidden"); });
 const hud = document.getElementById("hud");
 const pauseBtn = document.getElementById("pauseBtn");
