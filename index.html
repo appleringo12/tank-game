@@ -235,6 +235,34 @@
   /* ---- ゲーム説明ボタン（色違い） ---- */
   .btn.info{ background:var(--steel); border-color:var(--steel-dark); border-bottom-color:var(--steel-dark); }
 
+  /* ---- タイトル画面：ゲーム説明／設定ボタンの横並び ---- */
+  #startScreen .modeBtnRow{ display:flex; width:min(86vw,390px); gap:10px; }
+  #startScreen .modeBtnRow .modeBtn{ width:auto; flex:1; min-width:0; padding-left:6px; padding-right:6px; }
+  #startScreen .modeBtnRow .modeBtn + .modeBtn{ margin-top:0; }
+
+  /* ---- 設定画面 ---- */
+  #settingsScreen{ z-index:26; }
+  .settingsBody{ display:flex; flex-direction:column; gap:26px; width:min(86vw,360px); margin:8px 0 2px; }
+  .settingsRow{ display:flex; align-items:center; justify-content:space-between; }
+  .settingsRow.settingsRowVolume{ flex-direction:column; align-items:stretch; gap:8px; }
+  .settingsLabel{ font-size:clamp(15px,4.2vw,19px); color:var(--paper); font-weight:700; letter-spacing:2px; }
+  .settingsToggleBtn{ min-width:96px; padding:8px 0; font-size:clamp(14px,3.8vw,17px); letter-spacing:2px; }
+  .settingsToggleBtn.alt{ opacity:0.7; }
+
+  .volumeSlider{ position:relative; width:100%; height:54px; touch-action:none; }
+  .volumeSliderLine{ position:absolute; left:0; right:0; top:14px; height:3px; background:var(--olive-dark); opacity:0.5; border-radius:2px; }
+  .volumeSliderTicks{ position:absolute; inset:0; }
+  .volumeSliderTick{ position:absolute; top:8px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; pointer-events:none; }
+  .volumeSliderTick .tickMark{ display:block; width:3px; height:14px; background:var(--paper); opacity:0.5; border-radius:2px; }
+  .volumeSliderTick.active .tickMark{ background:var(--olive-dark); opacity:1; }
+  .volumeSliderTick .tickNum{ margin-top:6px; font-size:12px; color:var(--paper); }
+  .volumeSliderTick.active .tickNum{ color:var(--olive-dark); font-weight:700; }
+  .volumeSliderHandle{
+    position:absolute; top:6px; left:0%; width:22px; height:22px; margin-left:-11px;
+    background:#fff; border:3px solid var(--olive-dark); border-radius:50%;
+    box-shadow:0 2px 4px rgba(0,0,0,0.25); pointer-events:none;
+  }
+
   /* ---- ゲーム説明画面 ---- */
   #howToPlayScreen{
     z-index:26;
@@ -271,7 +299,10 @@
       <div id="modeStats"></div>
       <button class="btn modeBtn" id="normalModeBtn">通常モード</button>
       <button class="btn modeBtn" id="rushModeBtn">爽快モード</button>
-      <button class="btn modeBtn info" id="howToPlayBtn">ゲーム説明</button>
+      <div class="modeBtnRow">
+        <button class="btn modeBtn info" id="howToPlayBtn">ゲーム説明</button>
+        <button class="btn modeBtn alt" id="settingsBtnTitle">設定</button>
+      </div>
     </div>
 
     <!-- 続きのセーブデータがあるときだけ表示する専用画面 -->
@@ -295,6 +326,7 @@
     <div id="pauseScreen" class="overlay hidden">
       <h1 class="title" style="font-size:clamp(22px,6vw,32px);">一時停止</h1>
       <button class="btn pauseMenuBtn" id="resumeBtn">再開する</button>
+      <button class="btn alt pauseMenuBtn" id="settingsBtnPause">設定</button>
       <button class="btn alt pauseMenuBtn" id="restartFromPauseBtn">タイトルに戻る</button>
     </div>
 
@@ -315,7 +347,6 @@
         右側ドラッグ＝<b>照準</b><br>
         そのままタップ=<b>射撃</b><br>
         右側を長押し＝<b>ミサイル発射</b><br>
-        右側をダブルタップしてから長押し＝<b>短い距離でミサイル発射</b><br>
 
          <span class="sectionTitle">■ 通常モードと爽快モードの違い</span>
         1. 爽快モードは自機の戦車の移動速度２倍<br>
@@ -337,6 +368,33 @@
         ・電波が届かない場所でもオフラインで遊べるようになります<br>
       </div>
       <button class="btn alt" id="howToPlayCloseBtn" style="margin-top:14px;">閉じる</button>
+    </div>
+
+    <!-- 設定画面 -->
+    <div id="settingsScreen" class="overlay hidden">
+      <h1 class="title" style="font-size:clamp(22px,6vw,32px);">設定</h1>
+      <div class="settingsBody">
+        <div class="settingsRow">
+          <span class="settingsLabel">BGM</span>
+          <button class="btn settingsToggleBtn" id="bgmToggleBtn">ON</button>
+        </div>
+        <div class="settingsRow settingsRowVolume">
+          <span class="settingsLabel">効果音</span>
+          <div class="volumeSlider" id="seVolumeSlider">
+            <div class="volumeSliderLine"></div>
+            <div class="volumeSliderTicks">
+              <div class="volumeSliderTick" style="left:0%"><span class="tickMark"></span><span class="tickNum">0</span></div>
+              <div class="volumeSliderTick" style="left:20%"><span class="tickMark"></span><span class="tickNum">1</span></div>
+              <div class="volumeSliderTick" style="left:40%"><span class="tickMark"></span><span class="tickNum">2</span></div>
+              <div class="volumeSliderTick" style="left:60%"><span class="tickMark"></span><span class="tickNum">3</span></div>
+              <div class="volumeSliderTick" style="left:80%"><span class="tickMark"></span><span class="tickNum">4</span></div>
+              <div class="volumeSliderTick" style="left:100%"><span class="tickMark"></span><span class="tickNum">5</span></div>
+            </div>
+            <div class="volumeSliderHandle" id="seVolumeHandle"></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn alt" id="settingsCloseBtn" style="margin-top:14px;">閉じる</button>
     </div>
   </div>
 
@@ -794,6 +852,26 @@ let stageClearTimer = 0;
 let stageClearDelay = 0;
 
 // ================================================================
+// 設定（BGMのオン/オフ・効果音の音量レベル）
+// ================================================================
+const SETTINGS_KEY = "tankBattleSettingsV1";
+let bgmEnabled = true;
+let seLevel = 3; // 0(無音)〜5。3が元々の音量。
+function loadSettings(){
+  try{
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    if(typeof d.bgmEnabled === "boolean") bgmEnabled = d.bgmEnabled;
+    if(Number.isFinite(d.seLevel)) seLevel = Math.max(0, Math.min(5, Math.floor(d.seLevel)));
+  }catch(e){}
+}
+function saveSettings(){
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bgmEnabled, seLevel })); }catch(e){}
+}
+loadSettings();
+
+// ================================================================
 // 効果音（外部ファイル不要のWeb Audio API）
 // ※ブラウザの自動再生制限のため、最初の操作後に有効化する
 // ================================================================
@@ -805,14 +883,16 @@ function initAudio(){
   }
   if(audioCtx && audioCtx.state === "suspended") audioCtx.resume();
 }
-const SFX_VOLUME_MULTIPLIER = 2.5; // 効果音を全体的に現在の2倍
+const SFX_LEVEL_BASE_MULTIPLIER = 2.5/3; // ★設定のレベル3＝元々の音量(2.5倍)になるよう、1レベルあたりの倍率を逆算
+function getSfxVolumeMultiplier(){ return SFX_LEVEL_BASE_MULTIPLIER * seLevel; } // レベル0で無音になる
 function playTone(freq, duration, type="square", volume=0.035, slide=0){
   if(!audioCtx) return;
+  if(seLevel <= 0) return; // 効果音レベル0＝無音
   const now=audioCtx.currentTime;
   const o=audioCtx.createOscillator(), g=audioCtx.createGain();
   o.type=type; o.frequency.setValueAtTime(freq,now);
   if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(20,freq+slide),now+duration);
-  g.gain.setValueAtTime(volume*10*SFX_VOLUME_MULTIPLIER,now);
+  g.gain.setValueAtTime(volume*10*getSfxVolumeMultiplier(),now);
   g.gain.exponentialRampToValueAtTime(0.001,now+duration);
   o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now+duration+0.02);
 }
@@ -1400,10 +1480,10 @@ function explodeMissile(m){
 
   const blastR = MISSILE_BLAST_RADIUS;
 
-  // ミサイルの爆風は通常弾も破壊する。敵味方は問わず、
-  // 爆風範囲内にある通常弾（高速弾は対象外）をすべて消す。
+  // ミサイルの爆風は通常弾・高速弾を問わず破壊する。敵味方は問わず、
+  // 爆風範囲内にある弾をすべて消す。
   for(const b of bullets){
-    if(b.dead || b.fastBullet) continue;
+    if(b.dead) continue;
     const dx=b.x-m.targetX, dy=b.y-m.targetY;
     if(dx*dx+dy*dy <= blastR*blastR){
       b.dead=true;
@@ -1625,8 +1705,7 @@ function updatePlayer(dt){
       rightStick.classList.toggle("missile-charging", missileCharging);
     }
     if(rightJoy.holdTime >= MISSILE_HOLD_TIME_FIRST){
-      // 長押し成立時点の「砲台の向き」を保存する。照準ドラッグ中でも長押しは成立する。
-      rightJoy.missileAngle = player.turretAngle;
+      // 発射角度は長押しを始めた瞬間の砲台の向き（rightStartで保存済みのmissileAngle）をそのまま使う。
       const missileDistance = MISSILE_DISTANCE;
       rightJoy.missileDistance = missileDistance;
       // ミサイルが空いているなら、この長押しで1発だけ発射。
@@ -1650,7 +1729,8 @@ function updatePlayer(dt){
     const held = performance.now()/1000 - rightJoy.fireFingerStartTime;
     if(held >= MISSILE_TAP_FIRE_TIME){
       rightJoy.fireFingerHoldTriggered=true;
-      rightJoy.missileAngle=player.turretAngle;
+      // 発射角度は2本目の指を置いた瞬間の砲台の向き（fireFingerAngle）をそのまま使う。
+      rightJoy.missileAngle=rightJoy.fireFingerAngle;
       const fireFingerDistance = rightJoy.fireFingerPendingShort ? MISSILE_TRIPLE_DISTANCE : MISSILE_DISTANCE;
       rightJoy.missileDistance = fireFingerDistance;
       // ミサイルが空いているなら、この長押しで1発だけ発射。
@@ -2263,6 +2343,71 @@ howToPlayBtn.addEventListener("click", ()=>{
   howToPlayScreen.scrollTop = 0; // 常に一番上から表示する
 });
 howToPlayCloseBtn.addEventListener("click", ()=>{ howToPlayScreen.classList.add("hidden"); });
+
+// ---- 設定画面 ----
+const settingsScreen = document.getElementById("settingsScreen");
+const settingsCloseBtn = document.getElementById("settingsCloseBtn");
+const settingsBtnTitle = document.getElementById("settingsBtnTitle");
+const settingsBtnPause = document.getElementById("settingsBtnPause");
+const bgmToggleBtn = document.getElementById("bgmToggleBtn");
+const seVolumeSlider = document.getElementById("seVolumeSlider");
+const seVolumeHandle = document.getElementById("seVolumeHandle");
+let settingsReturnScreen = null;
+
+function updateBgmToggleUI(){
+  bgmToggleBtn.textContent = bgmEnabled ? "ON" : "OFF";
+  bgmToggleBtn.classList.toggle("alt", !bgmEnabled);
+}
+function updateSeVolumeUI(){
+  seVolumeHandle.style.left = (seLevel/5*100) + "%";
+  seVolumeSlider.querySelectorAll(".volumeSliderTick").forEach((el,i)=>{
+    el.classList.toggle("active", i === seLevel);
+  });
+}
+function openSettings(returnScreen){
+  settingsReturnScreen = returnScreen;
+  returnScreen.classList.add("hidden");
+  updateBgmToggleUI();
+  updateSeVolumeUI();
+  settingsScreen.classList.remove("hidden");
+}
+function closeSettings(){
+  settingsScreen.classList.add("hidden");
+  if(settingsReturnScreen) settingsReturnScreen.classList.remove("hidden");
+  settingsReturnScreen = null;
+}
+settingsBtnTitle.addEventListener("click", ()=>openSettings(startScreen));
+settingsBtnPause.addEventListener("click", ()=>openSettings(pauseScreen));
+settingsCloseBtn.addEventListener("click", closeSettings);
+bgmToggleBtn.addEventListener("click", ()=>{
+  setBgmEnabled(!bgmEnabled);
+  updateBgmToggleUI();
+});
+
+// 効果音レベルのスライダー：横線＋6本の目盛り線をドラッグして0〜5を選ぶ
+let seSliderDragging = false;
+function setSeLevelFromClientX(clientX){
+  const rect = seVolumeSlider.getBoundingClientRect();
+  const ratio = rect.width > 0 ? Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) : 0;
+  const level = Math.round(ratio * 5);
+  if(level !== seLevel){
+    seLevel = level;
+    updateSeVolumeUI();
+    saveSettings();
+    playStageClear(); // 音量サンプルとしてステージクリア時の効果音を鳴らす
+  }
+}
+seVolumeSlider.addEventListener("pointerdown", e=>{
+  seSliderDragging = true;
+  try{ seVolumeSlider.setPointerCapture(e.pointerId); }catch(err){}
+  setSeLevelFromClientX(e.clientX);
+});
+seVolumeSlider.addEventListener("pointermove", e=>{
+  if(!seSliderDragging) return;
+  setSeLevelFromClientX(e.clientX);
+});
+seVolumeSlider.addEventListener("pointerup", ()=>{ seSliderDragging = false; });
+seVolumeSlider.addEventListener("pointercancel", ()=>{ seSliderDragging = false; });
 const hud = document.getElementById("hud");
 const pauseBtn = document.getElementById("pauseBtn");
 const bgm = document.getElementById("bgm");
@@ -2270,8 +2415,13 @@ const isIPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 bgm.volume = isIPhone ? 0.025 : (isMobile ? 0.04 : 0.0833);
 
-function playBgm(){ bgm.play().catch(()=>{}); }
+function playBgm(){ if(bgmEnabled) bgm.play().catch(()=>{}); }
 function stopBgm(){ bgm.pause(); }
+function setBgmEnabled(v){
+  bgmEnabled = !!v;
+  saveSettings();
+  if(!bgmEnabled){ stopBgm(); } else if(state==="playing"){ playBgm(); }
+}
 
 function formatContinueStage(d){
   const n = Math.max(1, Math.floor(d.totalStageProgress));
@@ -2301,6 +2451,8 @@ function showTitleScreen(){
   setMenuLayout(true);
   stopBgm();
   state = "start";
+  // タイトルに戻るときは、どのステージまで進んでいたかの情報（続きから再開データ）をリセットする。
+  clearContinueData();
   startScreen.classList.remove("hidden");
   continueScreen.classList.add("hidden");
   pauseScreen.classList.add("hidden");
