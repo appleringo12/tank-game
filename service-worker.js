@@ -1,17 +1,18 @@
-const CACHE_NAME = "puchi-tank-v1-offline";
+const CACHE_NAME = "puchi-tank-v2-icon";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
+  "./icon-192-maskable.png",
+  "./icon-512-maskable.png",
   "./flowerbed_fields_64k.mp3"
 ];
 
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-    // BGMなど一部ファイルがまだGitHub側にない場合でも、SW自体の導入を失敗させない。
     await Promise.all(ASSETS.map(async url => {
       try {
         const response = await fetch(url, { cache: "no-cache" });
@@ -45,7 +46,6 @@ self.addEventListener("fetch", event => {
       }
       return response;
     } catch (e) {
-      // オフライン時にキャッシュが無いリソースだけ失敗する。
       throw e;
     }
   })());
