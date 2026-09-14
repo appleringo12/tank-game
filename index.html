@@ -788,6 +788,23 @@ function playTankDefeat(){
   setTimeout(()=>playTone(420,0.16,"triangle",0.090,220),70);
   setTimeout(()=>playTone(760,0.20,"sine",0.070,-300),145);
 }
+// 黄色・茶色の戦車用の撃破音（レトロアーケード系・テンポゆっくり版）
+function playTankDefeatSlowRetro(){
+  initAudio();
+  playTone(700,0.06,"square",0.06,0);
+  setTimeout(()=>playTone(525,0.06,"square",0.06,0),70);
+  setTimeout(()=>playTone(770,0.06,"square",0.06,0),140);
+  setTimeout(()=>playTone(1050,0.18,"square",0.06,-400),210);
+}
+// 緑・赤・黒の戦車用の撃破音（レトロアーケード系・音を1つ追加したリッチ版）
+function playTankDefeatRichRetro(){
+  initAudio();
+  playTone(700,0.05,"square",0.06,0);
+  setTimeout(()=>playTone(525,0.05,"square",0.06,0),50);
+  setTimeout(()=>playTone(770,0.05,"square",0.06,0),100);
+  setTimeout(()=>playTone(930,0.05,"square",0.05,0),150);
+  setTimeout(()=>playTone(1250,0.14,"square",0.055,-450),200);
+}
 function playBulletBounce(){
   initAudio();
   playTone(900,0.045,"triangle",0.022,-260);
@@ -1139,6 +1156,10 @@ function damageTank(t){
     if(t.isPlayer) {
       playExplosion();
       onPlayerDeath();
+    } else if(t.type === "yellow" || t.type === "brown") {
+      playTankDefeatSlowRetro();
+    } else if(t.type === "green" || t.type === "red" || t.type === "black") {
+      playTankDefeatRichRetro();
     } else {
       playTankDefeat();
     }
