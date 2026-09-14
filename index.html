@@ -231,44 +231,6 @@
   #startScreen .modeBtn{ width:min(86vw,390px); min-height:70px; font-size:clamp(20px,6vw,27px); letter-spacing:2px; border-radius:26px; padding:14px 20px; }
   #startScreen .modeBtn + .modeBtn{ margin-top:10px; }
   .tank-emblem{ width:64px; height:64px; filter:drop-shadow(0 2px 4px rgba(210,150,230,.4)); }
-
-  /* ---- 設定ボタン（他のボタンの半分サイズ・別カラー） ---- */
-  .settingsBtn{
-    font-family:inherit;
-    font-size:clamp(8px,2.1vw,10px);
-    letter-spacing:2px;
-    padding:6px 19px;
-    border-radius:14px;
-    background:var(--steel);
-    color:#fff;
-    border:2px solid var(--steel-dark);
-    border-bottom:3px solid var(--steel-dark);
-    cursor:pointer;
-    box-shadow:0 0 0 1px rgba(255,255,255,0.5);
-    margin-top:10px;
-  }
-  .settingsBtn:active{ border-bottom-width:2px; transform:translateY(1px); }
-
-  /* ---- 設定画面：音量バーUI ---- */
-  #settingsScreen{ z-index:26; }
-  .volRow{ display:flex; align-items:center; gap:12px; margin:10px 0; }
-  .volLabel{ width:64px; font-size:13px; color:var(--paper); font-weight:700; text-align:right; letter-spacing:1px; }
-  .volBars{
-    display:flex; align-items:flex-end; gap:6px;
-    padding-bottom:6px;
-    border-bottom:2px solid rgba(150,105,170,0.4);
-  }
-  .volBars .volBar{
-    width:16px; border:none; border-radius:3px 3px 0 0;
-    background:rgba(150,105,170,0.25);
-    cursor:pointer; padding:0;
-  }
-  .volBars .volBar.active{ background:var(--olive-dark); }
-  .volBars .volBar:nth-child(1){ height:8px; }
-  .volBars .volBar:nth-child(2){ height:14px; }
-  .volBars .volBar:nth-child(3){ height:20px; }
-  .volBars .volBar:nth-child(4){ height:26px; }
-  .volBars .volBar:nth-child(5){ height:32px; }
 </style>
 </head>
 <body>
@@ -300,7 +262,6 @@
       <div id="modeStats"></div>
       <button class="btn modeBtn" id="normalModeBtn">通常モード</button>
       <button class="btn modeBtn" id="rushModeBtn">爽快モード</button>
-      <button class="settingsBtn" id="settingsBtnStart">⚙ 設定</button>
     </div>
 
     <!-- 続きのセーブデータがあるときだけ表示する専用画面 -->
@@ -325,7 +286,6 @@
       <h1 class="title" style="font-size:clamp(22px,6vw,32px);">一時停止</h1>
       <button class="btn pauseMenuBtn" id="resumeBtn">再開する</button>
       <button class="btn alt pauseMenuBtn" id="restartFromPauseBtn">タイトルに戻る</button>
-      <button class="settingsBtn" id="settingsBtnPause">⚙ 設定</button>
     </div>
 
     <!-- ゲームオーバー画面 -->
@@ -334,32 +294,6 @@
       <p class="subtitle">モード: <b id="finalMode"></b><br>クリアステージ: <b id="finalStage"></b><br>最大クリアステージ: <b id="finalMaxStage"></b></p>
       <button class="btn" id="retryBtn">同じモードでもう一度</button>
       <button class="btn alt" id="gameOverTitleBtn">タイトル画面に戻る</button>
-    </div>
-
-    <!-- 設定画面 -->
-    <div id="settingsScreen" class="overlay hidden">
-      <h1 class="title" style="font-size:clamp(20px,5.5vw,28px);">設定</h1>
-      <div class="volRow">
-        <span class="volLabel">BGM</span>
-        <div class="volBars" data-target="bgm">
-          <button class="volBar" data-level="0"></button>
-          <button class="volBar" data-level="1"></button>
-          <button class="volBar" data-level="2"></button>
-          <button class="volBar" data-level="3"></button>
-          <button class="volBar" data-level="4"></button>
-        </div>
-      </div>
-      <div class="volRow">
-        <span class="volLabel">効果音</span>
-        <div class="volBars" data-target="sfx">
-          <button class="volBar" data-level="0"></button>
-          <button class="volBar" data-level="1"></button>
-          <button class="volBar" data-level="2"></button>
-          <button class="volBar" data-level="3"></button>
-          <button class="volBar" data-level="4"></button>
-        </div>
-      </div>
-      <button class="btn alt" id="settingsCloseBtn" style="margin-top:14px;">閉じる</button>
     </div>
   </div>
 
@@ -806,30 +740,13 @@ function initAudio(){
   if(audioCtx && audioCtx.state === "suspended") audioCtx.resume();
 }
 const SFX_VOLUME_MULTIPLIER = 2.5; // 効果音を全体的に現在の2倍
-
-// ---- 設定：BGM／効果音の音量（5段階：0=無音〜4=最大） ----
-function loadVolumeLevel(key, fallback){
-  try{
-    const v = Number(localStorage.getItem("tankBattleVolume_"+key));
-    if(Number.isFinite(v) && v>=0 && v<=4) return Math.floor(v);
-  }catch(e){}
-  return fallback;
-}
-function saveVolumeLevel(key, level){
-  try{ localStorage.setItem("tankBattleVolume_"+key, String(level)); }catch(e){}
-}
-let sfxVolumeLevel = loadVolumeLevel("sfx", 4);
-let bgmVolumeLevel = loadVolumeLevel("bgm", 4);
-
 function playTone(freq, duration, type="square", volume=0.035, slide=0){
   if(!audioCtx) return;
-  const effectiveVolume = volume*10*SFX_VOLUME_MULTIPLIER*(sfxVolumeLevel/4);
-  if(effectiveVolume<=0) return; // 効果音が無音設定のときは何もしない
   const now=audioCtx.currentTime;
   const o=audioCtx.createOscillator(), g=audioCtx.createGain();
   o.type=type; o.frequency.setValueAtTime(freq,now);
   if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(20,freq+slide),now+duration);
-  g.gain.setValueAtTime(effectiveVolume,now);
+  g.gain.setValueAtTime(volume*10*SFX_VOLUME_MULTIPLIER,now);
   g.gain.exponentialRampToValueAtTime(0.001,now+duration);
   o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now+duration+0.02);
 }
@@ -2212,59 +2129,10 @@ const pauseBtn = document.getElementById("pauseBtn");
 const bgm = document.getElementById("bgm");
 const isIPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-const bgmBaseVolume = isIPhone ? 0.025 : (isMobile ? 0.04 : 0.0833);
-function applyBgmVolume(){ bgm.volume = bgmBaseVolume * (bgmVolumeLevel/4); }
-applyBgmVolume();
+bgm.volume = isIPhone ? 0.025 : (isMobile ? 0.04 : 0.0833);
 
 function playBgm(){ bgm.play().catch(()=>{}); }
 function stopBgm(){ bgm.pause(); }
-
-/* ================================================================
-   設定画面（BGM／効果音の音量）
-   ================================================================ */
-const settingsScreen = document.getElementById("settingsScreen");
-const settingsBtnStart = document.getElementById("settingsBtnStart");
-const settingsBtnPause = document.getElementById("settingsBtnPause");
-const settingsCloseBtn = document.getElementById("settingsCloseBtn");
-
-function renderVolumeBars(){
-  document.querySelectorAll('.volBars').forEach(group=>{
-    const target = group.dataset.target;
-    const level = target === "bgm" ? bgmVolumeLevel : sfxVolumeLevel;
-    group.querySelectorAll('.volBar').forEach(bar=>{
-      const barLevel = Number(bar.dataset.level);
-      bar.classList.toggle("active", barLevel <= level);
-    });
-  });
-}
-document.querySelectorAll('.volBars').forEach(group=>{
-  const target = group.dataset.target;
-  group.querySelectorAll('.volBar').forEach(bar=>{
-    bar.addEventListener("click", ()=>{
-      const level = Number(bar.dataset.level);
-      if(target === "bgm"){
-        bgmVolumeLevel = level;
-        saveVolumeLevel("bgm", level);
-        applyBgmVolume();
-      } else {
-        sfxVolumeLevel = level;
-        saveVolumeLevel("sfx", level);
-        initAudio();
-        playBulletBounce(); // 設定した音量を即確認できるようプレビュー再生
-      }
-      renderVolumeBars();
-    });
-  });
-});
-function openSettings(){
-  renderVolumeBars();
-  settingsScreen.classList.remove("hidden");
-}
-settingsBtnStart.addEventListener("click", openSettings);
-settingsBtnPause.addEventListener("click", openSettings);
-settingsCloseBtn.addEventListener("click", ()=>{
-  settingsScreen.classList.add("hidden");
-});
 
 function formatContinueStage(d){
   const n = Math.max(1, Math.floor(d.totalStageProgress));
