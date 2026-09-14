@@ -231,6 +231,15 @@
   #startScreen .modeBtn{ width:min(86vw,390px); min-height:70px; font-size:clamp(20px,6vw,27px); letter-spacing:2px; border-radius:26px; padding:14px 20px; }
   #startScreen .modeBtn + .modeBtn{ margin-top:10px; }
   .tank-emblem{ width:64px; height:64px; filter:drop-shadow(0 2px 4px rgba(210,150,230,.4)); }
+
+  /* ---- ゲーム説明ボタン（色違い） ---- */
+  .btn.info{ background:var(--steel); border-color:var(--steel-dark); border-bottom-color:var(--steel-dark); }
+
+  /* ---- ゲーム説明画面 ---- */
+  #howToPlayScreen{ z-index:26; overflow-y:auto; padding-top:28px; padding-bottom:28px; }
+  #howToPlayScreen .subtitle{ text-align:left; max-width:380px; }
+  #howToPlayScreen .subtitle .sectionTitle{ display:block; margin:14px 0 4px; color:var(--olive-dark); font-weight:700; font-size:13px; letter-spacing:1px; }
+  #howToPlayScreen .subtitle .sectionTitle:first-child{ margin-top:0; }
 </style>
 </head>
 <body>
@@ -253,15 +262,10 @@
     <!-- スタート画面 -->
     <div id="startScreen" class="overlay">
       <h1 class="title">ぷち戦車</h1>
-      <p class="subtitle">
-        左側ドラッグ＝<b>移動</b><br>
-        右側ドラッグ＝<b>照準</b><br>そのまま<b>タップ</b>で発射<br>
-        右側を<b>長押し</b>＝<b>ミサイル発射</b><br>
-        右側を<b>ダブルタップしてから長押し</b>＝<b>短い距離でミサイル発射</b><br>
-      </p>
       <div id="modeStats"></div>
       <button class="btn modeBtn" id="normalModeBtn">通常モード</button>
       <button class="btn modeBtn" id="rushModeBtn">爽快モード</button>
+      <button class="btn modeBtn info" id="howToPlayBtn">ゲーム説明</button>
     </div>
 
     <!-- 続きのセーブデータがあるときだけ表示する専用画面 -->
@@ -294,6 +298,31 @@
       <p class="subtitle">モード: <b id="finalMode"></b><br>クリアステージ: <b id="finalStage"></b><br>最大クリアステージ: <b id="finalMaxStage"></b></p>
       <button class="btn" id="retryBtn">同じモードでもう一度</button>
       <button class="btn alt" id="gameOverTitleBtn">タイトル画面に戻る</button>
+    </div>
+
+    <!-- ゲーム説明画面 -->
+    <div id="howToPlayScreen" class="overlay hidden">
+      <h1 class="title" style="font-size:clamp(20px,5.5vw,28px);">ゲーム説明</h1>
+      <div class="subtitle">
+        <span class="sectionTitle">■ 操作方法</span>
+        左側ドラッグ＝<b>移動</b><br>
+        右側ドラッグ＝<b>照準</b><br>そのまま<b>タップ</b>で発射<br>
+        右側を<b>長押し</b>＝<b>ミサイル発射</b><br>
+        右側を<b>ダブルタップしてから長押し</b>＝<b>短い距離でミサイル発射</b><br>
+
+        <span class="sectionTitle">■ Androidでホーム画面に追加する方法</span>
+        1. Chromeでこのゲームのページを開く<br>
+        2. 右上の「⋮」（メニュー）をタップ<br>
+        3. 「アプリをインストール」または「ホーム画面に追加」をタップ<br>
+        4. 確認画面で「インストール」または「追加」をタップ
+
+        <span class="sectionTitle">■ iPhoneでホーム画面に追加する方法</span>
+        1. Safariでこのゲームのページを開く<br>
+        2. 画面下（または上）の共有アイコン［□から↑が出ているマーク］をタップ<br>
+        3. メニューを下にスクロールし「ホーム画面に追加」をタップ<br>
+        4. 右上の「追加」をタップ
+      </div>
+      <button class="btn alt" id="howToPlayCloseBtn" style="margin-top:14px;">閉じる</button>
     </div>
   </div>
 
@@ -2124,6 +2153,11 @@ const continueBtn = document.getElementById("continueBtn");
 const newGameBtn = document.getElementById("newGameBtn");
 const pauseScreen = document.getElementById("pauseScreen");
 const gameOverScreen = document.getElementById("gameOverScreen");
+const howToPlayScreen = document.getElementById("howToPlayScreen");
+const howToPlayBtn = document.getElementById("howToPlayBtn");
+const howToPlayCloseBtn = document.getElementById("howToPlayCloseBtn");
+howToPlayBtn.addEventListener("click", ()=>{ howToPlayScreen.classList.remove("hidden"); });
+howToPlayCloseBtn.addEventListener("click", ()=>{ howToPlayScreen.classList.add("hidden"); });
 const hud = document.getElementById("hud");
 const pauseBtn = document.getElementById("pauseBtn");
 const bgm = document.getElementById("bgm");
