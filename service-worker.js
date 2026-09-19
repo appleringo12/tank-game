@@ -1,4 +1,4 @@
-const CACHE_NAME = "puchi-tank-v1.87";
+const CACHE_NAME = "puchi-tank-v1.89";
 const ASSETS = [
   "./",
   "./index.html",
