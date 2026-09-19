@@ -347,19 +347,18 @@
     <div id="howToPlayScreen" class="overlay hidden">
       <h1 class="title" style="font-size:clamp(20px,5.5vw,28px);">ゲーム説明</h1>
       <div class="subtitle">
-        <span class="sectionTitle">■ 操作方法A（従来の操作）</span>
+        <span class="sectionTitle">■ 通常操作</span>
         左側ドラッグ＝<b>移動</b><br>
         右側ドラッグ＝<b>照準</b><br>
         そのままタップ=<b>射撃</b><br>
         右側を長押し＝<b>ミサイル発射</b><br>
         右側をダブルタップしてから長押し＝<b>短距離ミサイル発射</b><br>
 
-        <span class="sectionTitle">■ 操作方法B（画面タップで狙う操作）</span>
-        左側ドラッグ＝<b>移動</b>（操作Aと同じ）<br>
-        ゲーム画面をタップ＝タップした方向へ<b>射撃</b><br>
-        ゲーム画面を長押し＝その方向へ<b>ミサイル発射</b><br>
-        自機に近い位置を長押し＝<b>短距離ミサイル発射</b><br>
-        設定画面から操作Aと切り替えられます。
+        <span class="sectionTitle">■ 簡単操作</span>
+        左側ドラッグ＝<b>移動</b><br>
+        タップした方向へ<b>射撃</b><br>
+        長押しした方向へ<b>ミサイル発射</b><br>
+
 
          <span class="sectionTitle">■ 通常モードと爽快モードの違い</span>
         1. 爽快モードは自機の戦車の移動速度２倍<br>
@@ -410,8 +409,8 @@
         <div class="settingsRow settingsRowVolume">
           <span class="settingsLabel">操作方法</span>
           <div class="schemeToggle">
-            <button class="btn schemeBtn" id="controlSchemeABtn">操作A</button>
-            <button class="btn schemeBtn" id="controlSchemeBBtn">操作B</button>
+            <button class="btn schemeBtn" id="controlSchemeABtn">通常操作</button>
+            <button class="btn schemeBtn" id="controlSchemeBBtn">簡単操作</button>
           </div>
           <div class="schemeDesc" id="controlSchemeDesc"></div>
         </div>
@@ -898,7 +897,7 @@ function updateSchemeB(dt){
 }
 bindZone(canvas, schemeBStart, schemeBMove, schemeBEnd);
 
-// 操作方法（A/B）を切り替えたときに、両方式の入力状態を持ち越さないようにする。
+// 操作方法を切り替えたときに、両方式の入力状態を持ち越さないようにする。
 function resetAllControlInputs(){
   if(rightJoy.active) rightEnd(rightJoy.id);
   if(leftJoy.active) leftEnd(leftJoy.id);
@@ -2750,7 +2749,7 @@ function startGame(continueGame=false, selectedMode=null){
 }
 
 // セーブデータがある場合は、ゲーム開始前に専用の選択画面を表示する。
-updateControlSchemeUI(); // 保存済みの操作方法(A/B)を、ゾーンのラベル表示に反映する
+updateControlSchemeUI(); // 保存済みの操作方法を、ゾーンのラベル表示に反映する
 if(loadContinueData()) showContinueScreen(); else showTitleScreen();
 
 function showGameOver(){
