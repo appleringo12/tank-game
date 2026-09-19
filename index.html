@@ -249,6 +249,11 @@
   .settingsToggleBtn{ min-width:96px; padding:8px 0; font-size:clamp(14px,3.8vw,17px); letter-spacing:2px; }
   .settingsToggleBtn.alt{ opacity:0.7; }
 
+  .schemeToggle{ display:flex; gap:10px; }
+  .schemeBtn{ flex:1; padding:8px 0; font-size:clamp(13px,3.6vw,16px); letter-spacing:1px; opacity:0.55; }
+  .schemeBtn.active{ opacity:1; }
+  .schemeDesc{ font-size:12px; color:var(--paper); opacity:0.85; line-height:1.5; }
+
   .volumeSlider{ position:relative; width:100%; height:54px; touch-action:none; }
   .volumeSliderLine{ position:absolute; left:0; right:0; top:14px; height:3px; background:var(--olive-dark); opacity:0.5; border-radius:2px; }
   .volumeSliderTicks{ position:absolute; inset:0; }
@@ -342,12 +347,19 @@
     <div id="howToPlayScreen" class="overlay hidden">
       <h1 class="title" style="font-size:clamp(20px,5.5vw,28px);">ゲーム説明</h1>
       <div class="subtitle">
-        <span class="sectionTitle">■ 操作方法</span>
+        <span class="sectionTitle">■ 操作方法A（従来の操作）</span>
         左側ドラッグ＝<b>移動</b><br>
         右側ドラッグ＝<b>照準</b><br>
         そのままタップ=<b>射撃</b><br>
         右側を長押し＝<b>ミサイル発射</b><br>
         右側をダブルタップしてから長押し＝<b>短距離ミサイル発射</b><br>
+
+        <span class="sectionTitle">■ 操作方法B（画面タップで狙う操作）</span>
+        左側ドラッグ＝<b>移動</b>（操作Aと同じ）<br>
+        ゲーム画面をタップ＝タップした方向へ<b>射撃</b><br>
+        ゲーム画面を長押し＝その方向へ<b>ミサイル発射</b><br>
+        自機に近い位置を長押し＝<b>短距離ミサイル発射</b><br>
+        設定画面から操作Aと切り替えられます。
 
          <span class="sectionTitle">■ 通常モードと爽快モードの違い</span>
         1. 爽快モードは自機の戦車の移動速度２倍<br>
@@ -394,6 +406,14 @@
             </div>
             <div class="volumeSliderHandle" id="seVolumeHandle"></div>
           </div>
+        </div>
+        <div class="settingsRow settingsRowVolume">
+          <span class="settingsLabel">操作方法</span>
+          <div class="schemeToggle">
+            <button class="btn schemeBtn" id="controlSchemeABtn">操作A</button>
+            <button class="btn schemeBtn" id="controlSchemeBBtn">操作B</button>
+          </div>
+          <div class="schemeDesc" id="controlSchemeDesc"></div>
         </div>
       </div>
       <button class="btn alt" id="settingsCloseBtn" style="margin-top:14px;">閉じる</button>
@@ -458,6 +478,10 @@ const MISSILE_DISTANCE = TILE * 5;   // ★通常ミサイルの着弾距離（5
 const MISSILE_TRIPLE_DISTANCE = MISSILE_DISTANCE / 3; // ★ダブルタップ後の長押しは通常の1/3地点
 const MISSILE_BLAST_RADIUS = 62;     // ★着弾時の爆風範囲
 const MISSILE_MAX_ACTIVE = 1;        // ★同時に存在できるミサイルは1発まで
+
+// --- 操作B（画面タップ操作）のパラメータ ---
+const SCHEME_B_HOLD_TIME = 0.2;              // ★この時間未満で指を離す＝通常弾、これ以上＝ミサイル発射
+const SCHEME_B_SHORT_RANGE = MISSILE_DISTANCE * 0.5; // ★タップ位置が自機からこの距離以内なら短距離ミサイル
 
 // --- 敵の種類ごとのパラメータ ---
 // speed=移動速度 / hp=耐久力（弾を何発で倒せるか）
@@ -580,6 +604,25 @@ document.addEventListener("visibilitychange", ()=>{
 });
 resize();
 
+// 画面上の座標(clientX/clientY)を、render()と同じカメラ変換でワールド座標に変換する。
+// （操作B：ゲーム画面をタップした位置を狙う方向として扱うために使う）
+function screenToWorld(clientX, clientY){
+  const rect = canvas.getBoundingClientRect();
+  const viewW = WORLD_W / CAMERA_ZOOM;
+  const viewH = WORLD_H / CAMERA_ZOOM;
+  const halfViewW = Math.min(viewW/2, WORLD_W/2);
+  const halfViewH = Math.min(viewH/2, WORLD_H/2);
+  const px = player ? player.x : WORLD_W/2;
+  const py = player ? player.y : WORLD_H/2;
+  const cameraX = clamp(px, halfViewW, WORLD_W-halfViewW);
+  const cameraY = clamp(py, halfViewH, WORLD_H-halfViewH);
+  const relX = clientX - rect.left;
+  const relY = clientY - rect.top;
+  const wx = relX/(scale*CAMERA_ZOOM) + cameraX - viewW/2;
+  const wy = relY/(scale*CAMERA_ZOOM) + cameraY - viewH/2;
+  return {x:wx, y:wy};
+}
+
 /* ================================================================
    入力（タッチ操作）まわり
    ・左ゾーン：ドラッグした方向へ戦車が移動する（バーチャルスティック）
@@ -651,6 +694,7 @@ function leftEnd(id){
 function rightStart(x,y,id){
   // 右側の指は照準専用。照準中の2本目の指は、短いタップなら通常弾、
   // 0.1秒以上の長押しならミサイルとして判定する。
+  if(controlScheme!=="A") return; // 操作Bではこのゾーンは使わない
   if(rightJoy.active) return;
   rightJoy.active=true; rightJoy.id=id; rightJoy.sx=x; rightJoy.sy=y;
   rightJoy.holdTime=0; rightJoy.dragged=false; rightJoy.missileArmed=false; rightJoy.missilePending=false;
@@ -799,6 +843,70 @@ window.addEventListener("touchend", e=>{
 bindZone(leftZoneEl, leftStart, leftMove, leftEnd);
 bindZone(rightZoneEl, rightStart, rightMove, rightEnd);
 
+// ================================================================
+// 操作B：ゲーム画面をタップ／長押しして攻撃する
+// ・タップ（短押し）＝タップした方向へ通常弾
+// ・長押し＝タップした方向へミサイル発射。自機に近い位置を長押しすると短距離ミサイルになる
+// ================================================================
+const schemeB = {
+  active:false, id:null, startTime:0, wx:0, wy:0, angle:0, holdTriggered:false,
+  pendingAngle:null, pendingDistance:0,
+};
+function schemeBStart(x,y,id){
+  if(controlScheme!=="B" || state!=="playing" || !player || !player.alive) return;
+  if(schemeB.active) return; // 同時に扱うのは1本指だけ
+  const w = screenToWorld(x,y);
+  schemeB.active = true;
+  schemeB.id = id;
+  schemeB.startTime = performance.now()/1000;
+  schemeB.wx = w.x; schemeB.wy = w.y;
+  schemeB.angle = Math.atan2(w.y-player.y, w.x-player.x);
+  schemeB.holdTriggered = false;
+  // 砲台はここでは動かさない。通常弾を撃った瞬間にだけ、撃った方向を向く（ミサイルでは向きを変えない）。
+}
+function schemeBMove(x,y,id){
+  if(!schemeB.active || id!==schemeB.id || !player) return;
+  const w = screenToWorld(x,y);
+  schemeB.wx = w.x; schemeB.wy = w.y;
+  schemeB.angle = Math.atan2(w.y-player.y, w.x-player.x);
+}
+function schemeBEnd(id){
+  if(!schemeB.active || id!==schemeB.id) return;
+  const held = performance.now()/1000 - schemeB.startTime;
+  if(!schemeB.holdTriggered && held < SCHEME_B_HOLD_TIME && player && player.alive){
+    // タップ（短押し）＝通常弾。発射した方向を向いたまま、次に撃つまでその向きを保つ。
+    player.turretAngle = schemeB.angle;
+    input.fireRequested = true;
+  }
+  schemeB.active = false;
+  schemeB.id = null;
+  schemeB.pendingAngle = null; // 指を離した時点で、まだ発射していない先行入力は消す
+}
+function updateSchemeB(dt){
+  if(controlScheme!=="B" || !schemeB.active || schemeB.holdTriggered || !player || !player.alive) return;
+  const held = performance.now()/1000 - schemeB.startTime;
+  if(held < SCHEME_B_HOLD_TIME) return;
+  schemeB.holdTriggered = true;
+  // ミサイル発射では砲台の向きを変えない。
+  const dist = Math.hypot(schemeB.wx-player.x, schemeB.wy-player.y);
+  const missileDistance = dist <= SCHEME_B_SHORT_RANGE ? MISSILE_TRIPLE_DISTANCE : MISSILE_DISTANCE;
+  if(!fireMissile(schemeB.angle, missileDistance)){
+    // すでに他のミサイルが飛行中なら、着弾した瞬間に発射する先行入力として覚えておく。
+    schemeB.pendingAngle = schemeB.angle;
+    schemeB.pendingDistance = missileDistance;
+  }
+}
+bindZone(canvas, schemeBStart, schemeBMove, schemeBEnd);
+
+// 操作方法（A/B）を切り替えたときに、両方式の入力状態を持ち越さないようにする。
+function resetAllControlInputs(){
+  if(rightJoy.active) rightEnd(rightJoy.id);
+  if(leftJoy.active) leftEnd(leftJoy.id);
+  if(schemeB.active) schemeBEnd(schemeB.id);
+  schemeB.active=false; schemeB.id=null; schemeB.holdTriggered=false; schemeB.pendingAngle=null;
+  input.fireRequested=false; input.aiming=false; input.aimMag=0;
+}
+
 /* ================================================================
    数学・当たり判定まわりの小さなヘルパー関数
    ================================================================ */
@@ -891,6 +999,7 @@ const SETTINGS_KEY = "tankBattleSettingsV1";
 const SFX_LEVEL_MAX = 6; // 効果音レベルの最大値（0〜6の7段階、3が真ん中＝デフォルト）
 let bgmEnabled = true;
 let seLevel = 3; // 0(無音)〜6。3が元々の音量（デフォルト）。
+let controlScheme = "A"; // "A"=従来操作（ドラッグ照準）、"B"=新操作（画面タップで照準）
 function loadSettings(){
   try{
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -898,10 +1007,11 @@ function loadSettings(){
     const d = JSON.parse(raw);
     if(typeof d.bgmEnabled === "boolean") bgmEnabled = d.bgmEnabled;
     if(Number.isFinite(d.seLevel)) seLevel = Math.max(0, Math.min(SFX_LEVEL_MAX, Math.floor(d.seLevel)));
+    if(d.controlScheme === "A" || d.controlScheme === "B") controlScheme = d.controlScheme;
   }catch(e){}
 }
 function saveSettings(){
-  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bgmEnabled, seLevel })); }catch(e){}
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bgmEnabled, seLevel, controlScheme })); }catch(e){}
 }
 loadSettings();
 
@@ -1518,6 +1628,13 @@ function updateMissiles(dt){
       }
     }
   }
+
+  // 操作Bの先行入力：長押し判定の瞬間に他のミサイルが飛行中だった場合、着弾した瞬間に発射する。
+  if(landed && missiles.length < MISSILE_MAX_ACTIVE && player && player.alive && schemeB.pendingAngle !== null){
+    if(fireMissile(schemeB.pendingAngle, schemeB.pendingDistance)){
+      schemeB.pendingAngle = null;
+    }
+  }
 }
 
 function explodeMissile(m){
@@ -1712,9 +1829,10 @@ function updatePlayer(dt){
   }
 
   // ---- 砲塔の向き（右スティックでドラッグ中はその方向、それ以外は徐々に車体方向へ） ----
+  // 操作Bでは、砲台の向きは発射した瞬間にだけ変える（このロジックでは動かさない）。
   if(input.aiming && input.aimMag>0.2){
     player.turretAngle = input.aimAngle;
-  } else if(!input.aiming){
+  } else if(!input.aiming && controlScheme!=="B"){
     player.turretAngle = lerpAngle(player.turretAngle, player.angle, 1-Math.pow(0.02,dt));
   }
 
@@ -1825,6 +1943,7 @@ function loop(ts){
 
   if(state==="playing"){
     updatePlayer(dt);
+    updateSchemeB(dt);
     for(const t of tanks){ if(!t.isPlayer) updateEnemy(t, dt); }
     for(let i=0;i<tanks.length;i++){
       for(let j=i+1;j<tanks.length;j++){
@@ -2038,10 +2157,10 @@ function render(){
     }
   }
 
-  // 自機の砲塔方向と、壁で1回反射した弾道を点線で表示
-  drawAimPreview(player);
-  // ミサイルの着弾予測地点（二重丸＋十字）
-  drawMissileTargetPreview();
+  // 自機の砲塔方向と、壁で1回反射した弾道を点線で表示（操作Bでは照準そのものが不要なので出さない）
+  if(controlScheme!=="B") drawAimPreview(player);
+  // ミサイルの着弾予測地点（二重丸＋十字）（操作Bでは出さない）
+  if(controlScheme!=="B") drawMissileTargetPreview();
 
   // 戦車
   for(const t of tanks){
@@ -2405,14 +2524,41 @@ const settingsCloseBtn = document.getElementById("settingsCloseBtn");
 const settingsBtnTitle = document.getElementById("settingsBtnTitle");
 const settingsBtnPause = document.getElementById("settingsBtnPause");
 const bgmToggleBtn = document.getElementById("bgmToggleBtn");
+const controlSchemeABtn = document.getElementById("controlSchemeABtn");
+const controlSchemeBBtn = document.getElementById("controlSchemeBBtn");
+const controlSchemeDesc = document.getElementById("controlSchemeDesc");
+const CONTROL_SCHEME_DESC = {
+  A: "ドラッグで照準、長押しでミサイル発射（従来の操作）。",
+  B: "画面をタップした方向に通常弾が飛ぶ。長押しでミサイル発射、狙った位置が近いほど短距離ミサイルになる。",
+};
 const seVolumeSlider = document.getElementById("seVolumeSlider");
 const seVolumeHandle = document.getElementById("seVolumeHandle");
 let settingsReturnScreen = null;
+let settingsPrevMenuState = false;
 
 function updateBgmToggleUI(){
   bgmToggleBtn.textContent = bgmEnabled ? "ON" : "OFF";
   bgmToggleBtn.classList.toggle("alt", !bgmEnabled);
 }
+function updateControlSchemeUI(){
+  controlSchemeABtn.classList.toggle("active", controlScheme==="A");
+  controlSchemeBBtn.classList.toggle("active", controlScheme==="B");
+  controlSchemeDesc.textContent = CONTROL_SCHEME_DESC[controlScheme] || "";
+  rightZoneEl.querySelector(".zone-label").innerHTML = controlScheme==="B"
+    ? "操作Bでは使いません<br>ゲーム画面をタップ／長押し"
+    : "ドラッグ＝照準<br>ドラッグ中にタップ＝発射<br>長押し＝ミサイル発射";
+}
+function setControlScheme(v){
+  if(v!=="A" && v!=="B") return;
+  if(controlScheme===v) return;
+  controlScheme = v;
+  saveSettings();
+  updateControlSchemeUI();
+  // 操作方法の切り替え時、両方式の入力状態をリセットして持ち越さないようにする。
+  resetAllControlInputs();
+}
+controlSchemeABtn.addEventListener("click", ()=>setControlScheme("A"));
+controlSchemeBBtn.addEventListener("click", ()=>setControlScheme("B"));
 function updateSeVolumeUI(){
   seVolumeHandle.style.left = (seLevel/SFX_LEVEL_MAX*100) + "%";
   seVolumeSlider.querySelectorAll(".volumeSliderTick").forEach((el,i)=>{
@@ -2421,13 +2567,17 @@ function updateSeVolumeUI(){
 }
 function openSettings(returnScreen){
   settingsReturnScreen = returnScreen;
+  settingsPrevMenuState = app.classList.contains("menu-state");
   returnScreen.classList.add("hidden");
+  setMenuLayout(true); // 設定を開いている間は、タイトル画面のときと同じく下の操作UIを隠す
   updateBgmToggleUI();
+  updateControlSchemeUI();
   updateSeVolumeUI();
   settingsScreen.classList.remove("hidden");
 }
 function closeSettings(){
   settingsScreen.classList.add("hidden");
+  setMenuLayout(settingsPrevMenuState); // 設定を開く前の表示状態に戻す
   if(settingsReturnScreen) settingsReturnScreen.classList.remove("hidden");
   settingsReturnScreen = null;
 }
@@ -2600,6 +2750,7 @@ function startGame(continueGame=false, selectedMode=null){
 }
 
 // セーブデータがある場合は、ゲーム開始前に専用の選択画面を表示する。
+updateControlSchemeUI(); // 保存済みの操作方法(A/B)を、ゾーンのラベル表示に反映する
 if(loadContinueData()) showContinueScreen(); else showTitleScreen();
 
 function showGameOver(){
