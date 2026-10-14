@@ -961,7 +961,7 @@ let lives = 3;
 
 // ================================================================
 // セーブデータ
-// ステージをクリアした瞬間だけ保存する。
+// ステージをクリアした瞬間と、自機が倒された瞬間に保存する。
 // 敵の位置・弾・ミサイルなど、その瞬間の戦闘状態は保存しない。
 // ================================================================
 const SAVE_KEY = "tankBattleContinueSaveV1";
@@ -1518,6 +1518,23 @@ function resetPlayerTransientState(){
 
 function onPlayerDeath(){
   lives--;
+
+  // 倒された瞬間にセーブする（倒された後にタスクキルして残機を復活させる不正の対策）。
+  // ・残機が残っている → 現在のステージを「減った残機」で保存。再開してもこのステージからやり直し。
+  // ・残機が0 → ゲームオーバー確定なのでセーブを消す（残してしまうと残機1で復活できてしまう）。
+  if(lives <= 0){
+    clearContinueData();
+  }else{
+    saveContinueData({
+      stageNum,
+      lapNum,
+      totalStageProgress,
+      lives,
+      mode: gameMode,
+      savedAt: Date.now()
+    });
+  }
+
   resetPlayerTransientState();
 
   // 死亡時に、倒されずに残っている敵だけ初期位置へ戻す。
