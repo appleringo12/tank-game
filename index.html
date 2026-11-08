@@ -45,6 +45,12 @@
     --missile:#ff6f91;
   }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  /* スマホの長押しでブラウザ標準のコピー等のメニューを出さない */
+  #startScreen, #startScreen *{
+    -webkit-touch-callout:none;
+    -webkit-user-select:none;
+    user-select:none;
+  }
   html,body{
     margin:0; padding:0; width:100%; height:100%;
     background:linear-gradient(160deg,#ffe3f3 0%,#f0e0ff 45%,#dcebff 100%);
@@ -231,6 +237,8 @@
   #startScreen .modeBtn{ width:min(86vw,390px); min-height:70px; font-size:clamp(20px,6vw,27px); letter-spacing:2px; border-radius:26px; padding:14px 20px; }
   #startScreen .modeBtn + .modeBtn{ margin-top:10px; }
   .tank-emblem{ width:64px; height:64px; filter:drop-shadow(0 2px 4px rgba(210,150,230,.4)); }
+  .stageSelectButtons{display:grid;grid-template-columns:repeat(3,minmax(72px,1fr));gap:10px;width:min(86vw,330px);max-height:48vh;overflow-y:auto;padding:4px}
+  .stageSelectButtons .btn{padding:10px 8px;letter-spacing:1px;font-size:clamp(15px,4vw,18px)}
 
   /* ---- ゲーム説明ボタン（色違い） ---- */
   .btn.info{ background:var(--steel); border-color:var(--steel-dark); border-bottom-color:var(--steel-dark); }
@@ -279,6 +287,45 @@
   #howToPlayScreen .subtitle{ text-align:left; max-width:380px; }
   #howToPlayScreen .subtitle .sectionTitle{ display:block; margin:14px 0 4px; color:var(--olive-dark); font-weight:700; font-size:13px; letter-spacing:1px; }
   #howToPlayScreen .subtitle .sectionTitle:first-child{ margin-top:0; }
+
+  /* ---- オリジナルステージ作成・一覧 ---- */
+  #stageEditorScreen,#stageLibraryScreen{z-index:35;overflow-y:auto;justify-content:flex-start;padding:12px 12px 24px;gap:10px}
+  .editorTop{display:flex;align-items:center;justify-content:space-between;width:min(96vw,760px);gap:8px}
+  .editorTitle{font-size:clamp(20px,5vw,28px);color:#ff9ecb;margin:4px}
+  .editorTools{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;width:min(96vw,760px)}
+  .editorTools .btn{font-size:13px;letter-spacing:0;padding:8px 11px;border-radius:15px;border-width:2px;border-bottom-width:4px}
+  /* ★配置するものを選ぶボタンは小さめに */
+  #editorTools{gap:4px}
+  #editorTools .btn{font-size:11px;padding:4px 8px;border-radius:11px;border-width:2px;border-bottom-width:3px}
+  #editorTools .selected{outline-width:2px}
+  .btn:disabled{opacity:.45;cursor:default}
+  .editorTools .selected{outline:3px solid #8ecbff;opacity:1}
+  #editorCanvas{width:min(94vw,720px);height:auto;max-height:52vh;aspect-ratio:13/9;background:#fff;border:2px solid #c9baf5;border-radius:10px;touch-action:none}
+  .editorSettings{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;color:var(--paper);font-size:13px}
+  .editorSettings input,.editorSettings select{font:inherit;padding:6px;border:1px solid #c9baf5;border-radius:8px;background:#fff;color:var(--paper)}
+  .editorHint{font-size:12px;color:#8a6f97;text-align:center;max-width:700px;line-height:1.6}
+  #stageCards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;width:min(96vw,760px)}
+  .stageCard{background:#fff9fd;border:2px solid #e9c9e5;border-radius:14px;padding:10px;color:var(--paper);text-align:left}
+  .stageCard canvas{width:100%;height:auto;border:1px solid #e5d4ee;border-radius:8px}
+  .stageCardTitle{font-weight:700;margin:4px 0 8px}
+  .stageCardActions{display:flex;flex-wrap:wrap;gap:6px}
+  #uiToast{position:absolute;left:50%;bottom:max(24px,env(safe-area-inset-bottom,0px) + 16px);transform:translateX(-50%);z-index:60;max-width:90vw;padding:12px 18px;border-radius:16px;background:#7a5c8a;color:#fff;font-size:14px;font-weight:700;line-height:1.5;text-align:center;box-shadow:0 4px 14px rgba(120,80,140,.35);pointer-events:none}
+  #uiConfirm{position:absolute;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;background:rgba(122,92,138,.45)}
+  #uiConfirm .box{background:#fff9fd;border:3px solid #e9c9e5;border-radius:18px;padding:20px 22px;max-width:86vw;color:var(--paper);text-align:center}
+  #uiConfirm .msg{font-weight:700;margin-bottom:14px;line-height:1.6}
+  #uiConfirm .row{display:flex;gap:10px;justify-content:center}
+  .codeImport{align-items:stretch}
+  .codeImport input{flex:1 1 220px;min-width:0;font:inherit;font-size:14px;padding:10px 12px;border:2px solid #c9baf5;border-radius:14px;background:#fff;color:var(--paper);letter-spacing:1px}
+  #shareDialog{position:absolute;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;background:rgba(122,92,138,.45)}
+  #shareDialog.hidden{display:none}
+  #shareDialog .box{background:#fff9fd;border:3px solid #e9c9e5;border-radius:18px;padding:18px 20px;width:min(88vw,420px);color:var(--paper);text-align:center}
+  #shareDialog .msg{font-weight:700;margin-bottom:8px}
+  #shareDialog .shareHint{font-size:12px;line-height:1.6;color:#8a6f97;margin-bottom:10px}
+  #shareDialog textarea{width:100%;box-sizing:border-box;font:700 15px/1.5 ui-monospace,Menlo,Consolas,monospace;letter-spacing:1px;word-break:break-all;padding:10px;border:2px solid #c9baf5;border-radius:12px;background:#fff;color:var(--paper);resize:none;margin-bottom:12px}
+  #shareDialog .row{display:flex;gap:10px;justify-content:center}
+  #shareDialog .row .btn{padding:10px 24px}
+  .stageCardActions .btn{font-size:12px;letter-spacing:0;padding:7px 10px;border-width:2px;border-bottom-width:4px;border-radius:12px}
+
 </style>
 </head>
 <body>
@@ -304,10 +351,20 @@
       <div id="modeStats"></div>
       <button class="btn modeBtn" id="normalModeBtn">通常モード</button>
       <button class="btn modeBtn" id="rushModeBtn">爽快モード</button>
+      <button class="btn modeBtn alt" id="stageCreateOpenBtn">ステージ作成</button>
+      <button class="btn modeBtn alt" id="stageLibraryOpenBtn">ステージを見る</button>
       <div class="modeBtnRow">
         <button class="btn modeBtn info" id="howToPlayBtn">ゲーム説明</button>
-        <button class="btn modeBtn alt" id="settingsBtnTitle">設定</button>
+        <button class="btn modeBtn info" id="settingsBtnTitle">設定</button>
       </div>
+    </div>
+
+    <!-- 長押しで開く途中ステージ選択 -->
+    <div id="stageSelectScreen" class="overlay hidden">
+      <h1 class="title" id="stageSelectTitle">開始ステージを選択</h1>
+      <div class="subtitle">5ステージごとに選べます（1周目のみ）</div>
+      <div id="stageSelectButtons" class="stageSelectButtons"></div>
+      <button class="btn alt" id="stageSelectCloseBtn">戻る</button>
     </div>
 
     <!-- 続きのセーブデータがあるときだけ表示する専用画面 -->
@@ -419,6 +476,54 @@
     </div>
   </div>
 
+
+    <!-- ステージ作成画面 -->
+    <div id="stageEditorScreen" class="overlay hidden">
+      <div class="editorTop"><h2 class="editorTitle">ステージ作成</h2><button class="btn alt" id="editorBackBtn">戻る</button></div>
+      <div class="editorSettings">
+        <label>名前 <input id="editorName" maxlength="24" value="オリジナルステージ"></label>
+      </div>
+      <div class="editorTools" id="editorTools">
+        <button class="btn" data-tool="#">レンガ</button>
+        <button class="btn" data-tool="X">鉄壁</button>
+        <button class="btn" data-tool="W">水</button>
+        <button class="btn" data-tool="P">自機スポーン</button>
+        <button class="btn" data-tool="yellow">黄色敵</button>
+        <button class="btn" data-tool="brown">茶色敵</button>
+        <button class="btn" data-tool="green">緑敵</button>
+        <button class="btn" data-tool="red">赤敵</button>
+        <button class="btn" data-tool="black">黒敵</button>
+        <button class="btn" data-tool="cyan">水色敵</button>
+      </div>
+      <canvas id="editorCanvas" width="728" height="504"></canvas>
+      <div class="editorTools">
+        <button class="btn selected" data-tool=".">消しゴム</button>
+        <button class="btn info" id="editorUndoBtn" disabled>一つ戻る</button>
+        <button class="btn alt" id="editorClearBtn">全消去</button>
+        <button class="btn alt" id="editorTestBtn">テストプレイ</button>
+        <button class="btn" id="editorSaveBtn">保存する</button>
+      </div>
+    </div>
+    <!-- オリジナルステージ一覧 -->
+    <div id="stageLibraryScreen" class="overlay hidden">
+      <div class="editorTop"><h2 class="editorTitle">オリジナルステージ</h2><button class="btn alt" id="libraryBackBtn">戻る</button></div>
+      <div class="editorHint">作成したステージを選んで遊ぶ・編集・複製・共有・削除できます。データはこのブラウザに保存されます。<br>「共有」で発行したコードを下の欄に入力すると、同じステージを読み込めます。</div>
+      <div id="stageCards"></div>
+      <div class="editorTools codeImport">
+        <input id="importCodeInput" placeholder="共有コードを入力" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <button class="btn info" id="importStageBtn">ステージを読み込む</button>
+      </div>
+    </div>
+
+  <div id="uiToast" class="hidden"></div>
+  <div id="shareDialog" class="hidden"><div class="box">
+    <div class="msg" id="shareDialogTitle">共有コード</div>
+    <div class="shareHint">このコードを相手に送り、「ステージを見る」のコード入力欄に入力してもらうと、同じステージを遊べます。（ステージ名はコードに含まれません）</div>
+    <textarea id="shareCodeBox" readonly rows="3" spellcheck="false"></textarea>
+    <div class="row"><button class="btn alt" id="shareCloseBtn">閉じる</button><button class="btn" id="shareCopyBtn">コピー</button></div>
+  </div></div>
+  <div id="uiConfirm" class="hidden"><div class="box"><div class="msg" id="uiConfirmMsg"></div><div class="row"><button class="btn alt" id="uiConfirmNo">やめる</button><button class="btn" id="uiConfirmYes">はい</button></div></div></div>
+
   <!-- ============ 下段：操作エリア ============ -->
   <div id="controls">
     <div id="leftZone" class="zone">
@@ -442,11 +547,13 @@
    ================================================================ */
 
 // --- ゲームワールド（マップ）のサイズ ---
-const WORLD_W = 480;   // 横長フィールド（12マス）
-const WORLD_H = 320;   // 8マス。16:9画面でも全体を見渡せるサイズ
 const TILE = 40;        // 1マスのサイズ（壁のブロック単位）
-const COLS = WORLD_W / TILE; // 横方向のマス数
-const ROWS = WORLD_H / TILE; // 縦方向のマス数
+const STAGE_COLS = 13;  // ★ステージの横マス数（通常・爽快・オリジナルすべて共通の固定サイズ）
+const STAGE_ROWS = 9;   // ★ステージの縦マス数
+let WORLD_W = STAGE_COLS * TILE;   // 横長フィールド（13マス = 520）
+let WORLD_H = STAGE_ROWS * TILE;   // 9マス = 360。16:9画面でも全体を見渡せるサイズ
+let COLS = STAGE_COLS; // 横方向のマス数
+let ROWS = STAGE_ROWS; // 縦方向のマス数
 
 // --- 戦車のパラメータ ---
 const TANK_R = 15;          // 戦車本体の当たり判定の半径
@@ -492,6 +599,9 @@ const ENEMY_TYPES = {
   green: { speed:50, hp:1, color:"#a8e6b0", dark:"#7ecb8c", maxBullets:1, bulletSpeed:240, r:TANK_R, fastBullet:true  },
   red:   { speed:50, hp:1, color:"#ff9aa8", dark:"#e06b7d", maxBullets:5, bulletSpeed:80,  r:TANK_R, fastBullet:false, fireInterval:1.0 },
   black: { speed:100,hp:1, color:"#c3aef0", dark:"#a186e0", maxBullets:2, bulletSpeed:240, r:TANK_R, fastBullet:true, fireInterval:2.0},
+  // ★水色：その場から動かない反射狙撃タンク。弾は1発まで／弾速は緑と同じ／壁で2回まで反射。
+  //   壁の反射を使って自機に当たる角度を探して撃つ（ai:"reflect"）。撃った後のクールタイムは長め。
+  cyan:  { speed:0,  hp:1, color:"#7fe4f2", dark:"#34b8d0", maxBullets:1, bulletSpeed:240, r:TANK_R, fastBullet:true, maxBounce:2, bulletColor:"#48c96a", reflectSfx:"cyan", fireInterval:5.0, dodge:false, ai:"reflect" },
 };
 
 /* ================================================================
@@ -512,65 +622,67 @@ const ENEMY_TYPES = {
 
   
 const LEVELS = [
-  { enemies:["yellow"], map:["............",".....X......",".....X......","..P..#...1..",".....#......",".....X......",".....X......","............"] },
-  { enemies:["yellow", "brown"], map:["............",".1#X....##2.","............","............","............","..X#....#X..","......P.....","............"] },
-  { enemies:["brown", "yellow"], map:["............",".1........2.","..X.........","..#.........",".....#X.....",".........#..","......P..#..","............"] },
-  { enemies:["yellow", "brown"], map:["............",".1...#....2.",".....#......",".....X......","............",".......#....","......P#....","............"] },
-  { enemies:["yellow", "green"], map:["............",".1........2.","...#X#......","............","............",".......#X#..","......P.....","............"] },
-  { enemies:["green", "brown"], map:["............",".1.X.....#2.","............","...#.....#..","............","...#.....X..","......P.....","............"] },
-  { enemies:["brown", "yellow"], map:["............",".1........2.","............","..##X...##X.","............",".....##X....","......P.....","............"] },
-  { enemies:["yellow", "green"], map:["............",".1#X......2.","......X.....","......#.....","......#.....","......X.....","......P.##..","............"] },
-  { enemies:["green", "brown"], map:["............",".1........2.","....X#......","............","............","........#X..","......P.....","............"] },
-  { enemies:["yellow", "green"], map:["............",".1.##....X#.","............","............","............","...#X....##.",".2....P.....","............"] },
-  { enemies:["green", "red", "brown"], map:["............",".1........2.","...#........","...X........","......##....","..........X.",".3....P...#.","............"] },
-  { enemies:["red", "brown", "yellow"], map:["............",".1....X...2.","......#.....","......#.....","............","........X...",".3....P.#...","............"] },
-  { enemies:["brown", "yellow", "green"], map:["............",".1........2.","....##X.....","............","............","........##X.",".3....P.....","............"] },
-  { enemies:["yellow", "green", "red"], map:["............",".1..#.....X.","............","....X.....#.","............","....#.....#.",".2....P...3.","............"] },
-  { enemies:["black", "brown", "yellow"], map:["............",".1........2.","............",".#.X##...X#.","............","......X##...",".3....P.....","............"] },
-  { enemies:["brown", "yellow", "green"], map:["............",".1.##.....2.",".......#....",".......X....",".......#....",".......#....",".3....P..X#.","............"] },
-  { enemies:["yellow", "green", "red"], map:["............",".1........2.",".....#X.....","............","......#.....",".........##.",".3....P.....","............"] },
-  { enemies:["green", "red", "black"], map:["............",".X..X#....#.","............",".3..........","............",".#..##....X.",".1....P...2.","............"] },
-  { enemies:["red", "black", "brown"], map:["............",".1........2.","....#.......","....#.......","......#X#...",".#..........",".X....P...3.","............"] },
-  { enemies:["black", "brown", "yellow"], map:["............",".X.....#..1.",".......X....",".......#....","............",".........#..",".2....P..X3.","............"] },
-  { enemies:["brown", "yellow", "green", "red"], map:["............",".1........2.",".....X##....","............","......#.....",".#.......X#.",".3....P..X4.","............"] },
-  { enemies:["yellow", "green", "red", "black"], map:["............",".#...#....1.","............",".X..##....4.","............",".#...X......",".2....P...3.","............"] },
-  { enemies:["green", "red", "black", "brown"], map:["............",".1........2.","............",".X#.#X#...#.","......#.....",".......#X#..",".3....P..X4.","............"] },
-  { enemies:["red", "black", "brown", "yellow"], map:["............",".X4.X#....1.","........#...",".2..#...#.3.","........X...","........#...",".X....P...#.","............"] },
-  { enemies:["black", "brown", "yellow", "green"], map:["............",".1........2.","...##.......","............","......#.....",".......X#...",".3....P..X4.","............"] },
-  { enemies:["brown", "yellow", "green", "red"], map:["............",".X#X....##1.","............",".4..#.......","............","..X#....#X..",".2....P...3.","............"] },
-  { enemies:["yellow", "green", "red", "black"], map:["............",".1........2.","..X.........","..#.........",".....#X.....",".........#..",".3....P..#4.","............"] },
-  { enemies:["green", "red", "black", "brown"], map:["............",".X...#....1.",".....#......",".4..#X......","............",".......#....",".2....P#..3.","............"] },
-  { enemies:["red", "black", "brown", "yellow"], map:["............",".1........2.","...#X#......","............","......#.....",".......#X#..",".3....P..X4.","............"] },
-  { enemies:["black", "brown", "yellow", "green"], map:["............",".X.X.....#1.","............",".4.##....#..","............","...#.....X..",".2....P...3.","............"] },
-  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".1........2.","..#.........",".5##X...##X.","......#.....",".....##X....",".3....P..X4.","............"] },
-  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".X#X......1.","......X.....",".4..#.#...5.","......#.....","......XX....",".2....P.##3.","............"] },
-  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".1........2.","..#.X#......",".5..........","......#.....","........#X..",".3....P..X4.","............"] },
-  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".X5##....X#.","............",".3..#.....4.","............","...#X..X.##.",".1....P...2.","............"] },
-  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".1........2.","..##........",".4.X......5.","......##....","..........X.",".3....P..X#.","............"] },
-  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".X....X...1.","......#.....",".4..#.#...5.","............",".......XX...",".2....P.#.3.","............"] },
-  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".1........2.","..#.##X.....",".5..........","......#.....","........##X.",".3....P..X4.","............"] },
-  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".X45#.....X.","............",".3..X.....#.","............","....#..X..#.",".1....P...2.","............"] },
-  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".5........2.","..#.........",".#.X##...X#.","......#.....","......X##...",".3....P..X4.","............"] },
-  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".X5##.....1.",".......#....",".3..#..X..4.",".......#....",".......#....",".2....P..X#.","............"] },
-  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".1........2.","..#..#X.....",".5..........",".....X#.....",".........##.",".3....P..X4.","............"] },
-  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".X5.X#....#.","............",".3..#.....4.","............",".#..##.X..X.",".1....P...2.","............"] },
-  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".1........2.","..#.#.......",".4..#.....5.",".....X#X#...",".#..........",".X....P..X3.","............"] },
-  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".X5....#..#.",".......X....",".3..#..#..4.","............",".......X.#..",".1....P..X2.","............"] },
-  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".1........2.","..#..X##....",".5..........",".....X#.....",".#.......X#.",".3....P..X4.","............"] },
-  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".#45.#....#.","............",".X..##....3.","............",".#...X.X....",".1....P...2.","............"] },
-  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".5........2.","..#.........",".X#.#X#...#.",".....X#.....",".......#X#..",".3....P..X4.","............"] },
-  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".X34X#5...#.","........#...",".1..#...#.2.","........X...",".......X#...",".X....P...#.","............"] },
-  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".1........2.","..###.......",".5..........",".....X#.....",".......X#...",".3....P..X4.","............"] },
+  { enemies:["yellow"], map:[".............", ".##...X...##.", ".#....X....#.", "......#......", "..P...#...1..", "......#......", ".#....X....#.", ".##...X...##.", "............."] },
+  { enemies:["brown", "yellow"], map:[".............", "...2.....1...", "..###...###..", ".............", ".............", ".............", "..###.P.###..", ".............", "............."] },
+  { enemies:["brown", "brown"], map:[".............", "......#......", "......#...2..", ".............", "..P..........", "......#...2..", "......#......", ".............", "............."] },
+  { enemies:["brown", "yellow", "brown"], map:[".............", ".............", "....#...#2...", "....W...#....", "..P.W...W.1..", "....W...#....", "....#...#2...", ".............", "............."] },
+  { enemies:["green", "green"], map:[".............", ".............", "...X.........", "...X......3..", ".P.#.........", "...X......3..", "...X.........", ".............", "............."] },
+  { enemies:["green", "green", "brown"], map:[".............", ".............", "...XXX#XXX...", "....3...3....", "......2......", "...X##X##X...", ".............", "......P......", "............."] },
+  { enemies:["brown", "yellow", "brown", "yellow"], map:["...WW...WW...", ".2.WW...WW.1.", "...WW...WW...", "#WWWW...WWWW#", "####..P..####", "#WWWW...WWWW#", "...WW...WW...", ".2.WW...WW.1.", "...WW...WW..."] },
+  { enemies:["red", "red"], map:[".............", ".............", "....4...4....", "..X##WWW##X..", ".............", ".............", "..#...P...#..", "..##.....##..", "............."] },
+  { enemies:["brown", "red", "green", "yellow", "green"], map:[".............", "...2.....4...", "..####W####..", ".............", "...3.....1...", ".............", "..XXXXWXXXX..", ".............", "...P.....3..."] },
+  { enemies:["black"], map:[".............", "......X......", "......X......", "...#..W..#...", "..P#..W..#5..", "...#..W..#...", "......X......", "......X......", "............."] },
+  { enemies:["brown", "brown", "red", "red", "green", "green", "black"], map:["......#......", ".2..2.#.4..4.", "......#......", "......#......", "...#..#..#...", "...#..#..#...", "...#.....#...", ".P.#.3.3.#.5.", "...#.....#..."] },
+  { enemies:["green", "green", "brown", "green"], map:[".............", "..3..........", "..WWWW.####..", "..W.......#..", ".3..2...P....", "..W.......#..", "..WWWW.####..", "..3..........", "............."] },
+  { enemies:["green", "black", "brown", "black"], map:[".............", ".3.........5.", "..XXX...XXX..", "..X.......X..", "........2....", "..X.......X..", "..XXX...XXX..", ".P.........5.", "............."] },
+  { enemies:["yellow", "red", "green", "brown", "black"], map:[".............", ".1WWW.X.WWW4.", "..WWW.X.WWW..", "......#......", "....3...2....", "......#......", "..WWW.X.WWW..", ".PWWW.X.WWW5.", "............."] },
+  { enemies:["cyan", "cyan"], map:[".............", "........#..6.", "........#....", "....#...W.##.", "..P.#...W....", "....#...W.##.", "........#....", "........#..6.", "............."] },
+  { enemies:["red", "brown", "black", "cyan", "black", "red", "brown"], map:[".............", "..#..4..2.#..", "..#.......#5.", "..W..###..#..", ".PW..###..W6.", "..W..###..#..", "..#.......#5.", "..#..4..2.#..", "............."] },
+  { enemies:["green", "green", "green", "green", "green", "green"], map:[".............", ".....WWW...3.", "....WWWWW3...", "...WWWWWWW.3.", ".P.WWWWWWW...", "...WWWWWWW.3.", "....WWWWW3...", ".....WWW...3.", "............."] },
+  { enemies:["red", "red", "red", "red", "red", "red", "red"], map:[".............", ".4..4.4.4..4.", "XW..XWXWX..WX", ".............", "...4.....4...", ".............", "XWXWX...XWXWX", "......P......", "............."] },
+  { enemies:["black", "black", "black", "black", "black", "black"], map:[".............", "...5..5..5...", ".XXW##W##WXX.", ".............", "...5.....5...", ".............", ".XXW##W##WXX.", "...P.....5...", "............."] },
+  { enemies:["cyan", "cyan", "cyan", "cyan", "cyan", "cyan"], map:["....X...X....", ".6..X.6.X..6.", "XXX.X...X.XXX", ".............", "...........6.", ".............", "XXX.X...X.XXX", ".P..X.6.X..6.", "....X...X...."] },
+  { enemies:["brown", "yellow", "green", "red"], map:["............",".1........2.",".....X##....","............","......#.....",".#.......X#.",".3....P..X4.","............"] },,
+  { enemies:["yellow", "green", "red", "black"], map:["............",".#...#....1.","............",".X..##....4.","............",".#...X......",".2....P...3.","............"] },,
+  { enemies:["green", "red", "black", "brown"], map:["............",".1........2.","............",".X#.#X#...#.","......#.....",".......#X#..",".3....P..X4.","............"] },,
+  { enemies:["red", "black", "brown", "yellow"], map:["............",".X4.X#....1.","........#...",".2..#...#.3.","........X...","........#...",".X....P...#.","............"] },,
+  { enemies:["black", "brown", "yellow", "green"], map:["............",".1........2.","...##.......","............","......#.....",".......X#...",".3....P..X4.","............"] },,
+  { enemies:["brown", "yellow", "green", "red"], map:["............",".X#X....##1.","............",".4..#.......","............","..X#....#X..",".2....P...3.","............"] },,
+  { enemies:["yellow", "green", "red", "black"], map:["............",".1........2.","..X.........","..#.........",".....#X.....",".........#..",".3....P..#4.","............"] },,
+  { enemies:["green", "red", "black", "brown"], map:["............",".X...#....1.",".....#......",".4..#X......","............",".......#....",".2....P#..3.","............"] },,
+  { enemies:["red", "black", "brown", "yellow"], map:["............",".1........2.","...#X#......","............","......#.....",".......#X#..",".3....P..X4.","............"] },,
+  { enemies:["black", "brown", "yellow", "green"], map:["............",".X.X.....#1.","............",".4.##....#..","............","...#.....X..",".2....P...3.","............"] },,
+  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".1........2.","..#.........",".5##X...##X.","......#.....",".....##X....",".3....P..X4.","............"] },,
+  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".X#X......1.","......X.....",".4..#.#...5.","......#.....","......XX....",".2....P.##3.","............"] },,
+  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".1........2.","..#.X#......",".5..........","......#.....","........#X..",".3....P..X4.","............"] },,
+  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".X5##....X#.","............",".3..#.....4.","............","...#X..X.##.",".1....P...2.","............"] },,
+  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".1........2.","..##........",".4.X......5.","......##....","..........X.",".3....P..X#.","............"] },,
+  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".X....X...1.","......#.....",".4..#.#...5.","............",".......XX...",".2....P.#.3.","............"] },,
+  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".1........2.","..#.##X.....",".5..........","......#.....","........##X.",".3....P..X4.","............"] },,
+  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".X45#.....X.","............",".3..X.....#.","............","....#..X..#.",".1....P...2.","............"] },,
+  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".5........2.","..#.........",".#.X##...X#.","......#.....","......X##...",".3....P..X4.","............"] },,
+  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".X5##.....1.",".......#....",".3..#..X..4.",".......#....",".......#....",".2....P..X#.","............"] },,
+  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".1........2.","..#..#X.....",".5..........",".....X#.....",".........##.",".3....P..X4.","............"] },,
+  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".X5.X#....#.","............",".3..#.....4.","............",".#..##.X..X.",".1....P...2.","............"] },,
+  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".1........2.","..#.#.......",".4..#.....5.",".....X#X#...",".#..........",".X....P..X3.","............"] },,
+  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".X5....#..#.",".......X....",".3..#..#..4.","............",".......X.#..",".1....P..X2.","............"] },,
+  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".1........2.","..#..X##....",".5..........",".....X#.....",".#.......X#.",".3....P..X4.","............"] },,
+  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".#45.#....#.","............",".X..##....3.","............",".#...X.X....",".1....P...2.","............"] },,
+  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".5........2.","..#.........",".X#.#X#...#.",".....X#.....",".......#X#..",".3....P..X4.","............"] },,
+  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".X34X#5...#.","........#...",".1..#...#.2.","........X...",".......X#...",".X....P...#.","............"] },,
+  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".1........2.","..###.......",".5..........",".....X#.....",".......X#...",".3....P..X4.","............"] },,
   { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".X#X5...###.","............",".3..#.....4.","............","..X#...X#X..",".1....P...2.","............"] },
 ];
 
-// マップの行数・列数が足りない場合に自動で埋める（安全対策。手動調整は不要）
+// マップの行数・列数が足りない場合に自動で埋める（12×8で作られた既存ステージは、右と下に空きマスが足されて13×9になる）
 LEVELS.forEach(l=>{
   while(l.map.length<ROWS) l.map.push(".".repeat(COLS));
   l.map = l.map.map(r=> r.length<COLS ? r+".".repeat(COLS-r.length) : r.slice(0,COLS));
 });
 
-const EMPTY=0, BRICK=1, STEEL=2;
+const EMPTY=0, BRICK=1, STEEL=2, WATER=3;
+// ★弾をさえぎるのはレンガと鉄壁だけ。水は弾を素通しする（戦車は水の上を通れない）。
+function blocksBullet(v){ return v===BRICK || v===STEEL; }
 
 /* ================================================================
    キャンバスの拡大縮小まわり
@@ -926,7 +1038,8 @@ function circleRectOverlap(cx,cy,r,rx,ry,rw,rh){
 /* ================================================================
    ゲームの状態（変数）
    ================================================================ */
-let walls = [];      // [row][col] -> EMPTY / BRICK / STEEL
+let walls = [];      // [row][col] -> EMPTY / BRICK / STEEL / WATER
+let waterPaths = null; // 水ブロックの描画用パス（ステージ開始時に作る）
 let bricksHp = [];   // レンガの残り耐久（壊れるまでのヒット数）
 let tanks = [];      // 自機＋敵の配列
 let bullets = [];    // 飛んでいる弾の配列
@@ -939,6 +1052,7 @@ let lapNum = 1; // 50ステージごとの周回数。一周目は表示しな�
 let totalStageProgress = 1; // 現在の通算ステージ番号（1周目1=1、2周目1=51）
 let gameMode = "normal"; // normal=通常モード / rush=爽快モード
 let maxStageProgress = 1;
+let challengeStartNoRecord = false; // 長押し選択で途中開始した周回は最高記録に反映しない
 function getModeLabel(mode=gameMode){ return mode === "rush" ? "爽快モード" : "通常モード"; }
 function getModeKey(prefix, mode=gameMode){ return `tankBattle${prefix}_${mode}`; }
 function loadModeRecord(prefix, mode=gameMode, fallback=0){
@@ -958,6 +1072,9 @@ function saveModeRecord(prefix, value, mode=gameMode){
 }
 try { maxStageProgress = loadModeRecord("MaxStageProgress", gameMode, 1) || 1; } catch(e) { maxStageProgress = 1; }
 let lives = 3;
+let activeLevelMap = null;
+let customPlayActive = false;
+let customReturnState = "library";
 
 // ================================================================
 // セーブデータ
@@ -1056,6 +1173,18 @@ function playBulletWallReflectSound(){
   playTone(760, 0.045, "triangle", 0.045);
 }
 
+// ★水色戦車の弾が壁で反射したときの専用音：澄んだ「ピィン」＋きらっと重なる高音
+function playCyanBulletReflectSound(){
+  initAudio();
+  playTone(1480,0.10,"sine",0.05,-430);
+  setTimeout(()=>playTone(2217,0.07,"triangle",0.026,-700),24);
+}
+// 弾の種類に応じた反射音を鳴らす
+function playBulletReflectSoundFor(b){
+  if(b.reflectSfx==="cyan") playCyanBulletReflectSound();
+  else playBulletWallReflectSound();
+}
+
 function playBulletImpactSound(isFast){
   // 通常弾＝「ポスッ」、高速弾＝少し大きめの「ボスッ」
   initAudio();
@@ -1074,6 +1203,12 @@ function playExplosion(){
   setTimeout(()=>playTone(240,0.16,"triangle",0.064,-70),40);
 }
 // ミサイル専用の着弾・爆発音。戦車撃破音とは明確に違う音にする。
+function playWaterSplashSound(){
+  // 水に着弾したときの専用音：軽く弾ける水滴のような音
+  initAudio();
+  playTone(880,0.09,"sine",0.045,-420);
+  setTimeout(()=>playTone(1320,0.12,"triangle",0.028,-650),45);
+}
 function playMissileExplosion(){
   initAudio();
   playTone(150,0.28,"sine",0.075,-70);
@@ -1135,30 +1270,41 @@ let respawnTimer = 0;
 let gameStartFireLock = 0; // ゲーム開始直後の1秒間は自機の射撃を禁止
 
 // マップ文字列から壁・スポーン地点を作る
-function buildLevel(idx){
-  const lvl = LEVELS[idx % LEVELS.length];
+function buildLevel(idx, customLevel=null){
+  const lvl = customLevel || LEVELS[idx % LEVELS.length];
+  // ★ステージの大きさは通常・爽快・オリジナルすべて 13×9 マスで固定。
+  ROWS = STAGE_ROWS; COLS = STAGE_COLS;
+  WORLD_W = COLS * TILE; WORLD_H = ROWS * TILE;
+  resize();
+  activeLevelMap = lvl.map;
+  // マップ文字列の範囲外は空きマス扱い（大きさの違う古いオリジナルステージでも落ちないように）
+  const cellAt = (r,c)=> String(lvl.map[r] || "")[c] || ".";
   walls = []; bricksHp = [];
   for(let r=0;r<ROWS;r++){
     walls.push([]); bricksHp.push([]);
     for(let c=0;c<COLS;c++){
-      const ch = lvl.map[r][c];
+      const ch = cellAt(r,c);
       let v = EMPTY;
       if(ch==="#") v=BRICK;
       else if(ch==="X") v=STEEL;
+      else if(ch==="W") v=WATER;
       walls[r].push(v);
       bricksHp[r].push(v===BRICK?2:0); // ★レンガの硬さ。2=弾2発で破壊。1にすると1発で壊れるようになる
     }
   }
+  waterPaths = buildWaterPaths((c,r)=> r>=0&&c>=0&&r<ROWS&&c<COLS&&walls[r][c]===WATER);
   tanks=[]; bullets=[]; missiles=[]; particles=[]; explosions=[];
 
   let playerSpawn = {x:WORLD_W/2, y:WORLD_H/2};
   const enemySpawns = [];
+  const customEnemies = []; // オリジナルステージ用：マス目の数字そのものが敵の種類
   for(let r=0;r<ROWS;r++){
     for(let c=0;c<COLS;c++){
-      const ch = lvl.map[r][c];
+      const ch = cellAt(r,c);
       const wx = c*TILE+TILE/2, wy = r*TILE+TILE/2;
       if(ch==="P") playerSpawn = {x:wx,y:wy};
-      else if(/[1-5]/.test(ch)) enemySpawns.push({x:wx,y:wy, order:parseInt(ch,10)});
+      else if(customLevel && CUSTOM_CHAR_TO_ENEMY[ch]) customEnemies.push({type:CUSTOM_CHAR_TO_ENEMY[ch], x:wx, y:wy});
+      else if(!customLevel && /[1-6]/.test(ch)) enemySpawns.push({x:wx,y:wy, order:parseInt(ch,10)});
     }
   }
   enemySpawns.sort((a,b)=>a.order-b.order);
@@ -1166,17 +1312,22 @@ function buildLevel(idx){
   player = makePlayer(playerSpawn.x, playerSpawn.y);
   tanks.push(player);
 
-  const comp = lvl.enemies;
-  for(let i=0;i<comp.length;i++){
-    const sp = enemySpawns[i % Math.max(enemySpawns.length,1)] || playerSpawn;
-    tanks.push(makeEnemy(comp[i], sp.x, sp.y));
+  if(customLevel){
+    // 置いたマスの色の敵がそのマスに出る（行の順番と数字の順番がずれても入れ替わらない）
+    for(const e of customEnemies) tanks.push(makeEnemy(e.type, e.x, e.y));
+  } else {
+    const comp = lvl.enemies;
+    for(let i=0;i<comp.length;i++){
+      const sp = enemySpawns[i % Math.max(enemySpawns.length,1)] || playerSpawn;
+      tanks.push(makeEnemy(comp[i], sp.x, sp.y));
+    }
   }
 }
 
 function makePlayer(x,y){
   lastMoveAngle = -Math.PI/2; // ★ミサイルの発射方向もリセット
   return {
-    isPlayer:true, x, y, angle:-Math.PI/2, turretAngle:-Math.PI/2,
+    isPlayer:true, x, y, vx:0, vy:0, angle:-Math.PI/2, turretAngle:-Math.PI/2,
     r:TANK_R, speed:(gameMode === "rush" ? PLAYER_SPEED*2 : PLAYER_SPEED), hp:1, alive:true,
     maxBullets:PLAYER_MAX_BULLETS, // 画面上に同時に出せる自分の弾の最大数
     fireCooldown:0, // 次の射撃までの待ち時間
@@ -1206,12 +1357,103 @@ function makeEnemy(type,x,y){
     justSawPlayerTimer: 0,
     dodgeDirCache: null,
     shouldShootCache: false,
+    ai: t.ai || null,       // "reflect"＝水色の反射狙撃AI
+    aimSolution: null,      // 水色：今狙っている反射ショットの角度など
+    reactTimer: 0,          // 水色：狙いを見つけてから撃つまでの猶予
   };
 }
 
 // 指定した戦車が今、画面上に出している自分の弾の数を数える
 function countBullets(owner){
   return owner?.bulletCount ?? 0;
+}
+
+
+/* ================================================================
+   水ブロックの描画
+   ・隣り合う水マスは境目なしでひと続きの水面になる
+   ・外側の角は丸く、L字などの内側の角もなめらかに丸める
+   ・波の線は世界座標でつながっているので、マスをまたいでも途切れない
+   ================================================================ */
+const WATER_R = 10;            // ★角の丸み（px）
+const WATER_BORDER = 3;        // ★ふちの太さ（px）
+const WATER_EDGE_COLOR = "#8bc9ec";
+const WATER_FILL_COLOR = "#c5e8fb";
+const WATER_WAVE_COLOR = "#eaf8ff";
+function waterRoundRect(path,x0,y0,x1,y1,rtl,rtr,rbr,rbl){
+  path.moveTo(x0+rtl,y0);
+  path.lineTo(x1-rtr,y0);
+  if(rtr>0) path.arc(x1-rtr,y0+rtr,rtr,-Math.PI/2,0);
+  path.lineTo(x1,y1-rbr);
+  if(rbr>0) path.arc(x1-rbr,y1-rbr,rbr,0,Math.PI/2);
+  path.lineTo(x0+rbl,y1);
+  if(rbl>0) path.arc(x0+rbl,y1-rbl,rbl,Math.PI/2,Math.PI);
+  path.lineTo(x0,y0+rtl);
+  if(rtl>0) path.arc(x0+rtl,y0+rtl,rtl,Math.PI,Math.PI*1.5);
+  path.closePath();
+}
+// 内側の角（L字のくぼみ）をなめらかにするための埋め草
+function waterFillet(path,kx,ky,sx,sy,R,inset){
+  const rf=R+inset;
+  const cx=kx+sx*R, cy=ky+sy*R;
+  const kix=kx-sx*inset, kiy=ky-sy*inset;       // 内側の角
+  const ax=cx, ay=cy-sy*rf;                      // 横の辺の上の端点
+  const bx=cx-sx*rf, by=cy;                      // 縦の辺の上の端点
+  const aA=Math.atan2(ay-cy,ax-cx), aB=Math.atan2(by-cy,bx-cx);
+  const arc=(from,to,a0,a1)=>{
+    let d=a1-a0; while(d>Math.PI) d-=Math.PI*2; while(d<=-Math.PI) d+=Math.PI*2;
+    path.arc(cx,cy,rf,a0,a1,d<0);
+  };
+  path.moveTo(kix,kiy);
+  if(sx*sy>0){ path.lineTo(ax,ay); arc(0,0,aA,aB); path.lineTo(bx,by); }
+  else       { path.lineTo(bx,by); arc(0,0,aB,aA); path.lineTo(ax,ay); }
+  path.closePath();
+}
+// isWater(c,r) が真のマスをつなげた水面のパスを作る（座標は1マス=TILEのワールド座標）
+function buildWaterPaths(isWater){
+  const outer=new Path2D(), inner=new Path2D(), runs=[]; // runs＝横に並んだ水マスのひとまとまり（波の線用）
+  for(let r=0;r<STAGE_ROWS;r++) for(let c=0;c<STAGE_COLS;c++){
+    if(!isWater(c,r)) continue;
+    const U=isWater(c,r-1), D=isWater(c,r+1), L=isWater(c-1,r), Rt=isWater(c+1,r);
+    if(!L) runs.push({r, xs:c*TILE+9, xe:0});
+    runs[runs.length-1].xe=(c+1)*TILE-(Rt?0:9);
+    for(const [path,inset] of [[outer,0],[inner,WATER_BORDER]]){
+      const eps=0.6; // となり同士を少し重ねて、拡大しても継ぎ目が出ないようにする
+      const x0=c*TILE+(L?0:inset), x1=(c+1)*TILE-(Rt?0:inset)+(Rt?eps:0);
+      const y0=r*TILE+(U?0:inset), y1=(r+1)*TILE-(D?0:inset)+(D?eps:0);
+      const rc=Math.max(0,WATER_R-inset);
+      waterRoundRect(path,x0,y0,x1,y1,(!U&&!L)?rc:0,(!U&&!Rt)?rc:0,(!D&&!Rt)?rc:0,(!D&&!L)?rc:0);
+      const rf=WATER_R;
+      if(U&&L&&!isWater(c-1,r-1))  waterFillet(path,c*TILE,r*TILE,-1,-1,rf,inset);
+      if(U&&Rt&&!isWater(c+1,r-1)) waterFillet(path,(c+1)*TILE,r*TILE,1,-1,rf,inset);
+      if(D&&Rt&&!isWater(c+1,r+1)) waterFillet(path,(c+1)*TILE,(r+1)*TILE,1,1,rf,inset);
+      if(D&&L&&!isWater(c-1,r+1))  waterFillet(path,c*TILE,(r+1)*TILE,-1,1,rf,inset);
+    }
+  }
+  return runs.length ? {outer,inner,runs} : null;
+}
+// time=0 なら波は止まった状態（エディタ・一覧の表示用）
+function drawWaterLayer(g,paths,time){
+  if(!paths) return;
+  g.fillStyle=WATER_EDGE_COLOR; g.fill(paths.outer);
+  g.fillStyle=WATER_FILL_COLOR; g.fill(paths.inner);
+  g.save();
+  g.strokeStyle=WATER_WAVE_COLOR; g.lineWidth=2; g.lineCap="round"; g.lineJoin="round";
+  for(const t of paths.runs){
+    const xs=t.xs, xe=t.xe;
+    for(let k=0;k<2;k++){
+      const base=t.r*TILE+(k?28:13), phase=k*2.1+t.r*0.9;
+      g.globalAlpha=k?0.6:0.95;
+      g.beginPath();
+      for(let x=xs;;x=Math.min(x+4,xe)){
+        const y=base+1.7*Math.sin(x*0.16+time*1.7+phase);
+        if(x===xs) g.moveTo(x,y); else g.lineTo(x,y);
+        if(x>=xe) break;
+      }
+      g.stroke();
+    }
+  }
+  g.restore();
 }
 
 /* ================================================================
@@ -1278,7 +1520,7 @@ function hasLineOfSight(x0,y0,x1,y1){
     const x=x0+dx*t, y=y0+dy*t;
     const c=Math.floor(x/TILE), r=Math.floor(y/TILE);
     if(r<0||c<0||r>=ROWS||c>=COLS) return false;
-    if(walls[r][c]!==EMPTY) return false;
+    if(blocksBullet(walls[r][c])) return false; // 水は弾が通るので射線をさえぎらない
   }
   return true;
 }
@@ -1291,12 +1533,16 @@ function spawnBullet(owner){
   const fastBullet = !!enemyType?.fastBullet;
   // ★爽快モードでは自機の弾速のみ2倍にする（敵の弾速は変えない）
   const speed = enemyType?.bulletSpeed ?? (owner.isPlayer && gameMode === "rush" ? BULLET_SPEED*2 : BULLET_SPEED);
+  // ★弾ごとの「壁で反射できる回数」。高速弾は0（反射せず消える）、通常弾は BULLET_MAX_BOUNCE、
+  //   水色の弾は高速のまま2回まで反射できる。
+  const maxBounce = enemyType?.maxBounce ?? (fastBullet ? 0 : BULLET_MAX_BOUNCE);
   bullets.push({
     x: owner.x + Math.cos(owner.turretAngle)*(owner.r+6),
     y: owner.y + Math.sin(owner.turretAngle)*(owner.r+6),
     vx: Math.cos(owner.turretAngle)*speed,
     vy: Math.sin(owner.turretAngle)*speed,
     owner, bounces:0, dead:false, trail:[], fastBullet, age:0,
+    maxBounce, reflectSfx: enemyType?.reflectSfx || null, tint: enemyType?.bulletColor || null,
   });
   owner.bulletCount = (owner.bulletCount || 0) + 1;
   playShot(fastBullet);
@@ -1315,8 +1561,8 @@ function updateBullets(dt){
     b.x += b.vx*dt;
     b.y += b.vy*dt;
 
-    // 高速弾は反射せず、外周の壁に当たったら消える。
-    if(b.fastBullet){
+    // 反射できない弾（緑・黒の高速弾）は、外周の壁に当たったら消える。
+    if(b.maxBounce<=0){
       if(b.x<BULLET_R || b.x>WORLD_W-BULLET_R ||
          b.y<BULLET_R || b.y>WORLD_H-BULLET_R){
         const ix=clamp(b.x,BULLET_R,WORLD_W-BULLET_R);
@@ -1340,59 +1586,59 @@ function updateBullets(dt){
       } else if(b.y>WORLD_H-BULLET_R){
         b.y=WORLD_H-BULLET_R; b.vy*=-1; b.bounces++; reflected=true;
       }
-      if(reflected) playBulletWallReflectSound();
+      if(reflected) playBulletReflectSoundFor(b);
     }
 
     // タイル（障害物）との当たり判定。
     const col=Math.floor(b.x/TILE), row=Math.floor(b.y/TILE);
-    if(row>=0&&col>=0&&row<ROWS&&col<COLS && walls[row][col]!==EMPTY){
+    if(row>=0&&col>=0&&row<ROWS&&col<COLS && blocksBullet(walls[row][col])){
       if(walls[row][col]===BRICK){
-        // 木箱は弾では壊れず、通常弾だけ反射。高速弾は消える。
-        if(b.fastBullet){
+        // 木箱は弾では壊れず、反射できる弾だけ反射。反射できない弾（緑・黒）は消える。
+        if(b.maxBounce<=0){
           spawnFastBulletImpactFx(b.x,b.y);
           playBulletImpactSound(true);
           b.dead=true;
           continue;
-        } else if(b.bounces < BULLET_MAX_BOUNCE){
+        } else if(b.bounces < b.maxBounce){
           const cxTile=col*TILE+TILE/2, cyTile=row*TILE+TILE/2;
           if(Math.abs(b.x-cxTile) > Math.abs(b.y-cyTile)) b.vx*=-1;
           else b.vy*=-1;
           b.bounces++;
           b.x += b.vx*dt*2;
           b.y += b.vy*dt*2;
-          playBulletWallReflectSound();
+          playBulletReflectSoundFor(b);
         } else {
-          spawnHitFx(b.x,b.y);
-          playBulletImpactSound(false);
+          if(b.fastBullet) spawnFastBulletImpactFx(b.x,b.y); else spawnHitFx(b.x,b.y);
+          playBulletImpactSound(!!b.fastBullet);
           b.dead=true;
         }
         continue;
       } else {
-        // 鉄壁：通常弾だけ跳ね返し、高速弾は消える。
-        if(b.fastBullet){
+        // 鉄壁：反射できる弾は跳ね返し、反射できない弾（緑・黒）は消える。
+        if(b.maxBounce<=0){
           spawnFastBulletImpactFx(b.x,b.y);
           playBulletImpactSound(true);
           b.dead=true;
           continue;
         }
-        if(b.bounces < BULLET_MAX_BOUNCE){
+        if(b.bounces < b.maxBounce){
           const cxTile=col*TILE+TILE/2, cyTile=row*TILE+TILE/2;
           if(Math.abs(b.x-cxTile) > Math.abs(b.y-cyTile)) b.vx*=-1;
           else b.vy*=-1;
           b.bounces++;
           b.x += b.vx*dt*2;
           b.y += b.vy*dt*2;
-          playBulletWallReflectSound();
+          playBulletReflectSoundFor(b);
         } else {
-          spawnHitFx(b.x,b.y);
-          playBulletImpactSound(false);
+          if(b.fastBullet) spawnFastBulletImpactFx(b.x,b.y); else spawnHitFx(b.x,b.y);
+          playBulletImpactSound(!!b.fastBullet);
           b.dead=true;
           continue;
         }
       }
     }
 
-    if(!b.fastBullet && b.bounces > BULLET_MAX_BOUNCE){
+    if(b.maxBounce>0 && b.bounces > b.maxBounce){
       b.dead=true;
       continue;
     }
@@ -1457,7 +1703,7 @@ function damageTank(t){
       onPlayerDeath();
     } else if(t.type === "yellow" || t.type === "brown") {
       playTankDefeatSlowRetro();
-    } else if(t.type === "green" || t.type === "red" || t.type === "black") {
+    } else if(t.type === "green" || t.type === "red" || t.type === "black" || t.type === "cyan") {
       playTankDefeatRichRetro();
     } else {
       playTankDefeat();
@@ -1537,6 +1783,19 @@ function onPlayerDeath(){
 
   resetPlayerTransientState();
 
+  // 自機がやられたら、ステージ開始時のレンガ配置・耐久値に戻す。
+  // 鉄壁・水・敵の撃破状況はそのまま維持する。
+  const originalMap = activeLevelMap || LEVELS[(stageNum-1) % LEVELS.length].map;
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const originalCell = String(originalMap[r] || "")[c] || ".";
+      if(originalCell === "#"){
+        walls[r][c] = BRICK;
+        bricksHp[r][c] = 2;
+      }
+    }
+  }
+
   // 死亡時に、倒されずに残っている敵だけ初期位置へ戻す。
   // すでに倒した敵は tanks から除去済みなので復活しない。
   for(const t of tanks){
@@ -1553,6 +1812,8 @@ function onPlayerDeath(){
     t.justSawPlayerTimer = 0;
     t.dodgeDirCache = null;
     t.shouldShootCache = false;
+    t.aimSolution = null;
+    t.reactTimer = 0;
     t.bulletCount = 0;
     const type = ENEMY_TYPES[t.type];
     t.fireCooldown = rand(0, type.fireInterval ?? ENEMY_FIRE_INTERVAL);
@@ -1656,8 +1917,16 @@ function updateMissiles(dt){
 function explodeMissile(m){
   if(m.dead) return;
   m.dead = true;
+  const waterCol = Math.floor(m.targetX / TILE);
+  const waterRow = Math.floor(m.targetY / TILE);
+  const landedOnWater = waterRow>=0 && waterCol>=0 && waterRow<ROWS && waterCol<COLS
+    && walls[waterRow][waterCol] === WATER;
+  if(landedOnWater){
+    spawnWaterSplash(m.targetX,m.targetY);
+    playWaterSplashSound();
+    return; // 水上では爆発せず、敵・弾・レンガにも影響しない
+  }
   spawnExplosion(m.targetX,m.targetY,2.0); // ★実際の爆風範囲(MISSILE_BLAST_RADIUS)に見た目を合わせて少し大きめに
-  // ミサイル専用の着弾・爆発音
   playMissileExplosion();
 
   const blastR = MISSILE_BLAST_RADIUS;
@@ -1696,6 +1965,14 @@ function explodeMissile(m){
 /* ================================================================
    エフェクト（爆発の破片など）
    ================================================================ */
+function spawnWaterSplash(x,y){
+  // 小さな白い水滴が外側へ飛び散る
+  for(let i=0;i<16;i++){
+    const a=Math.random()*Math.PI*2, sp=rand(35,115);
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-rand(12,38),
+      life:rand(0.28,0.52),t:0,color:"#ffffff",r:rand(2.2,4.2)});
+  }
+}
 function spawnExplosion(x,y,scaleF){
   explosions.push({x,y,t:0, dur:0.5, scaleF});
   for(let i=0;i<14;i++){
@@ -1714,7 +1991,7 @@ function spawnFastBulletImpactFx(x,y){
   // 高速弾専用：細い閃光＋淡いパステルブルーの火花
   for(let i=0;i<10;i++){
     const a=Math.random()*Math.PI*2, sp=rand(70,190);
-    particles.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:rand(0.12,0.28), t:0, color:i%2?"#b3ecff":"#ffffff"});
+    particles.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:rand(0.12,0.28), t:0, color:i%2?"#a8efb2":"#ffffff"});
   }
   explosions.push({x,y,t:0,dur:0.16,scaleF:0.45, fast:true});
 }
@@ -1746,6 +2023,7 @@ function updateFx(dt){
 function updateEnemy(t, dt){
   if(!t.alive) return;
   const p = player;
+  if(t.ai === "reflect"){ updateReflectSniper(t, dt); return; } // 水色：反射狙撃AI
 
   // 重いAI判断（視界・弾避け・射撃判断）は約12.5回/秒。
   // 移動と旋回は下で毎フレーム行うので、プレイヤーの操作感には影響しない。
@@ -1820,6 +2098,142 @@ function updateEnemy(t, dt){
   }
 }
 
+
+/* ================================================================
+   水色戦車の反射狙撃AI
+   ・その場から動かず、砲塔だけを回す
+   ・全方向に弾を試し撃ち（シミュレーション）して、壁で最大2回反射した先で
+     自機に当たる角度を探す。見つかったらそちらへ砲塔を向けて撃つ。
+   ・味方の敵戦車や自分自身に先に当たる角度は選ばない
+   ・自機が動いているときは、今の移動速度で進んだ位置を狙う（偏差射撃）
+   ================================================================ */
+const CYAN_THINK_INTERVAL = 0.15;   // ★狙いを探し直す間隔(秒)
+const CYAN_PREAIM_TIME = 1.0;       // ★次に撃てるようになる何秒前から狙い始めるか
+const CYAN_REACT_TIME = 0.5;        // ★狙いが見つかってから撃つまでの猶予(秒)。短くすると手強くなる
+const CYAN_TURN_SPEED = 4.5;        // ★砲塔の回転速度(ラジアン/秒)
+const CYAN_COARSE_STEP_DEG = 2;     // 角度の粗い探索幅(度)
+const CYAN_REFINE_STEP_DEG = 0.25;  // 惜しい角度の周りを細かく探す幅(度)
+const CYAN_HIT_MARGIN = 0.8;        // 当たり判定をこの割合まで絞って、ど真ん中寄りを狙う
+const CYAN_LEAD = 0.0;              // 自機の移動先を予測せず、現在位置を狙う
+const CYAN_NEAR_MISS = 40;          // これ以内で外れた角度は細かく探し直す(px)
+
+function rotateToward(cur, target, maxStep){
+  let d = ((target-cur+Math.PI*3)%(Math.PI*2))-Math.PI;
+  if(Math.abs(d)<=maxStep) return target;
+  return cur + Math.sign(d)*maxStep;
+}
+function angleDiffAbs(a,b){ return Math.abs(((a-b+Math.PI*3)%(Math.PI*2))-Math.PI); }
+
+// 実際の弾（updateBullets）と同じ動きで、1発撃ったときの軌道を先読みする。
+// out.hit=true なら自機に当たる。out.miss は自機に一番近づいた距離。
+function simulateReflectShot(owner, angle, target, others, out){
+  const type = ENEMY_TYPES[owner.type];
+  const maxB = type.maxBounce ?? 0;
+  const dt = 1/60;
+  let x = owner.x + Math.cos(angle)*(owner.r+6);
+  let y = owner.y + Math.sin(angle)*(owner.r+6);
+  let vx = Math.cos(angle)*type.bulletSpeed, vy = Math.sin(angle)*type.bulletSpeed;
+  let bounces = 0, time = 0, minD2 = 1e12;
+  const tr = (target.r+BULLET_R)*CYAN_HIT_MARGIN, tr2 = tr*tr;
+  const tvx = (target.vx||0)*CYAN_LEAD, tvy = (target.vy||0)*CYAN_LEAD;
+  out.hit=false; out.time=0; out.bounces=0; out.miss=1e6;
+  for(let i=0;i<480;i++){
+    x += vx*dt; y += vy*dt; time += dt;
+    if(x<BULLET_R){ x=BULLET_R; vx=-vx; bounces++; }
+    else if(x>WORLD_W-BULLET_R){ x=WORLD_W-BULLET_R; vx=-vx; bounces++; }
+    if(y<BULLET_R){ y=BULLET_R; vy=-vy; bounces++; }
+    else if(y>WORLD_H-BULLET_R){ y=WORLD_H-BULLET_R; vy=-vy; bounces++; }
+    const col=Math.floor(x/TILE), row=Math.floor(y/TILE);
+    if(row>=0&&col>=0&&row<ROWS&&col<COLS&&blocksBullet(walls[row][col])){
+      if(bounces<maxB){
+        const cx=col*TILE+TILE/2, cy=row*TILE+TILE/2;
+        if(Math.abs(x-cx)>Math.abs(y-cy)) vx=-vx; else vy=-vy;
+        bounces++;
+        x += vx*dt*2; y += vy*dt*2;
+      } else break;
+    }
+    if(bounces>maxB) break;
+    for(let k=0;k<others.length;k++){
+      const o=others[k], dx=x-o.x, dy=y-o.y;
+      if(dx*dx+dy*dy < o.rr*o.rr){ out.miss=Math.sqrt(minD2); return; } // 先に別の戦車へ当たる
+    }
+    const px = clamp(target.x+tvx*time, target.r, WORLD_W-target.r);
+    const py = clamp(target.y+tvy*time, target.r, WORLD_H-target.r);
+    const ddx=x-px, ddy=y-py, d2=ddx*ddx+ddy*ddy;
+    if(d2<minD2) minD2=d2;
+    if(d2<tr2){ out.hit=true; out.time=time; out.bounces=bounces; out.miss=0; return; }
+  }
+  out.miss=Math.sqrt(minD2);
+}
+
+// 全方向を調べて、自機に当たる一番早い角度を返す（なければ null）
+function findReflectShot(t, p){
+  const others = [];
+  for(const o of tanks){
+    if(!o.alive || o===p) continue;
+    others.push({x:o.x, y:o.y, rr:o.r+BULLET_R+2}); // 自分自身・他の敵（当たると誤射になる）
+  }
+  const res = {hit:false,time:0,bounces:0,miss:0};
+  let best = null;
+  const near = [];
+  const consider = (a)=>{
+    simulateReflectShot(t, a, p, others, res);
+    if(res.hit){
+      if(!best || res.time<best.time) best = {angle:a, time:res.time, bounces:res.bounces};
+    } else if(res.miss<CYAN_NEAR_MISS){
+      near.push(a);
+    }
+  };
+  for(let deg=0; deg<360; deg+=CYAN_COARSE_STEP_DEG) consider(deg*Math.PI/180);
+  if(!best){
+    // 惜しかった角度の周りを細かく調べる（遠くへ反射する細い狙い道を拾うため）
+    const coarse = near.slice(); near.length = 0;
+    for(const a0 of coarse){
+      for(let k=-4;k<=4;k++){
+        if(!k) continue;
+        consider(a0 + k*CYAN_REFINE_STEP_DEG*Math.PI/180);
+      }
+    }
+  }
+  return best;
+}
+
+function updateReflectSniper(t, dt){
+  const p = player;
+  t.fireCooldown = Math.max(0, (t.fireCooldown ?? 0) - dt);
+  t.reactTimer = Math.max(0, (t.reactTimer ?? 0) - dt);
+  const canAct = p.alive && p.invuln<=0 && countBullets(t) < t.maxBullets;
+  if(!canAct) t.aimSolution = null;
+
+  t.aiThinkTimer -= dt;
+  if(t.aiThinkTimer<=0){
+    t.aiThinkTimer += CYAN_THINK_INTERVAL;
+    if(canAct && t.fireCooldown<=CYAN_PREAIM_TIME){
+      const had = !!t.aimSolution;
+      t.aimSolution = findReflectShot(t,p);
+      if(t.aimSolution && !had) t.reactTimer = CYAN_REACT_TIME; // 狙いを見つけた直後は少し待つ
+    } else {
+      t.aimSolution = null;
+    }
+  }
+
+  const s = t.aimSolution;
+  if(!s) return;
+  t.turretAngle = rotateToward(t.turretAngle, s.angle, CYAN_TURN_SPEED*dt);
+  if(t.fireCooldown<=0 && t.reactTimer<=0 && canAct && angleDiffAbs(t.turretAngle, s.angle)<0.02){
+    // 撃つ直前にもう一度だけ狙い直して、まだ当たる角度ならそのまま発射
+    const fresh = findReflectShot(t,p);
+    if(fresh && angleDiffAbs(fresh.angle, t.turretAngle)<0.2){
+      t.turretAngle = fresh.angle;
+      spawnBullet(t);
+      t.fireCooldown = t.fireInterval ?? ENEMY_FIRE_INTERVAL;
+      t.aimSolution = null;
+    } else {
+      t.aimSolution = fresh;
+    }
+  }
+}
+
 /* ================================================================
    自機の更新
    ================================================================ */
@@ -1833,9 +2247,11 @@ function updatePlayer(dt){
   if(keys["s"]||keys["arrowdown"]){ my+=1; moving=true; }
   if(keys["a"]||keys["arrowleft"]){ mx-=1; moving=true; }
   if(keys["d"]||keys["arrowright"]){ mx+=1; moving=true; }
+  player.vx = 0; player.vy = 0; // ★水色戦車の偏差射撃のために、今の移動速度を記録する
   if(moving){
     const len=Math.hypot(mx,my)||1;
     mx/=len; my/=len;
+    player.vx = mx*player.speed; player.vy = my*player.speed;
     const targetAngle = Math.atan2(my,mx);
     player.angle = lerpAngle(player.angle, targetAngle, 1-Math.pow(0.00005,dt));
     lastMoveAngle = targetAngle; // ★ミサイルの発射方向用に、入力した瞬間の角度をそのまま記録
@@ -1949,9 +2365,364 @@ function updatePlayer(dt){
 /* ================================================================
    メインループ
    ================================================================ */
+// ================================================================
+// オリジナルステージ作成・管理
+// ================================================================
+const CUSTOM_STAGE_KEY = "petitTankCustomStagesV1";
+const editorScreen = document.getElementById("stageEditorScreen");
+const libraryScreen = document.getElementById("stageLibraryScreen");
+const editorCanvas = document.getElementById("editorCanvas");
+const ectx = editorCanvas.getContext("2d");
+const editorName = document.getElementById("editorName");
+const stageCards = document.getElementById("stageCards");
+let editorMap = [];
+let editorEnemies = [];
+let editorTool = ".";
+let editingStageId = null;
+let editorReturnTo = "title";
+const editorWidth = STAGE_COLS, editorHeight = STAGE_ROWS; // ★オリジナルステージの広さは固定（変更不可）
+const CUSTOM_ENEMY_TO_CHAR = {yellow:"1",brown:"2",green:"3",red:"4",black:"5",cyan:"6"};
+const CUSTOM_CHAR_TO_ENEMY = {"1":"yellow","2":"brown","3":"green","4":"red","5":"black","6":"cyan"};
+// 保存済みステージを固定サイズ(13×9)に合わせる。足りない分は空きマス、はみ出した分は切り捨て。
+// 敵のリストも、マップ上に置かれた敵から作り直す。
+function fitCustomLevel(level){
+  const map = Array.from({length:STAGE_ROWS},(_,r)=>Array.from({length:STAGE_COLS},(_,c)=>String(level.map?.[r]||"")[c]||".").join(""));
+  const enemies = [];
+  for(const row of map) for(const ch of row) if(CUSTOM_CHAR_TO_ENEMY[ch]) enemies.push(CUSTOM_CHAR_TO_ENEMY[ch]);
+  return {...level, map, enemies};
+}
+// alert/confirmが使えない環境（埋め込み表示など）でも動くよう、画面内の表示で代用する
+let uiToastTimer=null;
+function uiAlert(msg){
+  const t=document.getElementById("uiToast");
+  t.textContent=msg; t.classList.remove("hidden");
+  clearTimeout(uiToastTimer); uiToastTimer=setTimeout(()=>t.classList.add("hidden"),2600);
+}
+function uiConfirm(msg,onYes){
+  const box=document.getElementById("uiConfirm");
+  document.getElementById("uiConfirmMsg").textContent=msg;
+  const close=()=>box.classList.add("hidden");
+  document.getElementById("uiConfirmYes").onclick=()=>{close();onYes();};
+  document.getElementById("uiConfirmNo").onclick=close;
+  box.classList.remove("hidden");
+}
+function readCustomStages(){
+  try { const v=JSON.parse(localStorage.getItem(CUSTOM_STAGE_KEY)||"[]"); return Array.isArray(v)?v:[]; } catch(e){ return []; }
+}
+function writeCustomStages(v){ try{localStorage.setItem(CUSTOM_STAGE_KEY,JSON.stringify(v));}catch(e){uiAlert("保存容量が不足しているため保存できませんでした。");} }
+function emptyEditorMap(){ editorMap=Array.from({length:editorHeight},()=>Array(editorWidth).fill(".")); editorEnemies=[]; }
+function editorNormalize(){
+  editorMap=Array.from({length:editorHeight},(_,r)=>Array.from({length:editorWidth},(_,c)=>editorMap[r]?.[c]||"."));
+}
+function openStageEditor(stage=null, returnTo="title"){
+  editorReturnTo=returnTo; editingStageId=stage?.id??null;
+  if(stage){
+    editorName.value=stage.name||"オリジナルステージ";
+    const fit=fitCustomLevel(stage);
+    editorMap=fit.map.map(r=>Array.from(r));
+    editorEnemies=[...fit.enemies];
+  }else{
+    editorName.value="オリジナルステージ"; emptyEditorMap();
+  }
+  editorTool="."; document.querySelectorAll("#editorTools [data-tool]").forEach(b=>b.classList.toggle("selected",b.dataset.tool===editorTool));
+  editorHistory=[]; editorStroke=null; updateEditorUndoBtn();
+  setMenuLayout(true); startScreen.classList.add("hidden"); libraryScreen.classList.add("hidden");
+  editorScreen.classList.remove("hidden"); drawEditorMap();
+}
+function drawEditorMap(){
+  const w=editorCanvas.width/editorWidth,h=editorCanvas.height/editorHeight;
+  ectx.clearRect(0,0,editorCanvas.width,editorCanvas.height);
+  ectx.fillStyle="#fffafc"; ectx.fillRect(0,0,editorCanvas.width,editorCanvas.height);
+  for(let r=0;r<editorHeight;r++)for(let c=0;c<editorWidth;c++){
+    const ch=editorMap[r][c],x=c*w,y=r*h;
+    if(ch==="#"){ectx.fillStyle="#f3b57e";ectx.fillRect(x+1,y+1,w-2,h-2);ectx.strokeStyle="#d99a63";ectx.strokeRect(x+3,y+3,w-6,h-6);}
+    else if(ch==="X"){ectx.fillStyle="#b9afe8";ectx.fillRect(x+1,y+1,w-2,h-2);ectx.fillStyle="#eee9ff";ectx.fillRect(x+w*.4,y+h*.4,w*.2,h*.2);}
+    else if(ch==="P" || CUSTOM_CHAR_TO_ENEMY[ch]){
+      const type=ch==="P"?"player":CUSTOM_CHAR_TO_ENEMY[ch];
+      const col=type==="player"?"#8ecbff":ENEMY_TYPES[type].color;
+      ectx.fillStyle=col;ectx.beginPath();ectx.arc(x+w/2,y+h/2,Math.min(w,h)*.28,0,Math.PI*2);ectx.fill();
+      ectx.strokeStyle="#765c8a";ectx.stroke();
+      ectx.fillStyle="#765c8a";ectx.font=`bold ${Math.max(9,h*.32)}px sans-serif`;ectx.textAlign="center";ectx.textBaseline="middle";ectx.fillText(ch==="P"?"自":ch,x+w/2,y+h/2);
+    }
+    ectx.strokeStyle="rgba(150,105,170,.28)";ectx.lineWidth=1;ectx.strokeRect(x,y,w,h);
+  }
+  // 水ブロック：となり同士がひと続きの水面になるようにまとめて描く
+  const wp=buildWaterPaths((c,r)=>r>=0&&c>=0&&r<editorHeight&&c<editorWidth&&editorMap[r][c]==="W");
+  if(wp){ ectx.save(); ectx.scale(w/TILE,h/TILE); drawWaterLayer(ectx,wp,0); ectx.restore(); }
+}
+// ---- 配置（なぞり配置・一つ戻る）----
+const EDITOR_DRAG_TOOLS = new Set(["#","X","W"]); // ★押したままなぞって連続配置できるのはレンガ・鉄壁・水だけ
+const EDITOR_HISTORY_MAX = 100;
+let editorHistory = [];
+let editorStroke = null;
+const editorUndoBtn = document.getElementById("editorUndoBtn");
+function cloneEditorMap(){ return editorMap.map(r=>r.slice()); }
+function editorMapKey(m){ return m.map(r=>r.join("")).join("/"); }
+function updateEditorUndoBtn(){ editorUndoBtn.disabled = editorHistory.length===0; }
+function editorPushHistory(snapshot){
+  editorHistory.push(snapshot);
+  if(editorHistory.length>EDITOR_HISTORY_MAX) editorHistory.shift();
+  updateEditorUndoBtn();
+}
+function editorUndo(){
+  if(!editorHistory.length) return;
+  editorMap=editorHistory.pop();
+  editorStroke=null;
+  updateEditorUndoBtn(); drawEditorMap();
+}
+function editorCellFromEvent(ev){
+  const rect=editorCanvas.getBoundingClientRect();
+  const c=Math.floor((ev.clientX-rect.left)/rect.width*editorWidth),r=Math.floor((ev.clientY-rect.top)/rect.height*editorHeight);
+  if(c<0||r<0||c>=editorWidth||r>=editorHeight) return null;
+  return {c,r};
+}
+// 1マスに配置する。first=押した最初のマス（なぞっている途中のマスでは自機・敵を上書きしない）
+function editorSetCell(c,r,first){
+  const old=editorMap[r][c];
+  if(editorTool==="P"){
+    for(let y=0;y<editorHeight;y++)for(let x=0;x<editorWidth;x++)if(editorMap[y][x]==="P")editorMap[y][x]=".";
+    editorMap[r][c]="P";
+  }else if(CUSTOM_ENEMY_TO_CHAR[editorTool]){
+    if(old!=="." && !CUSTOM_CHAR_TO_ENEMY[old]) return;
+    editorMap[r][c]=CUSTOM_ENEMY_TO_CHAR[editorTool];
+  }else{
+    if(!first && (old==="P" || CUSTOM_CHAR_TO_ENEMY[old])) return;
+    editorMap[r][c]=editorTool;
+  }
+}
+// 2つのマスの間を直線でつなぐ（速くなぞっても隙間があかないように）
+function editorLineCells(c0,r0,c1,r1){
+  const out=[]; let dc=Math.abs(c1-c0), dr=Math.abs(r1-r0), sc=c0<c1?1:-1, sr=r0<r1?1:-1, err=dc-dr, c=c0, r=r0;
+  while(true){
+    out.push([c,r]);
+    if(c===c1&&r===r1) break;
+    const e2=2*err;
+    if(e2>-dr){ err-=dr; c+=sc; }
+    if(e2<dc){ err+=dc; r+=sr; }
+  }
+  return out;
+}
+function editorFinishStroke(){
+  if(!editorStroke) return;
+  if(editorMapKey(editorStroke.before)!==editorMapKey(editorMap)) editorPushHistory(editorStroke.before);
+  editorStroke=null;
+}
+editorCanvas.addEventListener("pointerdown",e=>{
+  e.preventDefault(); editorCanvas.setPointerCapture(e.pointerId);
+  const cell=editorCellFromEvent(e); if(!cell) return;
+  editorFinishStroke();
+  editorStroke={before:cloneEditorMap(), last:cell, drag:EDITOR_DRAG_TOOLS.has(editorTool)};
+  editorSetCell(cell.c,cell.r,true);
+  editorNormalize(); drawEditorMap();
+});
+editorCanvas.addEventListener("pointermove",e=>{
+  if(!editorStroke || !editorStroke.drag) return;
+  const cell=editorCellFromEvent(e);
+  if(!cell){ editorStroke.last=null; return; }            // 盤面の外に出たら線をつながない
+  const last=editorStroke.last;
+  if(last && last.c===cell.c && last.r===cell.r) return;
+  const cells = last ? editorLineCells(last.c,last.r,cell.c,cell.r).slice(1) : [[cell.c,cell.r]];
+  for(const [c,r] of cells) editorSetCell(c,r,false);
+  editorStroke.last=cell;
+  editorNormalize(); drawEditorMap();
+});
+editorCanvas.addEventListener("pointerup",editorFinishStroke);
+editorCanvas.addEventListener("pointercancel",editorFinishStroke);
+editorUndoBtn.onclick=editorUndo;
+document.querySelectorAll("#editorTools [data-tool]").forEach(b=>b.addEventListener("click",()=>{
+  editorTool=b.dataset.tool;document.querySelectorAll("#editorTools [data-tool]").forEach(x=>x.classList.toggle("selected",x===b));
+}));
+function editorToLevel(){
+  const map=editorMap.map(row=>row.join(""));
+  const enemies=[];
+  for(const row of map)for(const ch of row)if(CUSTOM_CHAR_TO_ENEMY[ch])enemies.push(CUSTOM_CHAR_TO_ENEMY[ch]);
+  return {name:editorName.value.trim()||"オリジナルステージ",map,enemies};
+}
+function validateCustomLevel(level){
+  const fit=fitCustomLevel(level);
+  if(!fit.map.some(r=>r.includes("P")))return "自機スポーンを1か所配置してください。";
+  if(!fit.enemies.length)return "敵戦車を1台以上配置してください。";
+  return "";
+}
+function saveEditorStage(){
+  const level=editorToLevel(),err=validateCustomLevel(level);if(err){uiAlert(err);return;}
+  const all=readCustomStages();
+  if(editingStageId){const i=all.findIndex(x=>x.id===editingStageId);if(i>=0)all[i]={...all[i],...level,updatedAt:Date.now()};else all.push({...level,id:"s"+Date.now(),createdAt:Date.now()});}
+  else {level.id="s"+Date.now();level.createdAt=Date.now();all.push(level);}
+  writeCustomStages(all);
+  showCustomLibrary();uiAlert("ステージを保存しました。");
+}
+function customLevelFromEditor(){const l=editorToLevel();const err=validateCustomLevel(l);if(err){uiAlert(err);return null;}return l;}
+function startCustomStage(level){
+  challengeStartNoRecord = false;
+  const err=validateCustomLevel(level);if(err){uiAlert(err);return;}
+  level=fitCustomLevel(level); // 固定サイズ(13×9)に合わせてから遊ぶ
+  customPlayActive=true;gameMode="normal";stageNum=1;lapNum=1;totalStageProgress=1;lives=3;
+  setMenuLayout(false);editorScreen.classList.add("hidden");libraryScreen.classList.add("hidden");
+  buildLevel(0,level);state="playing";gameStartFireLock=1;hud.classList.remove("hidden");
+  stageLabelEl.textContent="ORIGINAL";maxStageLabelEl.textContent="";playBgm();
+}
+
+// ================================================================
+// ステージ共有コード
+// ・ステージ(名前＋13×9のマップ)を短い文字列に圧縮して表す。復号して同じステージを作れる。
+// ・置いてあるブロック／戦車の「位置」と「種類」だけを記録する（組合せ数体系で圧縮）。
+// ・文字は 0-9 と英大文字（I,L,O,Uを除く32種）。先頭は"T"、末尾は入力ミス検出用のチェック文字。
+// ================================================================
+const SHARE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const SHARE_CELL_CHARS = "#XPW123456";                 // 空きマス以外の10種類
+const SHARE_KINDS = BigInt(SHARE_CELL_CHARS.length);
+const SHARE_CELLS = STAGE_COLS * STAGE_ROWS;           // 117マス
+const SHARE_PREFIX = "S";                              // 形式の目印（名前入りの旧形式は"T"）
+const SHARE_DEFAULT_NAME = "共有ステージ";
+const SHARE_C = (()=>{ // 組合せ数 C(n,r)
+  const t=[];
+  for(let n=0;n<=SHARE_CELLS;n++){
+    const row=[];
+    for(let r=0;r<=SHARE_CELLS;r++){
+      row.push(r===0 ? 1n : (n===0 ? 0n : t[n-1][r-1]+t[n-1][r]));
+    }
+    t.push(row);
+  }
+  return t;
+})();
+function shareCheckChar(body){
+  let sum=0;
+  for(let i=0;i<body.length;i++) sum+=SHARE_ALPHABET.indexOf(body[i])*(i+1);
+  return SHARE_ALPHABET[sum%32];
+}
+function encodeStageCode(stage){
+  const fit=fitCustomLevel(stage);
+  const items=[];
+  fit.map.forEach((row,r)=>{ for(let c=0;c<STAGE_COLS;c++){ const t=SHARE_CELL_CHARS.indexOf(row[c]); if(t>=0) items.push({pos:r*STAGE_COLS+c,t}); } });
+  const k=items.length;
+  let rank=0n; items.forEach((it,i)=>{ rank+=SHARE_C[it.pos][i+1]; });   // 置いたマスの位置
+  let types=0n; for(let i=k-1;i>=0;i--) types=types*SHARE_KINDS+BigInt(items[i].t); // 置いたものの種類
+  let n=(rank*(SHARE_KINDS**BigInt(k))+types)*118n+BigInt(k);
+  let body="";
+  if(n===0n) body="0";
+  while(n>0n){ body=SHARE_ALPHABET[Number(n%32n)]+body; n/=32n; }
+  body=SHARE_PREFIX+body;
+  return body+shareCheckChar(body);
+}
+// コード → {name,map,enemies}。正しくなければ null
+function decodeStageCode(text){
+  try{
+    let c=String(text||"").toUpperCase().replace(/[\s\-_]/g,"").replace(/O/g,"0").replace(/[IL]/g,"1");
+    if(c.length<3 || c[0]!==SHARE_PREFIX) return null;
+    for(const ch of c) if(SHARE_ALPHABET.indexOf(ch)<0) return null;
+    const body=c.slice(0,-1);
+    if(shareCheckChar(body)!==c[c.length-1]) return null;
+    let n=0n;
+    for(const ch of body.slice(1)) n=n*32n+BigInt(SHARE_ALPHABET.indexOf(ch));
+    const k=Number(n%118n); n/=118n;
+    if(k>SHARE_CELLS) return null;
+    const span=SHARE_KINDS**BigInt(k);
+    let types=n%span, rank=n/span;
+    if(rank>=SHARE_C[SHARE_CELLS][k]) return null;
+    const pos=new Array(k);
+    for(let i=k;i>=1;i--){
+      let p=SHARE_CELLS-1;
+      while(p>0 && SHARE_C[p][i]>rank) p--;
+      pos[i-1]=p; rank-=SHARE_C[p][i];
+    }
+    const g=Array.from({length:STAGE_ROWS},()=>Array(STAGE_COLS).fill("."));
+    for(let i=0;i<k;i++){
+      const t=Number(types%SHARE_KINDS); types/=SHARE_KINDS;
+      g[Math.floor(pos[i]/STAGE_COLS)][pos[i]%STAGE_COLS]=SHARE_CELL_CHARS[t];
+    }
+    const stage=fitCustomLevel({name:SHARE_DEFAULT_NAME,map:g.map(r=>r.join(""))});
+    if(stage.map.join("").split("P").length!==2 || !stage.enemies.length) return null; // 自機は1か所・敵は1台以上
+    if(encodeStageCode(stage)!==c) return null; // 作り直したコードが入力と一致しなければ壊れたコード
+    return {name:SHARE_DEFAULT_NAME,map:stage.map,enemies:stage.enemies};
+  }catch(e){ return null; }
+}
+// クリップボードへコピー（使えない環境では選択状態にして手動コピーしてもらう）
+async function copyTextToClipboard(text, box){
+  try{ if(navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(text); return true; } }catch(e){}
+  try{ box.focus(); box.select(); box.setSelectionRange(0,text.length); return !!document.execCommand("copy"); }catch(e){ return false; }
+}
+const shareDialog=document.getElementById("shareDialog");
+const shareCodeBox=document.getElementById("shareCodeBox");
+const shareCopyBtn=document.getElementById("shareCopyBtn");
+let shareCopyTimer=null;
+function openShareDialog(stage){
+  const code=encodeStageCode(stage);
+  document.getElementById("shareDialogTitle").textContent=`「${stage.name||"名前なし"}」の共有コード`;
+  shareCodeBox.value=code;
+  shareCopyBtn.textContent="コピー";
+  shareDialog.classList.remove("hidden");
+  shareCodeBox.focus(); shareCodeBox.select();
+}
+shareCopyBtn.onclick=async()=>{
+  const ok=await copyTextToClipboard(shareCodeBox.value, shareCodeBox);
+  clearTimeout(shareCopyTimer);
+  shareCopyBtn.textContent=ok?"コピーしました":"長押しでコピー";
+  if(!ok){ shareCodeBox.focus(); shareCodeBox.select(); }
+  shareCopyTimer=setTimeout(()=>{shareCopyBtn.textContent="コピー";},2000);
+};
+document.getElementById("shareCloseBtn").onclick=()=>shareDialog.classList.add("hidden");
+shareDialog.addEventListener("click",e=>{ if(e.target===shareDialog) shareDialog.classList.add("hidden"); });
+function showCustomLibrary(){
+  customPlayActive=false;setMenuLayout(true);stopBgm();state="start";
+  editorScreen.classList.add("hidden");startScreen.classList.add("hidden");libraryScreen.classList.remove("hidden");
+  const all=readCustomStages();stageCards.innerHTML="";
+  if(!all.length){stageCards.innerHTML='<div class="editorHint">まだステージがありません。「ステージ作成」から作ってみましょう。</div>';return;}
+  for(const stage of all){
+    const card=document.createElement("div");card.className="stageCard";
+    const fitted=fitCustomLevel(stage);
+    const preview=document.createElement("canvas");preview.width=364;preview.height=252;
+    const pc=preview.getContext("2d"),rows=STAGE_ROWS,cols=STAGE_COLS,cw=364/cols,ch=252/rows;
+    pc.fillStyle="#fffafc";pc.fillRect(0,0,364,252);
+    fitted.map.forEach((line,r)=>Array.from(line).forEach((v,c)=>{const x=c*cw,y=r*ch;if(v==="#"){pc.fillStyle="#f3b57e";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="X"){pc.fillStyle="#a898e0";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="P"||CUSTOM_CHAR_TO_ENEMY[v]){pc.fillStyle=v==="P"?"#8ecbff":ENEMY_TYPES[CUSTOM_CHAR_TO_ENEMY[v]].color;pc.beginPath();pc.arc(x+cw/2,y+ch/2,Math.min(cw,ch)*.28,0,7);pc.fill();}}));
+    const wp=buildWaterPaths((c,r)=>fitted.map[r]?.[c]==="W");
+    if(wp){pc.save();pc.scale(cw/TILE,ch/TILE);drawWaterLayer(pc,wp,0);pc.restore();}
+    const title=document.createElement("div");title.className="stageCardTitle";title.textContent=stage.name||"名前なし";
+    const meta=document.createElement("div");meta.className="editorHint";meta.textContent=`${cols}×${rows}マス ／ 敵 ${fitted.enemies.length}台`;
+    const actions=document.createElement("div");actions.className="stageCardActions";
+    const add=(label,fn,alt=false)=>{const b=document.createElement("button");b.className="btn"+(alt?" alt":"");b.textContent=label;b.onclick=fn;actions.append(b);};
+    add("遊ぶ",()=>startCustomStage(stage));
+    add("編集",()=>openStageEditor(stage,"library"),true);
+    add("複製",()=>{const copy={...stage,id:"s"+Date.now(),name:(stage.name||"ステージ")+" コピー",createdAt:Date.now()};writeCustomStages([...readCustomStages(),copy]);showCustomLibrary();});
+    add("共有",()=>openShareDialog(stage),true);
+    add("削除",()=>uiConfirm(`「${stage.name}」を削除しますか？`,()=>{writeCustomStages(readCustomStages().filter(x=>x.id!==stage.id));showCustomLibrary();}),true);
+    card.append(preview,title,meta,actions);stageCards.append(card);
+  }
+}
+document.getElementById("stageCreateOpenBtn").onclick=()=>openStageEditor(null,"title");
+document.getElementById("stageLibraryOpenBtn").onclick=showCustomLibrary;
+document.getElementById("editorBackBtn").onclick=()=>editorReturnTo==="library"?showCustomLibrary():showTitleScreen();
+document.getElementById("libraryBackBtn").onclick=showTitleScreen;
+document.getElementById("editorClearBtn").onclick=()=>uiConfirm("配置をすべて消去しますか？",()=>{
+  const before=cloneEditorMap();
+  emptyEditorMap(); editorStroke=null;
+  if(editorMapKey(before)!==editorMapKey(editorMap)) editorPushHistory(before); // 全消去も「一つ戻る」で戻せる
+  drawEditorMap();
+});
+document.getElementById("editorSaveBtn").onclick=saveEditorStage;
+document.getElementById("editorTestBtn").onclick=()=>{const l=customLevelFromEditor();if(l)startCustomStage(l);};
+function importStageFromCode(){
+  const input=document.getElementById("importCodeInput");
+  const stage=decodeStageCode(input.value);
+  if(!stage){
+    const old=/^\s*T/i.test(input.value);
+    uiAlert(old ? "古い形式のコードは読み込めません。共有し直してもらってください。" : "コードが正しくありません。コピーしたコードをそのまま入力してください。");
+    return;
+  }
+  const all=readCustomStages();
+  all.push({...stage,id:"s"+Date.now()+Math.random().toString(36).slice(2,6),createdAt:Date.now()});
+  writeCustomStages(all);
+  input.value="";
+  showCustomLibrary();
+  uiAlert(`「${stage.name}」を読み込みました。`);
+}
+document.getElementById("importStageBtn").onclick=importStageFromCode;
+document.getElementById("importCodeInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); importStageFromCode(); } });
+
+
 let lastTime = 0;
 function loop(ts){
-  requestAnimationFrame(loop);
+  requestAnimationFrame(loop); // ★次のフレームを予約する（これが無いと1回描画しただけで止まり、真っ白になる）
   if(!lastTime) lastTime = ts;
   let dt = (ts-lastTime)/1000;
   lastTime = ts;
@@ -2012,9 +2783,9 @@ function loop(ts){
 }
 
 function respawnPlayer(){
-  const lvl = LEVELS[(stageNum-1) % LEVELS.length];
+  const lvl = {map: activeLevelMap || LEVELS[(stageNum-1) % LEVELS.length].map};
   let sp={x:WORLD_W/2,y:WORLD_H/2};
-  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(lvl.map[r][c]==="P") sp={x:c*TILE+TILE/2,y:r*TILE+TILE/2};
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(String(lvl.map[r]||"")[c]==="P") sp={x:c*TILE+TILE/2,y:r*TILE+TILE/2};
   player.x=sp.x; player.y=sp.y; player.angle=-Math.PI/2; player.turretAngle=-Math.PI/2;
   lastMoveAngle = -Math.PI/2; // ★ミサイルの発射方向もリセット
   player.hp=1; player.alive=true; player.invuln=2.0;
@@ -2070,7 +2841,7 @@ function render(){
     for(let r=0;r<ROWS;r++){
       for(let c=0;c<COLS;c++){
         const v = walls[r][c];
-        if(v===EMPTY) continue;
+        if(v===EMPTY || v===WATER) continue; // 水は下でまとめて描く
         const x=c*TILE, y=r*TILE;
         if(v===BRICK){
           const dmg = bricksHp[r][c];
@@ -2113,15 +2884,16 @@ function render(){
             ctx.beginPath(); ctx.arc(nx,ny,nailR,0,7); ctx.fill();
           }
         } else {
-          ctx.fillStyle = "#c9baf5";
+          ctx.fillStyle = "#d9d1f5";
           ctx.fillRect(x+1,y+1,TILE-2,TILE-2);
-          ctx.fillStyle = "#a898e0";
+          ctx.fillStyle = "#b9afe8";
           ctx.fillRect(x+3,y+3,TILE-6,TILE-6);
-          ctx.fillStyle = "#e6dcff";
+          ctx.fillStyle = "#eee9ff";
           ctx.fillRect(x+TILE/2-3,y+TILE/2-3,6,6);
         }
       }
     }
+    drawWaterLayer(ctx, waterPaths, performance.now()/1000);
   }
 
   // ミサイル：小さな円から大きな円へ伸びる着弾予告＋飛翔体
@@ -2130,7 +2902,7 @@ function render(){
     ctx.save();
     ctx.translate(m.x,m.y);
     ctx.rotate(m.angle);
-    ctx.globalAlpha=0.22; ctx.fillStyle="#b3ecff";
+    ctx.globalAlpha=0.22; ctx.fillStyle="#b9f2c4";
     ctx.fillRect(-12,-2,18,4);
     ctx.globalAlpha=1; ctx.fillStyle="#ffffff";
     ctx.beginPath(); ctx.moveTo(8,0); ctx.lineTo(-4,-4); ctx.lineTo(-2,0); ctx.lineTo(-4,4); ctx.closePath(); ctx.fill();
@@ -2152,11 +2924,11 @@ function render(){
       ctx.save();
       ctx.translate(b.x,b.y);
       ctx.rotate(Math.atan2(b.vy,b.vx));
-      ctx.globalAlpha=0.28; ctx.fillStyle="#b3ecff";
+      ctx.globalAlpha=0.28; ctx.fillStyle="#70d98a";
       ctx.fillRect(-14,-2,20,4);
       ctx.globalAlpha=1; ctx.fillStyle="#ffffff";
       ctx.beginPath(); ctx.moveTo(9,0); ctx.lineTo(-5,-4); ctx.lineTo(-2,0); ctx.lineTo(-5,4); ctx.closePath(); ctx.fill();
-      ctx.fillStyle="#8fe0ff"; ctx.fillRect(-5,-2,10,4);
+      ctx.fillStyle="#48c96a"; ctx.fillRect(-5,-2,10,4);
       ctx.restore();
     } else {
       for(let i=0;i<b.trail.length;i++){
@@ -2189,7 +2961,7 @@ function render(){
   for(const p of particles){
     ctx.globalAlpha = clamp(1-p.t/p.life,0,1);
     ctx.fillStyle = p.color;
-    ctx.beginPath(); ctx.arc(p.x,p.y,3,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r||3,0,7); ctx.fill();
   }
   ctx.globalAlpha=1;
 
@@ -2226,7 +2998,7 @@ function getAimPreviewSegments(t){
       if(py<=BULLET_R){ hitDist=d; hitX=px; hitY=BULLET_R; hitNormal={x:0,y:1}; break; }
       if(py>=WORLD_H-BULLET_R){ hitDist=d; hitX=px; hitY=WORLD_H-BULLET_R; hitNormal={x:0,y:-1}; break; }
       const col=Math.floor(px/TILE), row=Math.floor(py/TILE);
-      if(row>=0&&col>=0&&row<ROWS&&col<COLS&&walls[row][col]!==EMPTY){
+      if(row>=0&&col>=0&&row<ROWS&&col<COLS&&blocksBullet(walls[row][col])){
         const left=col*TILE, right=left+TILE, top=row*TILE, bottom=top+TILE;
         const dl=Math.abs(px-left), dr=Math.abs(px-right), dt=Math.abs(py-top), db=Math.abs(py-bottom);
         const m=Math.min(dl,dr,dt,db);
@@ -2351,6 +3123,7 @@ function formatClearedStage(clearedCount){
 }
 
 function updateMaxStage(){
+  if(challengeStartNoRecord) return;
   if(totalStageProgress > maxStageProgress){
     maxStageProgress = totalStageProgress;
     saveModeRecord("MaxStageProgress", maxStageProgress, gameMode);
@@ -2424,7 +3197,8 @@ const ENEMY_NAMES = {
   brown:"茶色戦車",
   green:"緑戦車",
   red:"赤戦車",
-  black:"黒戦車"
+  black:"黒戦車",
+  cyan:"水色戦車"
 };
 
 // クリア画面用の戦車アイコン。ゲーム中の戦車と同じ配色・形を使う。
@@ -2466,7 +3240,7 @@ function showStageClear(){
   // ステージクリア成立時だけセーブ。次のステージから再開できる。
   const wasLastStage = (stageNum >= 50);
   updateMaxStage();
-  saveContinueData({
+  if(!challengeStartNoRecord) saveContinueData({
     stageNum: nextNum,
     lapNum: wasLastStage ? lapNum + 1 : lapNum,
     totalStageProgress: totalStageProgress + 1,
@@ -2484,14 +3258,22 @@ function showStageClear(){
     enemyTankIcon(type).replace('COUNT_PLACEHOLDER', String(count))
   ).join("");
 
-  clearStageTitle.textContent = `STAGE ${stageNum} CLEAR!`;
+  clearStageTitle.textContent = customPlayActive ? "オリジナルステージ CLEAR!" : `STAGE ${stageNum} CLEAR!`;
   clearStats.innerHTML = `残機：${Math.max(lives,0)}` + (gotExtraLife ? `　　<span style="color:var(--amber);">ライフ+1！</span>` : "");
-  nextStageInfo.innerHTML = `次のステージ：<b>STAGE ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
+  nextStageInfo.innerHTML = customPlayActive ? "ステージクリア！タップしてステージ一覧に戻ります。" : `次のステージ：<b>STAGE ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
   stageClearScreen.classList.remove("hidden");
 }
 
 function startNextStage(){
   if(state !== "stageclear") return;
+  if(customPlayActive){
+    customPlayActive = false;
+    state = "start";
+    stageClearScreen.classList.add("hidden");
+    hud.classList.add("hidden");
+    showCustomLibrary();
+    return;
+  }
   const nextNum = getNextStageNumber();
   const wasLastStage = (stageNum >= 50);
   stageNum = nextNum;
@@ -2669,6 +3451,10 @@ function showContinueScreen(){
 }
 
 function showTitleScreen(){
+  customPlayActive = false;
+  challengeStartNoRecord = false;
+  stageSelectScreen?.classList.add("hidden");
+  buildLevel(0); // 通常マップ寸法へ戻し、タイトル画面の描画も安全にする
   setMenuLayout(true);
   stopBgm();
   state = "start";
@@ -2680,6 +3466,8 @@ function showTitleScreen(){
   gameOverScreen.classList.add("hidden");
   stageClearScreen.classList.add("hidden");
   hud.classList.add("hidden");
+  document.getElementById("stageEditorScreen").classList.add("hidden");
+  document.getElementById("stageLibraryScreen").classList.add("hidden");
   updateModeStats();
 }
 function updateModeStats(){
@@ -2687,20 +3475,22 @@ function updateModeStats(){
   const rMax = loadModeRecord("MaxStageProgress", "rush", 1) || 1;
   modeStats.innerHTML = `通常：最高 ${formatClearedStage(nMax-1)}<br>爽快：最高 ${formatClearedStage(rMax-1)}`;
 }
-function safeStartGame(continueGame=false, selectedMode=null){
-  try { startGame(continueGame, selectedMode); } catch(e) {
+function safeStartGame(continueGame=false, selectedMode=null, startAtStage=1, noRecord=false){
+  try { startGame(continueGame, selectedMode, startAtStage, noRecord); } catch(e) {
     console.error("startGame error:", e);
     try {
       setMenuLayout(false);
       if(selectedMode) gameMode = selectedMode;
-      stageNum=continueGame ? stageNum : 1;
+      challengeStartNoRecord = !!noRecord && !continueGame;
+      stageNum=continueGame ? stageNum : Math.max(1,Math.min(50,Math.floor(Number(startAtStage)||1)));
       lapNum=continueGame ? lapNum : 1;
-      totalStageProgress=continueGame ? totalStageProgress : 1;
+      totalStageProgress=continueGame ? totalStageProgress : stageNum;
       lives=continueGame ? lives : 3;
       refreshModeRecords();
       buildLevel(stageNum-1);
       state="playing";
       startScreen.classList.add("hidden");
+      stageSelectScreen.classList.add("hidden");
       continueScreen.classList.add("hidden");
       pauseScreen.classList.add("hidden");
       gameOverScreen.classList.add("hidden");
@@ -2710,6 +3500,62 @@ function safeStartGame(continueGame=false, selectedMode=null){
     } catch(e2) { console.error("fallback start error:", e2); }
   }
 }
+const stageSelectScreen = document.getElementById("stageSelectScreen");
+const stageSelectButtons = document.getElementById("stageSelectButtons");
+const stageSelectTitle = document.getElementById("stageSelectTitle");
+let stageButtonHoldTimer = null;
+let stageButtonLongPressed = false;
+let stageButtonPointerDown = false;
+let pendingStageMode = "normal";
+function openStageSelect(mode){
+  pendingStageMode = mode;
+  const maxProgress = loadModeRecord("MaxStageProgress",mode,1) || 1;
+  const maxClearedFirstLap = Math.min(50,Math.max(0,maxProgress-1));
+  const choices = [];
+  for(let n=5;n<=maxClearedFirstLap;n+=5) choices.push(n);
+  if(!choices.length){ return; }
+  stageSelectTitle.textContent = mode==="rush" ? "爽快モードの開始ステージ" : "通常モードの開始ステージ";
+  stageSelectButtons.innerHTML = "";
+  for(const n of choices){
+    const b=document.createElement("button");
+    b.className="btn";
+    b.textContent=`STAGE ${n}`;
+    b.addEventListener("click",()=>{
+      stageSelectScreen.classList.add("hidden");
+      safeStartGame(false,mode,n,true);
+    });
+    stageSelectButtons.appendChild(b);
+  }
+  stageSelectScreen.classList.remove("hidden");
+}
+function bindModeButtonLongPress(button,mode){
+  button.addEventListener("pointerdown",()=>{
+    stageButtonPointerDown=true;
+    stageButtonLongPressed=false;
+    clearTimeout(stageButtonHoldTimer);
+    stageButtonHoldTimer=setTimeout(()=>{
+      if(!stageButtonPointerDown) return;
+      stageButtonLongPressed=true;
+      openStageSelect(mode);
+    },550);
+  });
+  const cancel=()=>{stageButtonPointerDown=false;clearTimeout(stageButtonHoldTimer);};
+  button.addEventListener("pointerup",cancel);
+  button.addEventListener("pointercancel",cancel);
+  button.addEventListener("pointerleave",cancel);
+  button.addEventListener("click",e=>{
+    if(stageButtonLongPressed){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      stageButtonLongPressed=false;
+    }
+  },true);
+}
+// タイトル画面の長押しはステージ選択に使うため、ブラウザ標準メニューを抑止する。
+document.getElementById("startScreen").addEventListener("contextmenu", e=>e.preventDefault());
+bindModeButtonLongPress(normalModeBtn,"normal");
+bindModeButtonLongPress(rushModeBtn,"rush");
+document.getElementById("stageSelectCloseBtn").onclick=()=>stageSelectScreen.classList.add("hidden");
 normalModeBtn.onclick = ()=>safeStartGame(false, "normal");
 rushModeBtn.onclick = ()=>safeStartGame(false, "rush");
 continueBtn.onclick = ()=>safeStartGame(true);
@@ -2729,13 +3575,14 @@ pauseBtn.addEventListener("click", ()=>{
   }
 });
 
-function startGame(continueGame=false, selectedMode=null){
+function startGame(continueGame=false, selectedMode=null, startAtStage=1, noRecord=false){
   setMenuLayout(false);
   // まずゲーム状態を初期化する。音声やセーブの問題で開始処理全体が止まらないようにする。
   state = "playing";
   try { initAudio(); } catch(e) { console.warn("audio init skipped", e); }
   try { bgm.currentTime = 0; } catch(e) {}
   const saved = continueGame ? loadContinueData() : null;
+  challengeStartNoRecord = !!noRecord && !continueGame;
   if(saved){
     gameMode = saved.mode === "rush" ? "rush" : "normal";
     refreshModeRecords();
@@ -2746,7 +3593,8 @@ function startGame(continueGame=false, selectedMode=null){
   }else{
     gameMode = selectedMode === "rush" ? "rush" : "normal";
     refreshModeRecords();
-    stageNum = 1; lapNum = 1; totalStageProgress = 1;
+    stageNum = Math.max(1,Math.min(50,Math.floor(Number(startAtStage)||1)));
+    lapNum = 1; totalStageProgress = stageNum;
     lives = 3;
     clearContinueData();
   }
@@ -2756,6 +3604,7 @@ function startGame(continueGame=false, selectedMode=null){
   gameStartFireLock = 1.0;
   state = "playing";
   startScreen.classList.add("hidden");
+  stageSelectScreen.classList.add("hidden");
   continueScreen.classList.add("hidden");
   pauseScreen.classList.add("hidden");
   gameOverScreen.classList.add("hidden");
@@ -2782,6 +3631,7 @@ function showGameOver(){
   hud.classList.add("hidden");
 }
 
+if(!player) buildLevel(0);
 requestAnimationFrame(loop);
 })();
 </script>
