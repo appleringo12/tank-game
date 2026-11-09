@@ -1293,6 +1293,7 @@ function buildLevel(idx, customLevel=null){
     }
   }
   waterPaths = buildWaterPaths((c,r)=> r>=0&&c>=0&&r<ROWS&&c<COLS&&walls[r][c]===WATER);
+  invalidateMapCache();
   tanks=[]; bullets=[]; missiles=[]; particles=[]; explosions=[];
 
   let playerSpawn = {x:WORLD_W/2, y:WORLD_H/2};
@@ -1458,6 +1459,31 @@ function drawWaterLayer(g,paths,time){
   g.restore();
 }
 
+/* 空間分割：近くのオブジェクトだけを候補にする。
+   cellSize以上の衝突半径を想定せず、呼び出し側で周囲セルを検索する。 */
+function buildSpatialGrid(items, cellSize, include = null){
+  const grid = new Map();
+  for(let i=0;i<items.length;i++){
+    const item=items[i];
+    if(include && !include(item)) continue;
+    const cx=Math.floor(item.x/cellSize), cy=Math.floor(item.y/cellSize);
+    const key=cx+","+cy;
+    let bucket=grid.get(key);
+    if(!bucket){ bucket=[]; grid.set(key,bucket); }
+    bucket.push({item,index:i});
+  }
+  return {grid,cellSize};
+}
+function querySpatialGrid(spatial, x, y, range=1){
+  const out=[];
+  const cx=Math.floor(x/spatial.cellSize), cy=Math.floor(y/spatial.cellSize);
+  for(let oy=-range;oy<=range;oy++) for(let ox=-range;ox<=range;ox++){
+    const bucket=spatial.grid.get((cx+ox)+","+(cy+oy));
+    if(bucket) for(const entry of bucket) out.push(entry);
+  }
+  return out;
+}
+
 /* ================================================================
    壁・戦車どうしの当たり判定
    ================================================================ */
@@ -1491,6 +1517,11 @@ function tanksOverlap(a,b){
     const push=(minD-d)/2;
     a.x+=dx/d*push; a.y+=dy/d*push;
     b.x-=dx/d*push; b.y-=dy/d*push;
+    // 戦車同士の押し合いで壁・水の中へ押し込まれないよう、
+    // 分離処理の直後に両方の戦車へ通常移動時と同じ壁押し戻しを適用する。
+    // 水色戦車は自分では移動しないため、この後処理が特に重要。
+    resolveWallCollision(a);
+    resolveWallCollision(b);
   }
 }
 // 敵AIの視界チェック（間に壁があれば見えない）
@@ -1550,9 +1581,8 @@ function spawnBullet(owner){
   playShot(fastBullet);
 }
 function updateBullets(dt){
-  // 1フレーム中は同じ生存戦車リストを使い回す。
-  const activeTanks = [];
-  for(const t of tanks){ if(t.alive) activeTanks.push(t); }
+  // 生存戦車を空間分割し、弾の近くにいる戦車だけ当たり判定する。
+  const tankGrid = buildSpatialGrid(tanks, TILE, t=>t.alive);
 
   for(const b of bullets){
     if(b.dead) continue;
@@ -1646,7 +1676,9 @@ function updateBullets(dt){
     }
 
     // 戦車との当たり判定。
-    for(const t of activeTanks){
+    for(const candidate of querySpatialGrid(tankGrid,b.x,b.y,1)){
+      const t=candidate.item;
+      if(!t.alive) continue;
       // 自機だけ、自分が発射した弾に限って発射直後は当たらない。
       // 敵には自己弾の無敵判定を一切入れない。
       // つまり「プレイヤーの弾→敵」「敵の弾→敵自身を含む全戦車」の
@@ -1665,23 +1697,21 @@ function updateBullets(dt){
     }
   }
 
-  // 弾同士の衝突。
-  // 同じ場所で大量の二重判定をしないよう、各ペアを1回だけ調べる。
+  // 弾同士：位置更新後に区画分けし、近隣セルだけを調べる。
+  const bulletGrid = buildSpatialGrid(bullets, TILE, b=>!b.dead);
   for(let i=0;i<bullets.length;i++){
     const a=bullets[i];
     if(a.dead) continue;
-    for(let j=i+1;j<bullets.length;j++){
-      const b=bullets[j];
-      if(b.dead) continue;
+    for(const candidate of querySpatialGrid(bulletGrid,a.x,a.y,1)){
+      const j=candidate.index, b=candidate.item;
+      if(j<=i || b.dead) continue;
       const dx=a.x-b.x, dy=a.y-b.y;
       const rr=BULLET_R*2;
       if(dx*dx+dy*dy <= rr*rr){
         const ix=(a.x+b.x)*0.5, iy=(a.y+b.y)*0.5;
         spawnHitFx(ix,iy);
         playBulletImpactSound(!!(a.fastBullet || b.fastBullet));
-        a.dead=true;
-        b.dead=true;
-        break;
+        a.dead=true; b.dead=true; break;
       }
     }
   }
@@ -1797,6 +1827,7 @@ function onPlayerDeath(){
       }
     }
   }
+  invalidateMapCache();
 
   // 死亡時に、倒されずに残っている敵だけ初期位置へ戻す。
   // すでに倒した敵は tanks から除去済みなので復活しない。
@@ -1958,6 +1989,7 @@ function explodeMissile(m){
       spawnHitFx(rx+TILE/2,ry+TILE/2);
     }
   }
+  invalidateMapCache();
   for(const t of tanks){
     if(!t.alive) continue;
     if(t.isPlayer) continue; // ★ミサイルは自機には当たらない（操作ミスによる自滅防止）
@@ -2439,7 +2471,7 @@ function openStageEditor(stage=null, returnTo="title"){
   }else{
     editorName.value="オリジナルステージ"; emptyEditorMap();
   }
-  editorTool="."; document.querySelectorAll("#editorTools [data-tool]").forEach(b=>b.classList.toggle("selected",b.dataset.tool===editorTool));
+  editorTool="."; document.querySelectorAll("#stageEditorScreen [data-tool]").forEach(b=>b.classList.toggle("selected",b.dataset.tool===editorTool));
   editorHistory=[]; editorStroke=null; updateEditorUndoBtn();
   setMenuLayout(true); startScreen.classList.add("hidden"); libraryScreen.classList.add("hidden");
   editorScreen.classList.remove("hidden"); drawEditorMap();
@@ -2466,7 +2498,7 @@ function drawEditorMap(){
   if(wp){ ectx.save(); ectx.scale(w/TILE,h/TILE); drawWaterLayer(ectx,wp,0); ectx.restore(); }
 }
 // ---- 配置（なぞり配置・一つ戻る）----
-const EDITOR_DRAG_TOOLS = new Set(["#","X","W"]); // ★押したままなぞって連続配置できるのはレンガ・鉄壁・水だけ
+const EDITOR_DRAG_TOOLS = new Set(["#","X","W","."]); // レンガ・鉄壁・水・消しゴムはドラッグで連続操作可能
 const EDITOR_HISTORY_MAX = 100;
 let editorHistory = [];
 let editorStroke = null;
@@ -2494,6 +2526,12 @@ function editorCellFromEvent(ev){
 // 1マスに配置する。first=押した最初のマス（なぞっている途中のマスでは自機・敵を上書きしない）
 function editorSetCell(c,r,first){
   const old=editorMap[r][c];
+  // 消しゴムは種類に関係なく必ず空マスにする。
+  // 敵・自機スポーンも消せるよう、通常配置用の上書き制限より先に処理する。
+  if(editorTool==="."){
+    editorMap[r][c]=".";
+    return;
+  }
   if(editorTool==="P"){
     for(let y=0;y<editorHeight;y++)for(let x=0;x<editorWidth;x++)if(editorMap[y][x]==="P")editorMap[y][x]=".";
     editorMap[r][c]="P";
@@ -2544,8 +2582,8 @@ editorCanvas.addEventListener("pointermove",e=>{
 editorCanvas.addEventListener("pointerup",editorFinishStroke);
 editorCanvas.addEventListener("pointercancel",editorFinishStroke);
 editorUndoBtn.onclick=editorUndo;
-document.querySelectorAll("#editorTools [data-tool]").forEach(b=>b.addEventListener("click",()=>{
-  editorTool=b.dataset.tool;document.querySelectorAll("#editorTools [data-tool]").forEach(x=>x.classList.toggle("selected",x===b));
+document.querySelectorAll("#stageEditorScreen [data-tool]").forEach(b=>b.addEventListener("click",()=>{
+  editorTool=b.dataset.tool;document.querySelectorAll("#stageEditorScreen [data-tool]").forEach(x=>x.classList.toggle("selected",x===b));
 }));
 function editorToLevel(){
   const map=editorMap.map(row=>row.join(""));
@@ -2750,9 +2788,16 @@ function loop(ts){
     updatePlayer(dt);
     updateSchemeB(dt);
     for(const t of tanks){ if(!t.isPlayer) updateEnemy(t, dt); }
+    // 戦車同士：同じ区画と隣接区画にいる組み合わせだけを判定する。
+    const tankGrid = buildSpatialGrid(tanks, TILE*2, t=>t.alive);
     for(let i=0;i<tanks.length;i++){
-      for(let j=i+1;j<tanks.length;j++){
-        if(tanks[i].alive && tanks[j].alive) tanksOverlap(tanks[i],tanks[j]);
+      const a=tanks[i];
+      if(!a.alive) continue;
+      for(const candidate of querySpatialGrid(tankGrid,a.x,a.y,1)){
+        const j=candidate.index;
+        if(j<=i) continue;
+        const b=candidate.item;
+        if(b.alive) tanksOverlap(a,b);
       }
     }
     updateBullets(dt);
@@ -2827,20 +2872,16 @@ function getStageBackgroundColor(){
   return "#ddd2f7";                       // 41〜50：薄紫
 }
 
-function render(){
-  ctx.save();
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.clearRect(0,0,canvas.width/dpr,canvas.height/dpr);
-  // マップ全体を常時表示。
-  const viewW = (canvas.width/dpr) / (scale * CAMERA_ZOOM);
-  const viewH = (canvas.height/dpr) / (scale * CAMERA_ZOOM);
-  const halfViewW = Math.min(viewW/2, WORLD_W/2);
-  const halfViewH = Math.min(viewH/2, WORLD_H/2);
-  const cameraX = clamp(player.x, halfViewW, WORLD_W-halfViewW);
-  const cameraY = clamp(player.y, halfViewH, WORLD_H-halfViewH);
-  ctx.scale(scale * CAMERA_ZOOM, scale * CAMERA_ZOOM);
-  ctx.translate(viewW/2 - cameraX, viewH/2 - cameraY);
-
+// 静的マップ（背景・格子・外周・壁）はオフスクリーンCanvasに描いて再利用する。
+let mapCacheCanvas = null;
+let mapCacheDirty = true;
+function invalidateMapCache(){ mapCacheDirty = true; }
+function rebuildMapCache(){
+  if(!mapCacheCanvas) mapCacheCanvas = document.createElement("canvas");
+  mapCacheCanvas.width = WORLD_W;
+  mapCacheCanvas.height = WORLD_H;
+  const targetCtx = mapCacheCanvas.getContext("2d");
+  const ctx = targetCtx;
   // 背景
   ctx.fillStyle = getStageBackgroundColor();
   ctx.fillRect(0,0,WORLD_W,WORLD_H);
@@ -2911,8 +2952,29 @@ function render(){
         }
       }
     }
-    drawWaterLayer(ctx, waterPaths, performance.now()/1000);
   }
+  mapCacheDirty = false;
+}
+
+function render(){
+  ctx.save();
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,canvas.width/dpr,canvas.height/dpr);
+  // マップ全体を常時表示。
+  const viewW = (canvas.width/dpr) / (scale * CAMERA_ZOOM);
+  const viewH = (canvas.height/dpr) / (scale * CAMERA_ZOOM);
+  const halfViewW = Math.min(viewW/2, WORLD_W/2);
+  const halfViewH = Math.min(viewH/2, WORLD_H/2);
+  const cameraX = clamp(player.x, halfViewW, WORLD_W-halfViewW);
+  const cameraY = clamp(player.y, halfViewH, WORLD_H-halfViewH);
+  ctx.scale(scale * CAMERA_ZOOM, scale * CAMERA_ZOOM);
+  ctx.translate(viewW/2 - cameraX, viewH/2 - cameraY);
+
+  // 背景・格子・外周・壁はキャッシュ画像を貼り付ける。
+  if(mapCacheDirty || !mapCacheCanvas) rebuildMapCache();
+  ctx.drawImage(mapCacheCanvas, 0, 0);
+  // 水面だけは波のアニメーションがあるため毎フレーム描画する。
+  if(walls.length) drawWaterLayer(ctx, waterPaths, performance.now()/1000);
 
   // ミサイル：小さな円から大きな円へ伸びる着弾予告＋飛翔体
   for(const m of missiles){
