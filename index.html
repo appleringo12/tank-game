@@ -4294,8 +4294,12 @@ function drawMissileTargetPreview(){
 
 function drawPlayerTag(t){
   ctx.save();
-  ctx.setLineDash([15,12]); ctx.lineWidth=10.5;
-  ctx.strokeStyle = t.pidx===0 ? "rgba(52,87,128,0.9)" : "rgba(128,62,72,0.9)";
+  // 端末ごとの縮小表示でも点線がつぶれにくいよう、間隔を広げて描画する。
+  ctx.setLineDash([15,36]);
+  ctx.lineWidth=5.25;
+  ctx.lineCap="butt";
+  // 元の色のRGB成分を明るくし、明度を上げる。
+  ctx.strokeStyle = t.pidx===0 ? "rgba(104,174,255,0.9)" : "rgba(255,124,144,0.9)";
   ctx.beginPath(); ctx.arc(t.x,t.y,(t.r+7)*1.5,0,Math.PI*2); ctx.stroke();
   ctx.setLineDash([]);
   ctx.font = "bold 10px sans-serif";
