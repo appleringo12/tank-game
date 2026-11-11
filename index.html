@@ -4591,7 +4591,6 @@ function setHueFromPointer(e){
 }
 hueRing.addEventListener("pointerdown",e=>{hueRing.setPointerCapture(e.pointerId);setHueFromPointer(e);});
 hueRing.addEventListener("pointermove",e=>{if(e.buttons||e.pressure>0)setHueFromPointer(e);});
-loadTankDesign();
 
 
 // ---- 設定画面 ----
@@ -4736,17 +4735,40 @@ function tankDesignColor(){
   return {color:`hsl(${h} 65% 78%)`,dark:`hsl(${h} 48% 62%)`};
 }
 function loadTankDesign(){
-  try{
-    const saved=localStorage.getItem(TANK_DESIGN_KEY);
-    if(saved!==null){const n=Number(saved);if(Number.isFinite(n))tankHue=((n%360)+360)%360;}
-  }catch(e){}
+  let saved=null;
+  try{saved=localStorage.getItem(TANK_DESIGN_KEY);}catch(e){}
+  if(saved===null){
+    try{
+      const prefix=encodeURIComponent(TANK_DESIGN_KEY)+"=";
+      const item=document.cookie.split("; ").find(v=>v.startsWith(prefix));
+      if(item)saved=decodeURIComponent(item.slice(prefix.length));
+    }catch(e){}
+  }
+  if(saved!==null){const n=Number(saved);if(Number.isFinite(n))tankHue=((n%360)+360)%360;}
 }
 function saveTankDesign(){
-  try{localStorage.setItem(TANK_DESIGN_KEY,String(((Number(tankHue)%360)+360)%360));}catch(e){}
+  const value=String(((Number(tankHue)%360)+360)%360);
+  let saved=false;
+  // localStorageへ保存し、実際に書き込めたことも確認する。
+  try{
+    localStorage.setItem(TANK_DESIGN_KEY,value);
+    saved=localStorage.getItem(TANK_DESIGN_KEY)===value;
+  }catch(e){}
+  // localStorageが利用できない環境向けの補助保存。
+  if(!saved){
+    try{
+      document.cookie=encodeURIComponent(TANK_DESIGN_KEY)+"="+encodeURIComponent(value)+"; Max-Age=31536000; Path=/; SameSite=Lax"+(location.protocol==="https:"?"; Secure":"");
+    }catch(e){}
+  }
 }
 // ページを閉じる／バックグラウンドへ移す直前にも現在の色を保存する。
 window.addEventListener("pagehide",saveTankDesign);
+window.addEventListener("beforeunload",saveTankDesign);
+window.addEventListener("blur",saveTankDesign);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")saveTankDesign();});
+// 保存関数・キー・tankHueの初期化が完了してから読み込む（TDZによる読み込み失敗を防止）。
+loadTankDesign();
+
 function paintDesignPreview(){
   const ring=document.getElementById("hueRing"),knob=document.getElementById("hueKnob"),cv=document.getElementById("designPreviewCanvas");
   if(!ring||!cv)return;
