@@ -326,6 +326,36 @@
   #shareDialog .row .btn{padding:10px 24px}
   .stageCardActions .btn{font-size:12px;letter-spacing:0;padding:7px 10px;border-width:2px;border-bottom-width:4px;border-radius:12px}
 
+
+  /* ---- マルチプレイ ---- */
+  .btn.multi{ background:#a8e6c8; border-color:#78cfa5; border-bottom-color:#78cfa5; }
+  .btn.multi.searching{ opacity:.88; }
+  /* マッチング中に右下へ出す、薄いローディング */
+  #mpSpinner{
+    position:fixed;
+    right:max(14px, env(safe-area-inset-right, 0px) + 10px);
+    bottom:max(14px, env(safe-area-inset-bottom, 0px) + 10px);
+    width:26px; height:26px; border-radius:50%;
+    border:3px solid rgba(122,92,138,0.16);
+    border-top-color:rgba(122,92,138,0.5);
+    animation:mpSpin 0.9s linear infinite;
+    pointer-events:none; z-index:80; opacity:0.75;
+  }
+  @keyframes mpSpin{ to{ transform:rotate(360deg); } }
+  #mpOverScreen{ z-index:27; }
+  .mpTag{
+    display:inline-block; padding:1px 7px; border-radius:9px; font-size:11px; font-weight:700; letter-spacing:1px;
+    color:#fff; text-shadow:none; border:2px solid rgba(255,255,255,0.9);
+  }
+  .mpTag.dead{ opacity:0.35; }
+  .mpTag.me{ outline:2px solid rgba(122,92,138,0.55); }
+  /* メニュー項目が1つ増えても、背の低い画面で収まるように */
+  #startScreen{ overflow-y:auto; }
+  @media (max-height:780px){
+    #startScreen{ gap:8px; }
+    #startScreen .modeBtn{ min-height:58px; padding-top:9px; padding-bottom:9px; }
+    #startScreen .modeBtn + .modeBtn{ margin-top:4px; }
+  }
 </style>
 </head>
 <body>
@@ -351,6 +381,7 @@
       <div id="modeStats"></div>
       <button class="btn modeBtn" id="normalModeBtn">通常モード</button>
       <button class="btn modeBtn" id="rushModeBtn">爽快モード</button>
+      <button class="btn modeBtn multi" id="multiBtn">マルチプレイ</button>
       <button class="btn modeBtn alt" id="stageCreateOpenBtn">ステージ作成</button>
       <button class="btn modeBtn alt" id="stageLibraryOpenBtn">ステージを見る</button>
       <div class="modeBtnRow">
@@ -381,7 +412,7 @@
       <div class="clearTitle" id="clearStageTitle">STAGE 1 CLEAR!</div>
       <div class="clearStats" id="clearStats"></div>
       <div class="nextInfo" id="nextStageInfo"></div>
-      <div class="tapHint">画面をタップすると次のステージへ</div>
+      <div class="tapHint" id="clearTapHint">画面をタップすると次のステージへ</div>
     </div>
 
     <!-- ポーズ画面 -->
@@ -398,6 +429,13 @@
       <p class="subtitle">モード: <b id="finalMode"></b><br>クリアステージ: <b id="finalStage"></b><br>最大クリアステージ: <b id="finalMaxStage"></b></p>
       <button class="btn" id="retryBtn">同じモードでもう一度</button>
       <button class="btn alt" id="gameOverTitleBtn">タイトル画面に戻る</button>
+    </div>
+
+    <!-- マルチプレイ用ゲームオーバー画面 -->
+    <div id="mpOverScreen" class="overlay hidden">
+      <h1 class="title" style="color:var(--blood); text-shadow:3px 3px 0 #ffc9dc;">GAME OVER</h1>
+      <p class="subtitle">マルチプレイ<br>クリアステージ: <b id="mpFinalStage"></b></p>
+      <button class="btn alt" id="mpOverTitleBtn">タイトル画面に戻る</button>
     </div>
 
     <!-- ゲーム説明画面 -->
@@ -420,6 +458,13 @@
          <span class="sectionTitle">■ 通常モードと爽快モードの違い</span>
         1. 爽快モードは自機の戦車の移動速度２倍<br>
         2. 爽快モードは自機の戦車の砲弾速度２倍<br>
+
+        <span class="sectionTitle">■ マルチプレイ</span>
+        タイトルの「マルチプレイ」をタップするとマッチング開始（右下にぐるぐるが出ます）<br>
+        マッチング中も、他のモードやステージ作成で遊べます<br>
+        マッチングすると自動で2人プレイが始まり、遊んでいた途中のデータは保存されます<br>
+        2人同時にやられるとゲームオーバー。片方が生きていれば次のステージで復活！<br>
+        ミサイルは味方に当たりませんが、通常弾は味方にも当たります<br>
 
         <span class="sectionTitle">■ Androidでホーム画面に追加する方法</span>
         1. Chromeでこのゲームのページを開く<br>
@@ -515,6 +560,7 @@
       </div>
     </div>
 
+  <div id="mpSpinner" class="hidden" aria-label="マッチング中"></div>
   <div id="uiToast" class="hidden"></div>
   <div id="shareDialog" class="hidden"><div class="box">
     <div class="msg" id="shareDialogTitle">共有コード</div>
@@ -535,7 +581,8 @@
   </div>
 
 </div>
-
+<!-- Photon Realtime JavaScript SDK（CDNを利用して直接読み込む） -->
+<script src="https://cdn.jsdelivr.net/npm/photon-javascript-sdk@1.0.0/lib/Photon-Javascript_SDK.min.js"></script>
 <script>
 (() => {
 "use strict";
@@ -589,6 +636,22 @@ const MISSILE_MAX_ACTIVE = 1;        // ★同時に存在できるミサイル�
 const SCHEME_B_HOLD_TIME = 0.2;              // ★この時間未満で指を離す＝通常弾、これ以上＝ミサイル発射
 const SCHEME_B_SHORT_RANGE = MISSILE_DISTANCE * 0.5; // ★タップ位置が自機からこの距離以内なら短距離ミサイル
 
+// --- マルチプレイ（Photon Realtime）の設定 ---
+// ★Photonダッシュボードで作った「Realtime」アプリの App ID をここに貼り付けてください。
+const PHOTON_APP_ID = "ff468c36-30b0-4963-83f5-e9dea506dfc7";
+const PHOTON_APP_VERSION = "1";   // ★この値が同じ人どうしだけがマッチングします（大きな変更をしたら数字を上げる）
+const PHOTON_REGION = "jp";       // ★接続するリージョン（日本は "jp"）
+const P_COLORS = [ {color:"#8ecbff", dark:"#5fa8e8"}, {color:"#ffc27a", dark:"#ee9a3c"} ]; // 1P=青 / 2P=オレンジ
+// マルチプレイの状態（ホスト＝ゲームを計算する側 / ゲスト＝映像を受け取る側）
+const mp = {
+  active:false, role:null, searching:false, client:null,
+  joined:false, isHost:false, joinTried:false, creating:false, retry:0,
+  joinTimer:null, helloTimer:null,
+  p1:null, p2:null, rin:{mx:0,my:0,mv:false,ta:-Math.PI/2},
+  fxq:[], snapTimer:0, inputTimer:0, lastRecv:0, clearTimer:0, overTimer:0,
+  bidSeq:0, fireCd:0, prevMyMissiles:0, hudKey:"",
+};
+
 // --- 敵の種類ごとのパラメータ ---
 // speed=移動速度 / hp=耐久力（弾を何発で倒せるか）
 // maxBullets=画面上に同時に出せる自分の弾の最大数（一番強いheavyだけ自機と同じ5発、他は1発）
@@ -622,56 +685,56 @@ const ENEMY_TYPES = {
 
   
 const LEVELS = [
-  { enemies:["yellow"], map:[".............", ".##...X...##.", ".#....X....#.", "......#......", "..P...#...1..", "......#......", ".#....X....#.", ".##...X...##.", "............."] },
-  { enemies:["brown", "yellow"], map:[".............", "...2.....1...", "..###...###..", ".............", ".............", ".............", "..###.P.###..", ".............", "............."] },
-  { enemies:["brown", "brown"], map:[".............", "......#......", "......#...2..", ".............", "..P..........", "......#...2..", "......#......", ".............", "............."] },
-  { enemies:["brown", "yellow", "brown"], map:[".............", ".............", "....#...#2...", "....W...#....", "..P.W...W.1..", "....W...#....", "....#...#2...", ".............", "............."] },
-  { enemies:["green", "green"], map:[".............", ".............", "...X.........", "...X......3..", ".P.#.........", "...X......3..", "...X.........", ".............", "............."] },
-  { enemies:["green", "green", "brown"], map:[".............", ".............", "...XXX#XXX...", "....3...3....", "......2......", "...X##X##X...", ".............", "......P......", "............."] },
-  { enemies:["brown", "yellow", "brown", "yellow"], map:["...WW...WW...", ".2.WW...WW.1.", "...WW...WW...", "#WWWW...WWWW#", "####..P..####", "#WWWW...WWWW#", "...WW...WW...", ".2.WW...WW.1.", "...WW...WW..."] },
-  { enemies:["red", "red"], map:[".............", ".............", "....4...4....", "..X##WWW##X..", ".............", ".............", "..#...P...#..", "..##.....##..", "............."] },
-  { enemies:["brown", "red", "green", "yellow", "green"], map:[".............", "...2.....4...", "..####W####..", ".............", "...3.....1...", ".............", "..XXXXWXXXX..", ".............", "...P.....3..."] },
-  { enemies:["black"], map:[".............", "......X......", "......X......", "...#..W..#...", "..P#..W..#5..", "...#..W..#...", "......X......", "......X......", "............."] },
-  { enemies:["brown", "brown", "red", "red", "green", "green", "black"], map:["......#......", ".2..2.#.4..4.", "......#......", "......#......", "...#..#..#...", "...#..#..#...", "...#.....#...", ".P.#.3.3.#.5.", "...#.....#..."] },
-  { enemies:["green", "green", "brown", "green"], map:[".............", "..3..........", "..WWWW.####..", "..W.......#..", ".3..2...P....", "..W.......#..", "..WWWW.####..", "..3..........", "............."] },
-  { enemies:["green", "black", "brown", "black"], map:[".............", ".3.........5.", "..XXX...XXX..", "..X.......X..", "........2....", "..X.......X..", "..XXX...XXX..", ".P.........5.", "............."] },
-  { enemies:["yellow", "red", "green", "brown", "black"], map:[".............", ".1WWW.X.WWW4.", "..WWW.X.WWW..", "......#......", "....3...2....", "......#......", "..WWW.X.WWW..", ".PWWW.X.WWW5.", "............."] },
-  { enemies:["cyan", "cyan"], map:[".............", "........#..6.", "........#....", "....#...W.##.", "..P.#...W....", "....#...W.##.", "........#....", "........#..6.", "............."] },
-  { enemies:["red", "brown", "black", "cyan", "black", "red", "brown"], map:[".............", "..#..4..2.#..", "..#.......#5.", "..W..###..#..", ".PW..###..W6.", "..W..###..#..", "..#.......#5.", "..#..4..2.#..", "............."] },
-  { enemies:["green", "green", "green", "green", "green", "green"], map:[".............", ".....WWW...3.", "....WWWWW3...", "...WWWWWWW.3.", ".P.WWWWWWW...", "...WWWWWWW.3.", "....WWWWW3...", ".....WWW...3.", "............."] },
-  { enemies:["red", "red", "red", "red", "red", "red", "red"], map:[".............", ".4..4.4.4..4.", "XW..XWXWX..WX", ".............", "...4.....4...", ".............", "XWXWX...XWXWX", "......P......", "............."] },
-  { enemies:["black", "black", "black", "black", "black", "black"], map:[".............", "...5..5..5...", ".XXW##W##WXX.", ".............", "...5.....5...", ".............", ".XXW##W##WXX.", "...P.....5...", "............."] },
-  { enemies:["cyan", "cyan", "cyan", "cyan", "cyan", "cyan"], map:["....X...X....", ".6..X.6.X..6.", "XXX.X...X.XXX", ".............", "...........6.", ".............", "XXX.X...X.XXX", ".P..X.6.X..6.", "....X...X...."] },
-  { enemies:["brown", "yellow", "green", "red"], map:["............",".1........2.",".....X##....","............","......#.....",".#.......X#.",".3....P..X4.","............"] },
-  { enemies:["yellow", "green", "red", "black"], map:["............",".#...#....1.","............",".X..##....4.","............",".#...X......",".2....P...3.","............"] },
-  { enemies:["green", "red", "black", "brown"], map:["............",".1........2.","............",".X#.#X#...#.","......#.....",".......#X#..",".3....P..X4.","............"] },
-  { enemies:["red", "black", "brown", "yellow"], map:["............",".X4.X#....1.","........#...",".2..#...#.3.","........X...","........#...",".X....P...#.","............"] },
-  { enemies:["black", "brown", "yellow", "green"], map:["............",".1........2.","...##.......","............","......#.....",".......X#...",".3....P..X4.","............"] },
-  { enemies:["brown", "yellow", "green", "red"], map:["............",".X#X....##1.","............",".4..#.......","............","..X#....#X..",".2....P...3.","............"] },
-  { enemies:["yellow", "green", "red", "black"], map:["............",".1........2.","..X.........","..#.........",".....#X.....",".........#..",".3....P..#4.","............"] },
-  { enemies:["green", "red", "black", "brown"], map:["............",".X...#....1.",".....#......",".4..#X......","............",".......#....",".2....P#..3.","............"] },
-  { enemies:["red", "black", "brown", "yellow"], map:["............",".1........2.","...#X#......","............","......#.....",".......#X#..",".3....P..X4.","............"] },
-  { enemies:["black", "brown", "yellow", "green"], map:["............",".X.X.....#1.","............",".4.##....#..","............","...#.....X..",".2....P...3.","............"] },
-  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".1........2.","..#.........",".5##X...##X.","......#.....",".....##X....",".3....P..X4.","............"] },
-  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".X#X......1.","......X.....",".4..#.#...5.","......#.....","......XX....",".2....P.##3.","............"] },
-  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".1........2.","..#.X#......",".5..........","......#.....","........#X..",".3....P..X4.","............"] },
-  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".X5##....X#.","............",".3..#.....4.","............","...#X..X.##.",".1....P...2.","............"] },
-  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".1........2.","..##........",".4.X......5.","......##....","..........X.",".3....P..X#.","............"] },
-  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".X....X...1.","......#.....",".4..#.#...5.","............",".......XX...",".2....P.#.3.","............"] },
-  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".1........2.","..#.##X.....",".5..........","......#.....","........##X.",".3....P..X4.","............"] },
-  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".X45#.....X.","............",".3..X.....#.","............","....#..X..#.",".1....P...2.","............"] },
-  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".5........2.","..#.........",".#.X##...X#.","......#.....","......X##...",".3....P..X4.","............"] },
-  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".X5##.....1.",".......#....",".3..#..X..4.",".......#....",".......#....",".2....P..X#.","............"] },
-  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".1........2.","..#..#X.....",".5..........",".....X#.....",".........##.",".3....P..X4.","............"] },
-  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".X5.X#....#.","............",".3..#.....4.","............",".#..##.X..X.",".1....P...2.","............"] },
-  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".1........2.","..#.#.......",".4..#.....5.",".....X#X#...",".#..........",".X....P..X3.","............"] },
-  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".X5....#..#.",".......X....",".3..#..#..4.","............",".......X.#..",".1....P..X2.","............"] },
-  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".1........2.","..#..X##....",".5..........",".....X#.....",".#.......X#.",".3....P..X4.","............"] },
-  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".#45.#....#.","............",".X..##....3.","............",".#...X.X....",".1....P...2.","............"] },
-  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".5........2.","..#.........",".X#.#X#...#.",".....X#.....",".......#X#..",".3....P..X4.","............"] },
-  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".X34X#5...#.","........#...",".1..#...#.2.","........X...",".......X#...",".X....P...#.","............"] },
-  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".1........2.","..###.......",".5..........",".....X#.....",".......X#...",".3....P..X4.","............"] },
-  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".X#X5...###.","............",".3..#.....4.","............","..X#...X#X..",".1....P...2.","............"] },
+  { enemies:["yellow"], map:[".............", ".##...X...##.", ".#....X....#.", "......#......", "..P...#...1..", "......#......", ".#....X....#.", ".##...X...##.", "............."], mp:[[2,4],[1,4]] },
+  { enemies:["brown", "yellow"], map:[".............", "...2.....1...", "..###...###..", ".............", ".............", ".............", "..###.P.###..", ".............", "............."], mp:[[6,6],[5,6]] },
+  { enemies:["brown", "brown"], map:[".............", "......#......", "......#...2..", ".............", "..P..........", "......#...2..", "......#......", ".............", "............."], mp:[[2,4],[1,4]] },
+  { enemies:["brown", "yellow", "brown"], map:[".............", ".............", "....#...#2...", "....W...#....", "..P.W...W.1..", "....W...#....", "....#...#2...", ".............", "............."], mp:[[2,4],[1,4]] },
+  { enemies:["green", "green"], map:[".............", ".............", "...X.........", "...X......3..", ".P.#.........", "...X......3..", "...X.........", ".............", "............."], mp:[[1,4],[0,4]] },
+  { enemies:["green", "green", "brown"], map:[".............", ".............", "...XXX#XXX...", "....3...3....", "......2......", "...X##X##X...", ".............", "......P......", "............."], mp:[[6,7],[5,7]] },
+  { enemies:["brown", "yellow", "brown", "yellow"], map:["...WW...WW...", ".2.WW...WW.1.", "...WW...WW...", "#WWWW...WWWW#", "####..P..####", "#WWWW...WWWW#", "...WW...WW...", ".2.WW...WW.1.", "...WW...WW..."], mp:[[6,4],[5,4]] },
+  { enemies:["red", "red"], map:[".............", ".............", "....4...4....", "..X##WWW##X..", ".............", ".............", "..#...P...#..", "..##.....##..", "............."], mp:[[6,6],[5,6]] },
+  { enemies:["brown", "red", "green", "yellow", "green"], map:[".............", "...2.....4...", "..####W####..", ".............", "...3.....1...", ".............", "..XXXXWXXXX..", ".............", "...P.....3..."], mp:[[3,8],[2,8]] },
+  { enemies:["black"], map:[".............", "......X......", "......X......", "...#..W..#...", "..P#..W..#5..", "...#..W..#...", "......X......", "......X......", "............."], mp:[[2,4],[1,4]] },
+  { enemies:["brown", "brown", "red", "red", "green", "green", "black"], map:["......#......", ".2..2.#.4..4.", "......#......", "......#......", "...#..#..#...", "...#..#..#...", "...#.....#...", ".P.#.3.3.#.5.", "...#.....#..."], mp:[[1,7],[0,7]] },
+  { enemies:["green", "green", "brown", "green"], map:[".............", "..3..........", "..WWWW.####..", "..W.......#..", ".3..2...P....", "..W.......#..", "..WWWW.####..", "..3..........", "............."], mp:[[8,4],[7,4]] },
+  { enemies:["green", "black", "brown", "black"], map:[".............", ".3.........5.", "..XXX...XXX..", "..X.......X..", "........2....", "..X.......X..", "..XXX...XXX..", ".P.........5.", "............."], mp:[[1,7],[0,7]] },
+  { enemies:["yellow", "red", "green", "brown", "black"], map:[".............", ".1WWW.X.WWW4.", "..WWW.X.WWW..", "......#......", "....3...2....", "......#......", "..WWW.X.WWW..", ".PWWW.X.WWW5.", "............."], mp:[[1,7],[0,7]] },
+  { enemies:["cyan", "cyan"], map:[".............", "........#..6.", "........#....", "....#...W.##.", "..P.#...W....", "....#...W.##.", "........#....", "........#..6.", "............."], mp:[[2,4],[1,4]] },
+  { enemies:["red", "brown", "black", "cyan", "black", "red", "brown"], map:[".............", "..#..4..2.#..", "..#.......#5.", "..W..###..#..", ".PW..###..W6.", "..W..###..#..", "..#.......#5.", "..#..4..2.#..", "............."], mp:[[1,4],[0,4]] },
+  { enemies:["green", "green", "green", "green", "green", "green"], map:[".............", ".....WWW...3.", "....WWWWW3...", "...WWWWWWW.3.", ".P.WWWWWWW...", "...WWWWWWW.3.", "....WWWWW3...", ".....WWW...3.", "............."], mp:[[1,4],[0,4]] },
+  { enemies:["red", "red", "red", "red", "red", "red", "red"], map:[".............", ".4..4.4.4..4.", "XW..XWXWX..WX", ".............", "...4.....4...", ".............", "XWXWX...XWXWX", "......P......", "............."], mp:[[6,7],[5,7]] },
+  { enemies:["black", "black", "black", "black", "black", "black"], map:[".............", "...5..5..5...", ".XXW##W##WXX.", ".............", "...5.....5...", ".............", ".XXW##W##WXX.", "...P.....5...", "............."], mp:[[3,7],[2,7]] },
+  { enemies:["cyan", "cyan", "cyan", "cyan", "cyan", "cyan"], map:["....X...X....", ".6..X.6.X..6.", "XXX.X...X.XXX", ".............", "...........6.", ".............", "XXX.X...X.XXX", ".P..X.6.X..6.", "....X...X...."], mp:[[1,7],[0,7]] },
+  { enemies:["brown", "yellow", "green", "red"], map:["............",".1........2.",".....X##....","............","......#.....",".#.......X#.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["yellow", "green", "red", "black"], map:["............",".#...#....1.","............",".X..##....4.","............",".#...X......",".2....P...3.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["green", "red", "black", "brown"], map:["............",".1........2.","............",".X#.#X#...#.","......#.....",".......#X#..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["red", "black", "brown", "yellow"], map:["............",".X4.X#....1.","........#...",".2..#...#.3.","........X...","........#...",".X....P...#.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["black", "brown", "yellow", "green"], map:["............",".1........2.","...##.......","............","......#.....",".......X#...",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["brown", "yellow", "green", "red"], map:["............",".X#X....##1.","............",".4..#.......","............","..X#....#X..",".2....P...3.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["yellow", "green", "red", "black"], map:["............",".1........2.","..X.........","..#.........",".....#X.....",".........#..",".3....P..#4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["green", "red", "black", "brown"], map:["............",".X...#....1.",".....#......",".4..#X......","............",".......#....",".2....P#..3.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["red", "black", "brown", "yellow"], map:["............",".1........2.","...#X#......","............","......#.....",".......#X#..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["black", "brown", "yellow", "green"], map:["............",".X.X.....#1.","............",".4.##....#..","............","...#.....X..",".2....P...3.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".1........2.","..#.........",".5##X...##X.","......#.....",".....##X....",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".X#X......1.","......X.....",".4..#.#...5.","......#.....","......XX....",".2....P.##3.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".1........2.","..#.X#......",".5..........","......#.....","........#X..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".X5##....X#.","............",".3..#.....4.","............","...#X..X.##.",".1....P...2.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".1........2.","..##........",".4.X......5.","......##....","..........X.",".3....P..X#.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".X....X...1.","......#.....",".4..#.#...5.","............",".......XX...",".2....P.#.3.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".1........2.","..#.##X.....",".5..........","......#.....","........##X.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".X45#.....X.","............",".3..X.....#.","............","....#..X..#.",".1....P...2.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".5........2.","..#.........",".#.X##...X#.","......#.....","......X##...",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".X5##.....1.",".......#....",".3..#..X..4.",".......#....",".......#....",".2....P..X#.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".1........2.","..#..#X.....",".5..........",".....X#.....",".........##.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".X5.X#....#.","............",".3..#.....4.","............",".#..##.X..X.",".1....P...2.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".1........2.","..#.#.......",".4..#.....5.",".....X#X#...",".#..........",".X....P..X3.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".X5....#..#.",".......X....",".3..#..#..4.","............",".......X.#..",".1....P..X2.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".1........2.","..#..X##....",".5..........",".....X#.....",".#.......X#.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".#45.#....#.","............",".X..##....3.","............",".#...X.X....",".1....P...2.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".5........2.","..#.........",".X#.#X#...#.",".....X#.....",".......#X#..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".X34X#5...#.","........#...",".1..#...#.2.","........X...",".......X#...",".X....P...#.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".1........2.","..###.......",".5..........",".....X#.....",".......X#...",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".X#X5...###.","............",".3..#.....4.","............","..X#...X#X..",".1....P...2.","............"], mp:[[6,6],[5,6]] },
 ];
 
 // マップの行数・列数が足りない場合に自動で埋める（12×8で作られた既存ステージは、右と下に空きマスが足されて13×9になる）
@@ -1075,6 +1138,7 @@ let lives = 3;
 let activeLevelMap = null;
 let customPlayActive = false;
 let customReturnState = "library";
+let customPlayFromEditor = false; // ステージ作成画面のテストプレイ中かどうか（マルチ開始時の自動保存用）
 
 // ================================================================
 // セーブデータ
@@ -1181,22 +1245,26 @@ function playCyanBulletReflectSound(){
 }
 // 弾の種類に応じた反射音を鳴らす
 function playBulletReflectSoundFor(b){
+  mpq("rf", b.reflectSfx==="cyan"?1:0);
   if(b.reflectSfx==="cyan") playCyanBulletReflectSound();
   else playBulletWallReflectSound();
 }
 
 function playBulletImpactSound(isFast){
+  mpq("bi", isFast?1:0);
   // 通常弾＝「ポスッ」、高速弾＝少し大きめの「ボスッ」
   initAudio();
   playTone(isFast ? 170 : 210, 0.075, "sine", isFast ? 0.12 : 0.085);
 }
 
 function playShot(fast=false){
+  mpq("sh", fast?1:0);
   initAudio();
   playTone(fast?950:720, fast?0.08:0.1, "sine", fast?0.03:0.04, fast?-260:-180);
 }
-function playHit(){ initAudio(); playTone(620,0.08,"triangle",0.032,90); }
+function playHit(){ mpq("ht"); initAudio(); playTone(620,0.08,"triangle",0.032,90); }
 function playExplosion(){
+  mpq("ex");
   // 通常の爆発音（ミサイル以外の爆発用）
   initAudio();
   playTone(340,0.2,"sine",0.10,-150);
@@ -1204,12 +1272,14 @@ function playExplosion(){
 }
 // ミサイル専用の着弾・爆発音。戦車撃破音とは明確に違う音にする。
 function playWaterSplashSound(){
+  mpq("ws");
   // 水に着弾したときの専用音：軽く弾ける水滴のような音
   initAudio();
   playTone(880,0.09,"sine",0.045,-420);
   setTimeout(()=>playTone(1320,0.12,"triangle",0.028,-650),45);
 }
 function playMissileExplosion(){
+  mpq("mx");
   initAudio();
   playTone(150,0.28,"sine",0.075,-70);
   setTimeout(()=>playTone(280,0.20,"triangle",0.055,180),55);
@@ -1217,6 +1287,7 @@ function playMissileExplosion(){
 }
 // 戦車撃破専用音。短く目立つ上昇音＋低音で、ミサイル爆発音と区別する。
 function playTankDefeat(){
+  mpq("d0");
   initAudio();
   playTone(190,0.13,"square",0.095,150);
   setTimeout(()=>playTone(420,0.16,"triangle",0.090,220),70);
@@ -1224,6 +1295,7 @@ function playTankDefeat(){
 }
 // 黄色・茶色の戦車用の撃破音（レトロアーケード系・テンポゆっくり版）
 function playTankDefeatSlowRetro(){
+  mpq("d1");
   initAudio();
   playTone(700,0.06,"square",0.06,0);
   setTimeout(()=>playTone(525,0.06,"square",0.06,0),70);
@@ -1232,6 +1304,7 @@ function playTankDefeatSlowRetro(){
 }
 // 緑・赤・黒の戦車用の撃破音（レトロアーケード系・音を1つ追加したリッチ版）
 function playTankDefeatRichRetro(){
+  mpq("d2");
   initAudio();
   playTone(700,0.05,"square",0.06,0);
   setTimeout(()=>playTone(525,0.05,"square",0.06,0),50);
@@ -1245,6 +1318,7 @@ function playBulletBounce(){
 }
 // ミサイル発射：既存の効果音に合わせた短い上昇音
 function playMissileLaunch(){
+  mpq("ml");
   initAudio();
   playTone(300,0.12,"sine",0.045,260);
   setTimeout(()=>playTone(620,0.16,"triangle",0.032,420),70);
@@ -1310,8 +1384,17 @@ function buildLevel(idx, customLevel=null){
   }
   enemySpawns.sort((a,b)=>a.order-b.order);
 
-  player = makePlayer(playerSpawn.x, playerSpawn.y);
-  tanks.push(player);
+  if(mp.active){
+    // ★マルチプレイ：1P・2Pそれぞれ専用の出現位置（LEVELSのmp、無ければ自動で決める）
+    const sp = getMpSpawns(lvl, cellAt);
+    const p1 = makePlayer(sp[0].x, sp[0].y, 0), p2 = makePlayer(sp[1].x, sp[1].y, 1);
+    mp.p1 = p1; mp.p2 = p2;
+    player = (mp.role === "guest") ? p2 : p1; // 自分の操作する戦車
+    tanks.push(p1, p2);
+  } else {
+    player = makePlayer(playerSpawn.x, playerSpawn.y);
+    tanks.push(player);
+  }
 
   if(customLevel){
     // 置いたマスの色の敵がそのマスに出る（行の順番と数字の順番がずれても入れ替わらない）
@@ -1323,9 +1406,43 @@ function buildLevel(idx, customLevel=null){
       tanks.push(makeEnemy(comp[i], sp.x, sp.y));
     }
   }
+  // 通信用の通し番号（ホストとゲストで同じ順番に作られる）
+  tanks.forEach((t,i)=>{ t.nid = i; });
 }
 
-function makePlayer(x,y){
+// マルチプレイの出現位置を返す。ステージに mp:[[列,行],[列,行]] があればそれを使う。
+// 無い場合（オリジナルステージなど）は、自機スポーンの近くの空きマスを2Pの位置にする。
+function getMpSpawns(lvl, cellAt){
+  const toPos = (c,r)=>({x:c*TILE+TILE/2, y:r*TILE+TILE/2});
+  if(lvl && Array.isArray(lvl.mp) && lvl.mp.length>=2){
+    return [toPos(lvl.mp[0][0], lvl.mp[0][1]), toPos(lvl.mp[1][0], lvl.mp[1][1])];
+  }
+  let p1=null; const enemies=[];
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const ch=cellAt(r,c);
+    if(ch==="P") p1={c,r};
+    else if(/[1-6]/.test(ch)) enemies.push({c,r});
+  }
+  if(!p1) p1={c:Math.floor(COLS/2), r:Math.floor(ROWS/2)};
+  const free=(c,r)=> c>=0&&r>=0&&c<COLS&&r<ROWS&&cellAt(r,c)===".";
+  let best=null, bestScore=1e9;
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    if(!free(c,r)) continue;
+    const d=Math.hypot(c-p1.c, r-p1.r);
+    if(d<1) continue;
+    let pen=0;
+    for(const e of enemies) if(Math.hypot(c-e.c, r-e.r)<2.5) pen+=10;
+    let open=0;
+    for(const [dc,dr] of [[1,0],[-1,0],[0,1],[0,-1]]) if(free(c+dc,r+dr) || (c+dc===p1.c && r+dr===p1.r)) open++;
+    if(open<2) pen+=5;
+    const score=d+pen+(r===p1.r?0:0.3);
+    if(score<bestScore){ bestScore=score; best={c,r}; }
+  }
+  if(!best) best={c:Math.min(COLS-1,p1.c+1), r:p1.r};
+  return [toPos(p1.c,p1.r), toPos(best.c,best.r)];
+}
+
+function makePlayer(x,y,pidx=0){
   lastMoveAngle = -Math.PI/2; // ★ミサイルの発射方向もリセット
   return {
     isPlayer:true, x, y, vx:0, vy:0, angle:-Math.PI/2, turretAngle:-Math.PI/2,
@@ -1335,7 +1452,9 @@ function makePlayer(x,y){
     fireBuffered:false, // ★発射間隔制限中に押された入力を覚えておく（先行入力）
     invuln:2.0,  // ★復活直後の無敵時間(秒)
     blink:0,
-    color:"#8ecbff", dark:"#5fa8e8",
+    color: mp.active ? P_COLORS[pidx].color : "#8ecbff",
+    dark:  mp.active ? P_COLORS[pidx].dark  : "#5fa8e8",
+    pidx, fireLock:1.0, // マルチ：2Pの開始直後の射撃ロック
   };
 }
 function makeEnemy(type,x,y){
@@ -1574,7 +1693,7 @@ function spawnBullet(owner){
     y: owner.y + Math.sin(owner.turretAngle)*(owner.r+6),
     vx: Math.cos(owner.turretAngle)*speed,
     vy: Math.sin(owner.turretAngle)*speed,
-    owner, bounces:0, dead:false, trail:[], fastBullet, age:0,
+    owner, bounces:0, dead:false, trail:[], fastBullet, age:0, bid:++mp.bidSeq,
     maxBounce, reflectSfx: enemyType?.reflectSfx || null, tint: enemyType?.bulletColor || null,
   });
   owner.bulletCount = (owner.bulletCount || 0) + 1;
@@ -1683,7 +1802,7 @@ function updateBullets(dt){
       // 敵には自己弾の無敵判定を一切入れない。
       // つまり「プレイヤーの弾→敵」「敵の弾→敵自身を含む全戦車」の
       // どちらも通常の当たり判定を行う。
-      if(b.owner === player && t === player && b.age < BULLET_SELF_SAFE_TIME) continue;
+      if(t.isPlayer && b.owner === t && b.age < BULLET_SELF_SAFE_TIME) continue;
       if(t.isPlayer && t.invuln>0 && b.owner!==t) continue;
 
       const dx=b.x-t.x, dy=b.y-t.y;
@@ -1732,7 +1851,7 @@ function damageTank(t){
     spawnExplosion(t.x,t.y, t.isPlayer?1.4:1.0);
     if(t.isPlayer) {
       playExplosion();
-      onPlayerDeath();
+      if(mp.active) onMpPlayerDeath(t); else onPlayerDeath();
     } else if(t.type === "yellow" || t.type === "brown") {
       playTankDefeatSlowRetro();
     } else if(t.type === "green" || t.type === "red" || t.type === "black" || t.type === "cyan") {
@@ -1764,7 +1883,7 @@ function resetPlayerTransientState(){
   // ミサイルの発射待ち・ダブルタップ判定・飛行中ミサイルをすべて破棄する。
   missileDoubleTapWindow = 0;
   missileDoubleTapAngle = lastMoveAngle;
-  missiles = [];
+  if(!mp.active) missiles = []; // マルチでは相方のミサイルが飛んでいるので消さない
 
   // 指を押しっぱなしにしたまま復活しても、死亡前の入力が再利用されないようにする。
   leftJoy.active = false;
@@ -1885,18 +2004,41 @@ function getMissileTargetPoint(originX, originY, angle, distance = MISSILE_DISTA
     y:clamp(originY+dy*maxDist,BULLET_R,WORLD_H-BULLET_R)
   };
 }
-function fireMissile(angle = rightJoy.missileAngle, distance = MISSILE_DISTANCE){
-  if(missiles.length >= MISSILE_MAX_ACTIVE || !player || !player.alive) return false;
+function countMissilesOf(who){
+  let n=0;
+  for(const m of missiles) if(!m.dead && m.owner===who) n++;
+  return n;
+}
+// ゲスト側：自分のミサイルが飛んでいる数（ホストから届いた情報から数える）
+function myMissileCount(){
+  if(mp.active && mp.role==="guest"){
+    let n=0;
+    for(const m of missiles) if(!m.dead && m.ownerNid===player.nid) n++;
+    return n;
+  }
+  return countMissilesOf(player);
+}
+function fireMissile(angle = rightJoy.missileAngle, distance = MISSILE_DISTANCE, who = null){
+  const me = who || player;
+  if(!me || !me.alive) return false;
+  // ★マルチのゲスト：計算はホストがするので、発射の要求だけ送る
+  if(!who && mp.active && mp.role==="guest"){
+    if(myMissileCount() >= MISSILE_MAX_ACTIVE) return false;
+    mpSend(EV.MISSILE, [angle, distance]);
+    return true;
+  }
+  // ★ミサイルは「発射した人ごとに」同時1発まで
+  if(countMissilesOf(me) >= MISSILE_MAX_ACTIVE) return false;
   // 右ボタンを押し始めた瞬間に保存した「左スティックの直近の角度」を使う。
-  const startX = player.x + Math.cos(angle)*(player.r+5);
-  const startY = player.y + Math.sin(angle)*(player.r+5);
-  const target = getMissileTargetPoint(player.x, player.y, angle, distance);
+  const startX = me.x + Math.cos(angle)*(me.r+5);
+  const startY = me.y + Math.sin(angle)*(me.r+5);
+  const target = getMissileTargetPoint(me.x, me.y, angle, distance);
   // トリプルタップの短距離ミサイルは、通常の1/3の距離だが、着弾までの時間は
   // 「これまでの短距離ミサイルの着弾時間（通常の1/3）」の1.5倍にしてある。
   const flightTime = distance === MISSILE_TRIPLE_DISTANCE
     ? MISSILE_FLIGHT_TIME / 3 * 1.5
     : MISSILE_FLIGHT_TIME;
-  missiles.push({x:startX,y:startY,startX,startY,targetX:target.x,targetY:target.y,angle,time:0,flightTime,dead:false});
+  missiles.push({x:startX,y:startY,startX,startY,targetX:target.x,targetY:target.y,angle,time:0,flightTime,dead:false,owner:me,mid:++mp.bidSeq});
   playMissileLaunch();
   return true;
 }
@@ -1920,13 +2062,19 @@ function updateMissiles(dt){
     if(m.dead) continue;
     missiles[missileWrite++] = m;
   }
-  const landed = missiles.some(m => m.dead);
+  const landedMine = missiles.some(m => m.dead && m.owner === player);
   missiles.length = missileWrite;
 
-  // 「ミサイルが飛行中に長押し入力された」場合だけ、着弾した瞬間に次を発射する（先行入力）。
-  // 一度発射したら、その長押し（一続きの指）ではもう発射しない。
-  // 次のミサイルを撃つには、指を離してもう一度ミサイルの入力（長押し／ダブルタップ長押し）をやり直す必要がある。
-  if(landed && missiles.length < MISSILE_MAX_ACTIVE && player && player.alive && rightJoy.missilePending){
+  // 自分のミサイルが着弾した瞬間に、先行入力を処理する
+  if(landedMine) processQueuedMissiles();
+}
+
+// 「ミサイルが飛行中に長押し入力された」場合だけ、着弾した瞬間に次を発射する（先行入力）。
+// 一度発射したら、その長押し（一続きの指）ではもう発射しない。
+// 次のミサイルを撃つには、指を離してもう一度ミサイルの入力（長押し／ダブルタップ長押し）をやり直す必要がある。
+function processQueuedMissiles(){
+  if(!player || !player.alive) return;
+  if(rightJoy.missilePending){
     const queuedDistance = rightJoy.missileDistance || MISSILE_DISTANCE;
     const queuedAngle = rightJoy.missileAngle;
     if(Number.isFinite(queuedAngle) && fireMissile(queuedAngle, queuedDistance)){
@@ -1942,7 +2090,7 @@ function updateMissiles(dt){
   }
 
   // 操作Bの先行入力：長押し判定の瞬間に他のミサイルが飛行中だった場合、着弾した瞬間に発射する。
-  if(landed && missiles.length < MISSILE_MAX_ACTIVE && player && player.alive && schemeB.pendingAngle !== null){
+  if(schemeB.pendingAngle !== null){
     if(fireMissile(schemeB.pendingAngle, schemeB.pendingDistance)){
       schemeB.pendingAngle = null;
     }
@@ -1977,6 +2125,7 @@ function explodeMissile(m){
     }
   }
 
+  const destroyedCells = []; // マルチ：壊れたレンガをゲストへ知らせる
   const minCol = Math.max(0, Math.floor((m.targetX-blastR)/TILE));
   const maxCol = Math.min(COLS-1, Math.floor((m.targetX+blastR)/TILE));
   const minRow = Math.max(0, Math.floor((m.targetY-blastR)/TILE));
@@ -1986,13 +2135,15 @@ function explodeMissile(m){
     const rx=c*TILE, ry=r*TILE;
     if(circleRectOverlap(m.targetX,m.targetY,blastR,rx,ry,TILE,TILE)){
       walls[r][c]=EMPTY; bricksHp[r][c]=0;
+      destroyedCells.push(r*COLS+c);
       spawnHitFx(rx+TILE/2,ry+TILE/2);
     }
   }
   invalidateMapCache();
+  if(destroyedCells.length && mp.active && mp.role==="host") mpSend(EV.WALLS, destroyedCells);
   for(const t of tanks){
     if(!t.alive) continue;
-    if(t.isPlayer) continue; // ★ミサイルは自機には当たらない（操作ミスによる自滅防止）
+    if(t.isPlayer) continue; // ★ミサイルは自機（マルチでは1P・2Pとも）には当たらない（操作ミスによる自滅防止）
     const dx=t.x-m.targetX, dy=t.y-m.targetY;
     if(dx*dx+dy*dy < blastR*blastR) damageTank(t);
   }
@@ -2002,6 +2153,7 @@ function explodeMissile(m){
    エフェクト（爆発の破片など）
    ================================================================ */
 function spawnWaterSplash(x,y){
+  mpq("sw", x, y);
   // 小さな白い水滴が外側へ飛び散る
   for(let i=0;i<16;i++){
     const a=Math.random()*Math.PI*2, sp=rand(35,115);
@@ -2010,6 +2162,7 @@ function spawnWaterSplash(x,y){
   }
 }
 function spawnExplosion(x,y,scaleF){
+  mpq("se", x, y, scaleF);
   explosions.push({x,y,t:0, dur:0.5, scaleF});
   for(let i=0;i<14;i++){
     const a=Math.random()*Math.PI*2, sp=rand(40,180)*scaleF;
@@ -2018,12 +2171,14 @@ function spawnExplosion(x,y,scaleF){
   }
 }
 function spawnHitFx(x,y){
+  mpq("sf", x, y);
   for(let i=0;i<5;i++){
     const a=Math.random()*Math.PI*2, sp=rand(30,90);
     particles.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:rand(0.15,0.3), t:0, color:"#ffd9ec"});
   }
 }
 function spawnFastBulletImpactFx(x,y){
+  mpq("sb", x, y);
   // 高速弾専用：細い閃光＋淡いパステルブルーの火花
   for(let i=0;i<10;i++){
     const a=Math.random()*Math.PI*2, sp=rand(70,190);
@@ -2056,9 +2211,19 @@ function updateFx(dt){
    ・視界に入っていなければランダムにうろつく
    ・視界に入っていれば追いかけつつ、狙いが合ったら発砲する
    ================================================================ */
+function nearestAlivePlayer(t){
+  if(!mp.active) return player;
+  let best=null, bd=1e12;
+  for(const p of [mp.p1, mp.p2]){
+    if(!p || !p.alive) continue;
+    const d=(p.x-t.x)*(p.x-t.x)+(p.y-t.y)*(p.y-t.y);
+    if(d<bd){ bd=d; best=p; }
+  }
+  return best || player;
+}
 function updateEnemy(t, dt){
   if(!t.alive) return;
-  const p = player;
+  const p = nearestAlivePlayer(t);
   if(t.ai === "reflect"){ updateReflectSniper(t, dt); return; } // 水色：反射狙撃AI
 
   // 弾避けは開始後0.5秒だけ継続し、次の開始まで2秒のクールタイムを設ける。
@@ -2246,7 +2411,7 @@ function findReflectShot(t, p){
 }
 
 function updateReflectSniper(t, dt){
-  const p = player;
+  const p = nearestAlivePlayer(t);
   t.fireCooldown = Math.max(0, (t.fireCooldown ?? 0) - dt);
   t.reactTimer = Math.max(0, (t.reactTimer ?? 0) - dt);
   const canAct = p.alive && p.invuln<=0 && countBullets(t) < t.maxBullets;
@@ -2285,6 +2450,7 @@ function updateReflectSniper(t, dt){
    自機の更新
    ================================================================ */
 function updatePlayer(dt){
+  if(mp.active && mp.role==="guest"){ updateGuestPlayer(dt); return; }
   if(!player.alive) return;
 
   // ---- 移動（左スティック／WASD／矢印キー） ----
@@ -2335,6 +2501,11 @@ function updatePlayer(dt){
     player.fireBuffered = false;
   }
 
+  updateMissileGestures(dt);
+}
+
+// 右側の入力（長押し・ダブルタップ長押し）からミサイル発射を判定する。ゲストでも同じ処理を使う。
+function updateMissileGestures(dt){
   rightJoy.fireFingerTapWindow = Math.max(0, (rightJoy.fireFingerTapWindow || 0) - dt);
   if(rightJoy.fireFingerTapWindow <= 0 && !rightJoy.fireFingerActive){ rightJoy.fireFingerTapCount = 0; rightJoy.fireFingerPendingShort = false; }
   missileDoubleTapWindow = Math.max(0, missileDoubleTapWindow - dt);
@@ -2737,7 +2908,7 @@ function showCustomLibrary(){
     const meta=document.createElement("div");meta.className="editorHint";meta.textContent=`${cols}×${rows}マス ／ 敵 ${fitted.enemies.length}台`;
     const actions=document.createElement("div");actions.className="stageCardActions";
     const add=(label,fn,alt=false)=>{const b=document.createElement("button");b.className="btn"+(alt?" alt":"");b.textContent=label;b.onclick=fn;actions.append(b);};
-    add("遊ぶ",()=>startCustomStage(stage));
+    add("遊ぶ",()=>{ startCustomStage(stage); customPlayFromEditor=false; });
     add("編集",()=>openStageEditor(stage,"library"),true);
     add("複製",()=>{const copy={...stage,id:"s"+Date.now(),name:(stage.name||"ステージ")+" コピー",createdAt:Date.now()};writeCustomStages([...readCustomStages(),copy]);showCustomLibrary();});
     add("共有",()=>openShareDialog(stage),true);
@@ -2756,7 +2927,7 @@ document.getElementById("editorClearBtn").onclick=()=>uiConfirm("配置をすべ
   drawEditorMap();
 });
 document.getElementById("editorSaveBtn").onclick=saveEditorStage;
-document.getElementById("editorTestBtn").onclick=()=>{const l=customLevelFromEditor();if(l)startCustomStage(l);};
+document.getElementById("editorTestBtn").onclick=()=>{const l=customLevelFromEditor();if(l){startCustomStage(l);customPlayFromEditor=customPlayActive;}};
 function importStageFromCode(){
   const input=document.getElementById("importCodeInput");
   const stage=decodeStageCode(input.value);
@@ -2776,6 +2947,609 @@ document.getElementById("importStageBtn").onclick=importStageFromCode;
 document.getElementById("importCodeInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); importStageFromCode(); } });
 
 
+/* ================================================================
+   マルチプレイ（Photon Realtime）
+   ・マッチングで部屋を作った人が「ホスト」（1P）、入った人が「ゲスト」（2P）
+   ・ホスト：ゲームの計算（敵AI・弾・ミサイル・当たり判定）を全部行い、状態を約20回/秒で送る
+   ・ゲスト：自分の操作（移動・照準・発射）をホストへ送り、返ってきた状態を表示する
+   ・遊んでいた途中のデータは、マッチング成立時に保存される
+   ================================================================ */
+const EV = { HELLO:1, LEVEL:2, SNAP:3, INPUT:4, FIRE:5, MISSILE:6, WALLS:7, CLEAR:8, OVER:9, BYE:10 };
+const MP_SNAP_INTERVAL = 0.05;   // ホスト→ゲストの状態送信間隔(秒)
+const MP_INPUT_INTERVAL = 0.033; // ゲスト→ホストの操作送信間隔(秒)
+const MP_TIMEOUT_MS = 8000;      // これだけ相手から何も届かなければ切断扱い
+const MP_CLEAR_DELAY = 3.0;      // ステージクリア画面を出してから次のステージへ進むまで(秒)
+const MP_OVER_DELAY = 1.4;       // 2人ともやられてからゲームオーバー画面を出すまで(秒)
+
+const mpSpinner = document.getElementById("mpSpinner");
+const mpOverScreen = document.getElementById("mpOverScreen");
+const r1 = v=>Math.round(v*10)/10;
+const r2 = v=>Math.round(v*100)/100;
+
+// ---- 効果音・エフェクトの中継（ホストで鳴ったものを、ゲストでも鳴らす） ----
+const MP_FX = {
+  sh:(a)=>playShot(!!a), ht:()=>playHit(), ex:()=>playExplosion(), mx:()=>playMissileExplosion(),
+  ml:()=>playMissileLaunch(), ws:()=>playWaterSplashSound(),
+  d0:()=>playTankDefeat(), d1:()=>playTankDefeatSlowRetro(), d2:()=>playTankDefeatRichRetro(),
+  rf:(a)=>playBulletReflectSoundFor({reflectSfx:a?"cyan":null}), bi:(a)=>playBulletImpactSound(!!a),
+  se:(x,y,s)=>spawnExplosion(x,y,s), sf:(x,y)=>spawnHitFx(x,y), sb:(x,y)=>spawnFastBulletImpactFx(x,y), sw:(x,y)=>spawnWaterSplash(x,y),
+};
+function mpq(k,a,b,c){
+  if(!mp.active || mp.role!=="host") return;
+  const e=[k];
+  if(a!==undefined) e.push(r1(a));
+  if(b!==undefined) e.push(r1(b));
+  if(c!==undefined) e.push(r1(c));
+  mp.fxq.push(e);
+}
+
+function mpSend(code, obj){
+  const c = mp.client;
+  if(!c) return;
+  try{ c.raiseEvent(code, JSON.stringify(obj)); }catch(e){ console.warn("mpSend failed", e); }
+}
+
+// ================================================================
+// マッチング
+// ================================================================
+function mpPhotonReady(){
+  return typeof Photon !== "undefined" && Photon && Photon.LoadBalancing && Photon.LoadBalancing.LoadBalancingClient;
+}
+function setSpinner(on){ mpSpinner.classList.toggle("hidden", !on); }
+function updateMultiBtn(){
+  const b = document.getElementById("multiBtn");
+  if(!b) return;
+  b.textContent = mp.searching ? "マッチング中…" : "マルチプレイ";
+  b.classList.toggle("searching", !!mp.searching);
+}
+
+function mpStartSearch(){
+  if(mp.active || mp.searching) return;
+  if(!mpPhotonReady()){
+    uiAlert("Photon SDK が読み込めませんでした。Photon-Javascript_SDK.min.js をHTMLと同じ場所に置いてください。");
+    return;
+  }
+  if(!PHOTON_APP_ID){
+    uiAlert("Photon の App ID が未設定です。HTML内の PHOTON_APP_ID に貼り付けてください。");
+    return;
+  }
+  try{ initAudio(); }catch(e){}
+  mp.searching = true; mp.retry = 0;
+  setSpinner(true); updateMultiBtn();
+  mpConnect();
+}
+
+function mpConnect(){
+  const LBC = Photon.LoadBalancing.LoadBalancingClient;
+  const c = new LBC(Photon.ConnectionProtocol.Wss, PHOTON_APP_ID, PHOTON_APP_VERSION);
+  mp.client = c; mp.joined = false; mp.isHost = false; mp.joinTried = false; mp.creating = false;
+  c.onStateChange = (st)=>{ if(mp.client===c) mpOnState(c, st); };
+  c.onError = (code,msg)=>{ if(mp.client===c) mpOnError(code, msg); };
+  c.onOperationResponse = (errorCode, errorMsg, code)=>{ if(mp.client===c) mpOnOpResponse(c, errorCode, errorMsg, code); };
+  c.onEvent = (code, data)=>{ if(mp.client===c) mpOnEvent(code, data); };
+  c.onActorLeave = ()=>{ if(mp.client===c) mpOnActorLeave(); };
+  try{ c.connectToRegionMaster(PHOTON_REGION); }
+  catch(e){ console.warn(e); mpFailSearch("Photonに接続できませんでした。"); }
+}
+
+function mpOnState(c, st){
+  const S = Photon.LoadBalancing.LoadBalancingClient.State;
+  if(st === S.JoinedLobby){
+    if(mp.joinTried || !mp.searching) return;
+    mp.joinTried = true;
+    try{ c.joinRandomRoom(); }catch(e){ mpCreateRoom(c); return; }
+    // 空き部屋が無いときの返事が来なくても、数秒待って自分で部屋を作る
+    clearTimeout(mp.joinTimer);
+    mp.joinTimer = setTimeout(()=>{
+      if(mp.client===c && mp.searching && !mp.joined && !mp.creating) mpCreateRoom(c);
+    }, 5000);
+  } else if(st === S.Joined){
+    clearTimeout(mp.joinTimer);
+    mp.joined = true;
+    let actorNr = 1;
+    try{ actorNr = c.myActor().actorNr; }catch(e){}
+    mp.isHost = (actorNr === 1); // 部屋を作った人（1番目）がホスト
+    if(!mp.isHost) mpGuestHello(c);
+  } else if(st === S.Disconnected || st === S.Error){
+    if(mp.active) mpEnd("通信が切断されました。");
+    else if(mp.searching) mpFailSearch("Photonとの接続が切れました。");
+  }
+}
+function mpOnError(code, msg){
+  console.warn("Photon error", code, msg);
+  if(mp.searching && !mp.joined) mpFailSearch("Photonに接続できませんでした。");
+}
+function mpOnOpResponse(c, errorCode, errorMsg, code){
+  if(!errorCode) return;
+  const OC = (Photon.LoadBalancing.Constants && Photon.LoadBalancing.Constants.OperationCode) || {};
+  const isJoinRandom = (code === OC.JoinRandomGame) || code === 225;
+  const isCreateOrJoin = (code === OC.CreateGame) || code === 227 || (code === OC.JoinGame) || code === 226;
+  if(isJoinRandom && mp.searching && !mp.joined && !mp.creating){
+    mpCreateRoom(c); // 空いている部屋が無い → 自分で部屋を作って待つ
+  } else if(isCreateOrJoin && mp.searching && !mp.joined){
+    mpFailSearch("マッチング用の部屋を作れませんでした。");
+  }
+}
+function mpCreateRoom(c){
+  if(mp.creating || mp.joined) return;
+  mp.creating = true;
+  try{
+    c.createRoom("tank_" + Math.random().toString(36).slice(2,10), { maxPlayers:2, isVisible:true, isOpen:true });
+  }catch(e){ console.warn(e); mpFailSearch("マッチング用の部屋を作れませんでした。"); }
+}
+// ゲスト：部屋に入ったことをホストへ知らせる（ゲーム開始の合図が届くまで繰り返す）
+function mpGuestHello(c){
+  let n = 0;
+  const tick = ()=>{
+    if(mp.client!==c || mp.active || !mp.searching) return;
+    if(n++ >= 8){ mpRetry(); return; }
+    mpSend(EV.HELLO, {});
+    mp.helloTimer = setTimeout(tick, 1000);
+  };
+  tick();
+}
+function mpRetry(){
+  const c = mp.client; mp.client = null;
+  try{ if(c) c.disconnect(); }catch(e){}
+  clearTimeout(mp.joinTimer); clearTimeout(mp.helloTimer);
+  if(++mp.retry > 3){ mpFailSearch("マッチングできませんでした。もう一度お試しください。"); return; }
+  mpConnect();
+}
+function mpStopClient(){
+  clearTimeout(mp.joinTimer); clearTimeout(mp.helloTimer);
+  const c = mp.client; mp.client = null;
+  try{ if(c) c.disconnect(); }catch(e){}
+}
+function mpCancelSearch(){
+  if(!mp.searching) return;
+  mp.searching = false; mp.joined = false;
+  mpStopClient(); setSpinner(false); updateMultiBtn();
+  uiAlert("マッチングを中止しました。");
+}
+function mpFailSearch(msg){
+  mp.searching = false; mp.joined = false;
+  mpStopClient(); setSpinner(false); updateMultiBtn();
+  if(msg) uiAlert(msg);
+}
+function mpOnActorLeave(){
+  if(!mp.active) return;
+  mpEnd(state==="mp_over" ? "" : "相手が退出したため、マルチプレイを終了しました。");
+}
+
+// ================================================================
+// イベント受信
+// ================================================================
+function mpOnEvent(code, data){
+  let o = null;
+  try{ o = (typeof data === "string") ? JSON.parse(data) : data; }catch(e){ return; }
+  switch(code){
+    case EV.HELLO: // ホスト：ゲストが入ってきた → ゲーム開始
+      if(mp.searching && !mp.active && mp.joined && mp.isHost) mpBeginGame("host");
+      break;
+    case EV.LEVEL: // ゲスト：ゲーム開始／次のステージ
+      if(!mp.active){ if(mp.searching && mp.joined && !mp.isHost) mpBeginGame("guest", o); }
+      else if(mp.role==="guest") mpGuestLoadLevel(o);
+      break;
+    case EV.SNAP:
+      if(mp.active && mp.role==="guest") mpApplySnap(o);
+      break;
+    case EV.INPUT:
+      if(mp.active && mp.role==="host"){
+        mp.lastRecv = performance.now();
+        const r = mp.rin;
+        r.mx = +o[0] || 0; r.my = +o[1] || 0; r.mv = !!o[2]; r.ta = +o[3];
+      }
+      break;
+    case EV.FIRE:
+      if(mp.active && mp.role==="host" && mp.p2 && mp.p2.alive){
+        mp.lastRecv = performance.now();
+        if(Number.isFinite(+o[0])) mp.p2.turretAngle = +o[0];
+        if(countBullets(mp.p2) < mp.p2.maxBullets) mp.p2.fireBuffered = true;
+      }
+      break;
+    case EV.MISSILE:
+      if(mp.active && mp.role==="host" && mp.p2 && state==="playing") fireMissile(+o[0], +o[1], mp.p2);
+      break;
+    case EV.WALLS:
+      if(mp.active && mp.role==="guest"){
+        for(const i of o){
+          const r = Math.floor(i/COLS), c = i%COLS;
+          if(walls[r] && walls[r][c]===BRICK){ walls[r][c]=EMPTY; bricksHp[r][c]=0; }
+        }
+        invalidateMapCache();
+      }
+      break;
+    case EV.CLEAR:
+      if(mp.active && mp.role==="guest") mpGuestClear(o);
+      break;
+    case EV.OVER:
+      if(mp.active && mp.role==="guest") mpGuestOver(o);
+      break;
+    case EV.BYE:
+      if(mp.active) mpEnd(state==="mp_over" ? "" : "相手がマルチプレイを終了しました。");
+      break;
+  }
+}
+
+// ================================================================
+// ゲーム開始・終了
+// ================================================================
+// マッチング成立の瞬間に、遊んでいた内容を保存する。保存できたら true。
+function mpSuspendLocal(){
+  let saved = false;
+  try{
+    const editorOpen = !editorScreen.classList.contains("hidden");
+    if(editorOpen || (customPlayActive && customPlayFromEditor)){
+      // ステージ作成中：今の状態のまま保存する（検証は行わない）
+      saved = autoSaveEditorForMulti();
+    } else if(!customPlayActive){
+      if(state==="playing" || state==="paused"){
+        saveContinueData({ stageNum, lapNum, totalStageProgress, lives, mode:gameMode, savedAt:Date.now() });
+        saved = true;
+      } else if(state==="stageclear_wait"){
+        // 最後の敵を倒した直後：クリア扱いで次のステージから再開できるようにする
+        const gotExtra = (lapNum===1 && stageNum % STAGES_PER_EXTRA_LIFE === 0);
+        const wasLast = stageNum >= 50;
+        saveContinueData({
+          stageNum:getNextStageNumber(), lapNum:wasLast ? lapNum+1 : lapNum,
+          totalStageProgress:totalStageProgress+1, lives:lives+(gotExtra?1:0), mode:gameMode, savedAt:Date.now()
+        });
+        saved = true;
+      } else if(state==="stageclear" || (state==="dying" && lives>0)){
+        saved = true; // どちらもその時点で保存済み
+      }
+    }
+  }catch(e){ console.warn("suspend failed", e); }
+  return saved;
+}
+function autoSaveEditorForMulti(){
+  const level = editorToLevel();
+  if(!level.map.some(row=>/[^.]/.test(row))) return false; // 何も置いていなければ保存しない
+  const all = readCustomStages();
+  if(editingStageId){
+    const i = all.findIndex(x=>x.id===editingStageId);
+    if(i>=0) all[i] = {...all[i], ...level, updatedAt:Date.now()};
+    else all.push({...level, id:editingStageId, createdAt:Date.now()});
+  } else {
+    level.id = "s"+Date.now(); level.createdAt = Date.now();
+    all.push(level); editingStageId = level.id;
+  }
+  writeCustomStages(all);
+  return true;
+}
+
+function mpBeginGame(role, lv){
+  const saved = mpSuspendLocal();
+  clearTimeout(mp.joinTimer); clearTimeout(mp.helloTimer);
+  mp.searching = false; mp.active = true; mp.role = role;
+  setSpinner(false); updateMultiBtn();
+  // 開いている画面をすべて閉じる
+  for(const el of [startScreen, stageSelectScreen, continueScreen, pauseScreen, gameOverScreen, stageClearScreen,
+                   howToPlayScreen, settingsScreen, editorScreen, libraryScreen, mpOverScreen]) el.classList.add("hidden");
+  document.getElementById("shareDialog").classList.add("hidden");
+  document.getElementById("uiConfirm").classList.add("hidden");
+  settingsReturnScreen = null;
+  resetAllControlInputs();
+  customPlayActive = false; customPlayFromEditor = false; challengeStartNoRecord = false;
+  gameMode = "normal"; lives = 3;
+  setMenuLayout(false);
+  try{ initAudio(); }catch(e){}
+  try{ bgm.currentTime = 0; }catch(e){}
+  mp.lastRecv = performance.now(); mp.snapTimer = 0; mp.inputTimer = 0; mp.fxq = []; mp.fireCd = 0;
+  mp.prevMyMissiles = 0; mp.hudKey = ""; mp.rin = {mx:0,my:0,mv:false,ta:-Math.PI/2};
+  stageNum = lv ? lv.s : 1; lapNum = lv ? lv.l : 1; totalStageProgress = lv ? lv.t : 1;
+  buildLevel(stageNum-1);
+  state = "playing";
+  gameStartFireLock = 1.0;
+  if(mp.p2) mp.p2.fireLock = 1.0;
+  hud.classList.remove("hidden");
+  hudStageCache = -1; hudLivesCache = -1; hudMaxCache = -1;
+  flashStage(formatStageProgress(totalStageProgress));
+  playBgm();
+  if(role==="host") mpSend(EV.LEVEL, {s:stageNum, l:lapNum, t:totalStageProgress});
+  uiAlert(saved ? "マッチング成功！途中のデータは保存しました" : "マッチング成功！マルチプレイ開始");
+}
+
+function mpEnd(msg){
+  const wasActive = mp.active;
+  mpStopClient();
+  mp.active = false; mp.role = null; mp.searching = false; mp.joined = false;
+  mp.p1 = null; mp.p2 = null; mp.fxq = [];
+  setSpinner(false); updateMultiBtn();
+  resetAllControlInputs();
+  mpOverScreen.classList.add("hidden");
+  stageClearScreen.classList.add("hidden");
+  hudStageCache = -1; hudLivesCache = -1; hudMaxCache = -1;
+  livesEl.innerHTML = ""; maxStageLabelEl.textContent = "";
+  missiles = []; bullets = [];
+  showTitleScreen(true); // タイトルから始まる（中断した通常プレイのデータは残す）
+  if(msg) uiAlert(msg);
+}
+
+// ================================================================
+// ホスト側
+// ================================================================
+function onMpPlayerDeath(t){
+  if(t === player) resetPlayerTransientState(); // 自分の入力状態だけ初期化（相方のミサイルは消さない）
+  t.fireBuffered = false;
+  // ★マルチに残機はない。1人が倒れても続行。2人同時に倒れた（どちらも生きていない）らゲームオーバー。
+  if(!mp.p1.alive && !mp.p2.alive){
+    bullets = []; missiles = [];
+    for(const k of tanks) k.bulletCount = 0;
+    state = "mp_over_wait";
+    mp.overTimer = MP_OVER_DELAY;
+  }
+}
+
+// ゲストの操作で動く2Pの更新（ホストで行う）
+function updateRemotePlayer(dt){
+  const p = mp.p2;
+  if(!p) return;
+  p.fireLock = Math.max(0, (p.fireLock||0) - dt);
+  if(!p.alive) return;
+  const r = mp.rin;
+  p.vx = 0; p.vy = 0;
+  if(r.mv){
+    let mx = r.mx, my = r.my;
+    const len = Math.hypot(mx,my) || 1;
+    mx /= len; my /= len;
+    p.vx = mx*p.speed; p.vy = my*p.speed;
+    p.angle = lerpAngle(p.angle, Math.atan2(my,mx), 1-Math.pow(0.00005,dt));
+    p.x += mx*p.speed*dt; p.y += my*p.speed*dt;
+    resolveWallCollision(p);
+  }
+  if(Number.isFinite(r.ta)) p.turretAngle = r.ta;
+  if(p.invuln>0){ p.invuln -= dt; p.blink += dt; }
+  p.fireCooldown = Math.max(0, (p.fireCooldown ?? 0) - dt);
+  if(p.fireBuffered && p.fireLock<=0 && p.fireCooldown<=0 && countBullets(p) < p.maxBullets){
+    spawnBullet(p);
+    p.fireCooldown = PLAYER_FIRE_INTERVAL;
+    p.fireBuffered = false;
+  }
+}
+
+function mpHostSnapshot(){
+  const t = [];
+  for(const k of tanks) t.push([k.nid, r1(k.x), r1(k.y), r2(k.angle), r2(k.turretAngle), (k.alive?1:0)|(k.invuln>0?2:0)]);
+  const b = [];
+  for(const k of bullets) if(!k.dead) b.push([k.bid, r1(k.x), r1(k.y), r1(k.vx), r1(k.vy), k.fastBullet?1:0]);
+  const m = [];
+  for(const k of missiles) if(!k.dead) m.push([k.mid, r1(k.startX), r1(k.startY), r1(k.targetX), r1(k.targetY), r2(k.angle), r2(k.time), r2(k.flightTime), k.owner ? k.owner.nid : 0]);
+  const o = {t, b, m};
+  if(mp.fxq.length){ o.fx = mp.fxq; mp.fxq = []; }
+  mpSend(EV.SNAP, o);
+}
+function mpHostTick(dt){
+  if(performance.now() - mp.lastRecv > MP_TIMEOUT_MS){ mpEnd("通信が途切れたため、マルチプレイを終了しました。"); return; }
+  mp.snapTimer -= dt;
+  if(mp.snapTimer <= 0){ mp.snapTimer = MP_SNAP_INTERVAL; mpHostSnapshot(); }
+}
+
+function mpRenderClear(anyDead){
+  const nextNum = getNextStageNumber();
+  const next = getNextLevel();
+  const counts = {};
+  for(const type of (next.enemies || [])) counts[type] = (counts[type] || 0) + 1;
+  const icons = Object.entries(counts).map(([type,count])=>
+    enemyTankIcon(type).replace('COUNT_PLACEHOLDER', String(count))).join("");
+  clearStageTitle.textContent = `STAGE ${stageNum} CLEAR!`;
+  clearStats.innerHTML = anyDead ? `<span style="color:var(--amber);">倒れた仲間は次のステージで復活！</span>` : `ふたりともナイス！`;
+  nextStageInfo.innerHTML = `次のステージ：<b>STAGE ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${icons || "なし"}</div>`;
+  clearTapHint.textContent = "まもなく次のステージへ…";
+  stageClearScreen.classList.remove("hidden");
+}
+function mpShowClear(){ // ホスト
+  const anyDead = !(mp.p1.alive && mp.p2.alive);
+  mpRenderClear(anyDead);
+  mp.clearTimer = MP_CLEAR_DELAY;
+  mpSend(EV.CLEAR, {d:anyDead?1:0});
+}
+function mpHostClearTick(dt){
+  if(mp.role!=="host") return;
+  mp.clearTimer -= dt;
+  if(mp.clearTimer <= 0){ mp.clearTimer = 999; mpHostNextStage(); }
+}
+function mpHostNextStage(){
+  const nextNum = getNextStageNumber();
+  const wasLast = stageNum >= 50;
+  stageNum = nextNum;
+  if(wasLast) lapNum++;
+  totalStageProgress++;
+  buildLevel(stageNum-1); // ★倒れていた方も、ここで1P/2Pの位置に復活する
+  state = "playing";
+  gameStartFireLock = 1.0;
+  if(mp.p2) mp.p2.fireLock = 1.0;
+  mp.rin.mv = false;
+  stageClearScreen.classList.add("hidden");
+  flashStage(formatStageProgress(totalStageProgress));
+  mpSend(EV.LEVEL, {s:stageNum, l:lapNum, t:totalStageProgress});
+}
+function mpShowOverScreen(progress){
+  state = "mp_over";
+  stageClearScreen.classList.add("hidden");
+  document.getElementById("mpFinalStage").textContent = formatClearedStage(progress - 1);
+  mpOverScreen.classList.remove("hidden");
+  hud.classList.add("hidden");
+  stopBgm();
+}
+function mpShowOver(){ // ホスト
+  mpShowOverScreen(totalStageProgress);
+  mpSend(EV.OVER, {t:totalStageProgress});
+}
+
+// ================================================================
+// ゲスト側
+// ================================================================
+function mpGuestLoadLevel(o){
+  stageNum = o.s; lapNum = o.l; totalStageProgress = o.t;
+  buildLevel(stageNum-1);
+  state = "playing";
+  stageClearScreen.classList.add("hidden");
+  hudStageCache = -1;
+  mp.prevMyMissiles = 0;
+  resetAllControlInputs();
+  flashStage(formatStageProgress(totalStageProgress));
+}
+function mpGuestClear(o){
+  state = "stageclear";
+  mpRenderClear(!!o.d);
+  if(lapNum===1 && stageNum % STAGES_PER_EXTRA_LIFE === 0) playMilestoneClear(); else playStageClear();
+}
+function mpGuestOver(o){
+  mpShowOverScreen(o.t);
+}
+
+// ホストから届いた状態を反映する
+function mpApplySnap(s){
+  mp.lastRecv = performance.now();
+  const byId = new Map();
+  for(const t of tanks) byId.set(t.nid, t);
+  const nt = [];
+  for(const a of s.t){
+    const t = byId.get(a[0]);
+    if(!t) continue;
+    t.tx = a[1]; t.ty = a[2]; t.tAng = a[3];
+    if(t !== player) t.tTur = a[4]; // 自分の砲塔の向きは手元の操作を優先する
+    if(!t.netInit){
+      t.x = t.tx; t.y = t.ty; t.angle = t.tAng;
+      if(t !== player) t.turretAngle = a[4];
+      t.netInit = true;
+    }
+    const wasAlive = t.alive;
+    t.alive = !!(a[5] & 1);
+    t.invuln = (a[5] & 2) ? 1 : 0;
+    if(t === player && wasAlive && !t.alive) resetPlayerTransientState();
+    nt.push(t);
+  }
+  tanks = nt; // 倒された敵は、ここで消える
+
+  const bm = new Map();
+  for(const b of bullets) bm.set(b.bid, b);
+  const nb = [];
+  for(const a of s.b){
+    let b = bm.get(a[0]);
+    if(!b) b = {bid:a[0], x:a[1], y:a[2], vx:a[3], vy:a[4], fastBullet:!!a[5], trail:[], dead:false, owner:null, age:0, bounces:0};
+    else { b.x = a[1]; b.y = a[2]; b.vx = a[3]; b.vy = a[4]; }
+    nb.push(b);
+  }
+  bullets = nb;
+
+  const mm = new Map();
+  for(const m of missiles) mm.set(m.mid, m);
+  const nm = [];
+  for(const a of s.m){
+    let m = mm.get(a[0]);
+    if(!m) m = {mid:a[0], startX:a[1], startY:a[2], targetX:a[3], targetY:a[4], angle:a[5], time:a[6], flightTime:a[7], dead:false, x:a[1], y:a[2]};
+    else m.time = a[6];
+    m.ownerNid = a[8];
+    nm.push(m);
+  }
+  missiles = nm;
+
+  if(s.fx) for(const e of s.fx){
+    const fn = MP_FX[e[0]];
+    if(fn) { try{ fn(e[1], e[2], e[3]); }catch(err){} }
+  }
+}
+
+// 左スティック／キーボードの移動入力
+function readMoveInput(){
+  let mx=0, my=0, moving=false;
+  if(input.moving){ mx=input.moveX; my=input.moveY; moving=true; }
+  if(keys["w"]||keys["arrowup"]){ my-=1; moving=true; }
+  if(keys["s"]||keys["arrowdown"]){ my+=1; moving=true; }
+  if(keys["a"]||keys["arrowleft"]){ mx-=1; moving=true; }
+  if(keys["d"]||keys["arrowright"]){ mx+=1; moving=true; }
+  if(moving){ const len=Math.hypot(mx,my)||1; mx/=len; my/=len; }
+  return {mx, my, moving};
+}
+
+// ゲストの自機まわりの入力処理（砲塔の向き・発射の要求・ミサイル）
+function updateGuestPlayer(dt){
+  if(!player || !player.alive){ input.fireRequested = false; return; }
+  if(input.aiming && input.aimMag>0.2){
+    player.turretAngle = input.aimAngle;
+  } else if(!input.aiming && controlScheme!=="B"){
+    player.turretAngle = lerpAngle(player.turretAngle, player.angle, 1-Math.pow(0.02,dt));
+  }
+  mp.fireCd = Math.max(0, mp.fireCd - dt);
+  if(input.fireRequested || (keys[" "] && mp.fireCd<=0)){
+    mpSend(EV.FIRE, [r2(player.turretAngle)]);
+    mp.fireCd = 0.12;
+  }
+  input.fireRequested = false;
+  updateMissileGestures(dt);
+}
+
+function guestFrame(dt){
+  if(performance.now() - mp.lastRecv > MP_TIMEOUT_MS){ mpEnd("通信が途切れたため、マルチプレイを終了しました。"); return; }
+  if(state==="playing"){ updatePlayer(dt); updateSchemeB(dt); }
+
+  // 受け取った位置へ滑らかに近づける
+  const k = 1 - Math.exp(-dt*18);
+  for(const t of tanks){
+    if(t.tx !== undefined){
+      t.x += (t.tx - t.x)*k; t.y += (t.ty - t.y)*k;
+      t.angle = lerpAngle(t.angle, t.tAng, k);
+      if(t !== player && t.tTur !== undefined) t.turretAngle = lerpAngle(t.turretAngle, t.tTur, k);
+    }
+    if(t.isPlayer && t.invuln>0) t.blink += dt;
+  }
+  // 弾は次の状態が届くまで、進行方向へ動かしておく
+  for(const b of bullets){
+    b.x += b.vx*dt; b.y += b.vy*dt;
+    b.trail.push({x:b.x, y:b.y});
+    if(b.trail.length>5) b.trail.shift();
+  }
+  for(const m of missiles){
+    m.time = Math.min(m.flightTime, m.time + dt);
+    const p = clamp(m.time/m.flightTime, 0, 1);
+    const e = p*p*(3-2*p);
+    m.x = m.startX + (m.targetX-m.startX)*e;
+    m.y = m.startY + (m.targetY-m.startY)*e;
+  }
+  // 自分のミサイルが着弾したら、先行入力を処理
+  const cnt = myMissileCount();
+  if(mp.prevMyMissiles>0 && cnt===0 && player && player.alive) processQueuedMissiles();
+  mp.prevMyMissiles = cnt;
+
+  updateFx(dt);
+
+  // 操作をホストへ送る（動いていないときも、生存確認を兼ねて送り続ける）
+  mp.inputTimer -= dt;
+  if(mp.inputTimer <= 0){
+    mp.inputTimer = MP_INPUT_INTERVAL;
+    const mv = (state==="playing" && player && player.alive) ? readMoveInput() : {mx:0,my:0,moving:false};
+    mpSend(EV.INPUT, [r2(mv.mx), r2(mv.my), mv.moving?1:0, r2(player ? player.turretAngle : 0)]);
+  }
+  updateHud();
+}
+
+// ================================================================
+// HUD（マルチ用）
+// ================================================================
+function updateHudMp(){
+  if(hudStageCache !== totalStageProgress){
+    stageLabelEl.textContent = formatStageProgress(totalStageProgress);
+    hudStageCache = totalStageProgress;
+  }
+  const a1 = (mp.p1 && mp.p1.alive) ? 1 : 0, a2 = (mp.p2 && mp.p2.alive) ? 1 : 0;
+  const me = mp.role==="guest" ? 2 : 1;
+  const key = `${a1}${a2}${me}`;
+  if(mp.hudKey !== key){
+    mp.hudKey = key;
+    const tag = (n, alive)=>`<span class="mpTag${alive?"":" dead"}${me===n?" me":""}" style="background:${P_COLORS[n-1].dark}">${n}P</span>`;
+    livesEl.innerHTML = tag(1,a1) + " " + tag(2,a2);
+  }
+  if(hudMaxCache !== -2){
+    maxStageLabelEl.textContent = "MULTI PLAY";
+    hudMaxCache = -2;
+  }
+}
+
+document.getElementById("mpOverTitleBtn").onclick = ()=>{ mpSend(EV.BYE, {}); mpEnd(""); };
+
+
 let lastTime = 0;
 function loop(ts){
   requestAnimationFrame(loop); // ★次のフレームを予約する（これが無いと1回描画しただけで止まり、真っ白になる）
@@ -2784,9 +3558,13 @@ function loop(ts){
   lastTime = ts;
   dt = Math.max(0, Math.min(dt, 0.05)); // 端末が重いときに一気に進みすぎない上限と、タイムスタンプ逆転時の下限(0)
 
+  // ★マルチのゲストは計算をせず、ホストから届いた状態を表示するだけ
+  if(mp.active && mp.role==="guest"){ guestFrame(dt); render(); return; }
+
   if(state==="playing"){
     updatePlayer(dt);
     updateSchemeB(dt);
+    if(mp.active) updateRemotePlayer(dt);
     for(const t of tanks){ if(!t.isPlayer) updateEnemy(t, dt); }
     // 戦車同士：同じ区画と隣接区画にいる組み合わせだけを判定する。
     const tankGrid = buildSpatialGrid(tanks, TILE*2, t=>t.alive);
@@ -2840,8 +3618,14 @@ function loop(ts){
     }
   } else if(state==="stageclear"){
     updateFx(dt);
+    if(mp.active) mpHostClearTick(dt);
+  } else if(state==="mp_over_wait"){
+    updateFx(dt);
+    mp.overTimer -= dt;
+    if(mp.overTimer<=0) mpShowOver();
   }
 
+  if(mp.active && mp.role==="host") mpHostTick(dt);
   render();
 }
 
@@ -3035,6 +3819,7 @@ function render(){
     if(!t.alive) continue;
     if(t.isPlayer && t.invuln>0 && Math.floor(t.blink*10)%2===0) continue; // 無敵中は点滅させる
     drawTank(t);
+    if(mp.active && t.isPlayer) drawPlayerTag(t);
   }
 
   // 破片パーティクル
@@ -3144,6 +3929,18 @@ function drawMissileTargetPreview(){
   ctx.restore();
 }
 
+function drawPlayerTag(t){
+  ctx.save();
+  ctx.font = "bold 10px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+  const label = (t.pidx===0 ? "1P" : "2P") + (t===player ? " ▼" : "");
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,0.95)";
+  ctx.strokeText(label, t.x, t.y - t.r - 2);
+  ctx.fillStyle = t.dark;
+  ctx.fillText(label, t.x, t.y - t.r - 2);
+  ctx.restore();
+}
+
 function drawTank(t){
   ctx.save();
   ctx.translate(t.x,t.y);
@@ -3218,6 +4015,7 @@ let hudLivesCache = -1;
 let hudStageCache = -1;
 let hudMaxCache = -1;
 function updateHud(enemiesLeft){
+  if(mp.active){ updateHudMp(); return; }
   const stageChanged = hudStageCache !== totalStageProgress;
   const maxChanged = hudMaxCache !== maxStageProgress;
   const livesChanged = hudLivesCache !== lives;
@@ -3271,6 +4069,7 @@ const stageClearScreen = document.getElementById("stageClearScreen");
 const clearStageTitle = document.getElementById("clearStageTitle");
 const clearStats = document.getElementById("clearStats");
 const nextStageInfo = document.getElementById("nextStageInfo");
+const clearTapHint = document.getElementById("clearTapHint");
 
 const ENEMY_NAMES = {
   yellow:"黄色戦車",
@@ -3310,6 +4109,7 @@ function getNextLevel(){
 }
 
 function showStageClear(){
+  if(mp.active){ mpShowClear(); return; } // マルチは専用の処理（セーブ・残機なし）
   // ★ステージを10クリアするごとにライフを1回復する。
   const gotExtraLife = (lapNum === 1 && stageNum % STAGES_PER_EXTRA_LIFE === 0);
   if(gotExtraLife){
@@ -3341,10 +4141,12 @@ function showStageClear(){
   clearStageTitle.textContent = customPlayActive ? "オリジナルステージ CLEAR!" : `STAGE ${stageNum} CLEAR!`;
   clearStats.innerHTML = `残機：${Math.max(lives,0)}` + (gotExtraLife ? `　　<span style="color:var(--amber);">ライフ+1！</span>` : "");
   nextStageInfo.innerHTML = customPlayActive ? "ステージクリア！タップしてステージ一覧に戻ります。" : `次のステージ：<b>STAGE ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
+  clearTapHint.textContent = "画面をタップすると次のステージへ";
   stageClearScreen.classList.remove("hidden");
 }
 
 function startNextStage(){
+  if(mp.active) return; // マルチは自動で次のステージへ進む
   if(state !== "stageclear") return;
   if(customPlayActive){
     customPlayActive = false;
@@ -3530,7 +4332,7 @@ function showContinueScreen(){
   continueScreen.classList.remove("hidden");
 }
 
-function showTitleScreen(){
+function showTitleScreen(keepSave=false){
   customPlayActive = false;
   challengeStartNoRecord = false;
   stageSelectScreen?.classList.add("hidden");
@@ -3539,7 +4341,7 @@ function showTitleScreen(){
   stopBgm();
   state = "start";
   // タイトルに戻るときは、どのステージまで進んでいたかの情報（続きから再開データ）をリセットする。
-  clearContinueData();
+  if(keepSave!==true) clearContinueData(); // マルチ終了後は、中断した通常プレイのデータを消さない
   startScreen.classList.remove("hidden");
   continueScreen.classList.add("hidden");
   pauseScreen.classList.add("hidden");
@@ -3638,6 +4440,11 @@ bindModeButtonLongPress(rushModeBtn,"rush");
 document.getElementById("stageSelectCloseBtn").onclick=()=>stageSelectScreen.classList.add("hidden");
 normalModeBtn.onclick = ()=>safeStartGame(false, "normal");
 rushModeBtn.onclick = ()=>safeStartGame(false, "rush");
+const multiBtn = document.getElementById("multiBtn");
+multiBtn.onclick = ()=>{
+  if(mp.searching) uiConfirm("マッチングを中止しますか？", ()=>mpCancelSearch());
+  else mpStartSearch();
+};
 continueBtn.onclick = ()=>safeStartGame(true);
 newGameBtn.onclick = ()=>showTitleScreen();
 document.getElementById("resumeBtn").addEventListener("click", ()=>{
@@ -3648,6 +4455,11 @@ document.getElementById("retryBtn").onclick = ()=>safeStartGame(false, gameMode)
 document.getElementById("gameOverTitleBtn").onclick = ()=>showTitleScreen();
 
 pauseBtn.addEventListener("click", ()=>{
+  if(mp.active){
+    // マルチプレイ中は一時停止できない。代わりに終了の確認を出す
+    uiConfirm("マルチプレイを終了してタイトルに戻りますか？", ()=>{ mpSend(EV.BYE, {}); mpEnd(""); });
+    return;
+  }
   if(state==="playing"){
     state="paused";
     stopBgm();
