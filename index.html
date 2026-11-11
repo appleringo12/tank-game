@@ -3059,18 +3059,18 @@ function mpOnError(code, msg){
   console.warn("Photon error", code, msg);
   if(mp.searching && !mp.joined) mpFailSearch("Photonに接続できませんでした。");
 }
-function mpOnOpResponse(c, errorCode, errorMsg, code){
+  function mpOnOpResponse(c, errorCode, errorMsg, code){
   if(!errorCode) return;
   const OC = (Photon.LoadBalancing.Constants && Photon.LoadBalancing.Constants.OperationCode) || {};
   const isJoinRandom = (code === OC.JoinRandomGame) || code === 225;
   const isCreateOrJoin = (code === OC.CreateGame) || code === 227 || (code === OC.JoinGame) || code === 226;
   if(isJoinRandom && mp.searching && !mp.joined && !mp.creating){
-    mpCreateRoom(c); // 空いている部屋が無い → 自分で部屋を作って待つ
+    mpCreateRoom(c);
   } else if(isCreateOrJoin && mp.searching && !mp.joined){
-    mpFailSearch("マッチング用の部屋を作れませんでした。");
+    mpFailSearch("エラー詳細: " + errorCode + " " + errorMsg); // ←★書き換えました
   }
 }
-function mpCreateRoom(c){
+  function mpCreateRoom(c){
   if(mp.creating || mp.joined) return;
   mp.creating = true;
   try{
