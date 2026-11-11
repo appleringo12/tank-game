@@ -248,6 +248,12 @@
   #startScreen .modeBtnRow .modeBtn{ width:auto; flex:1; min-width:0; padding-left:6px; padding-right:6px; }
   #startScreen .modeBtnRow .modeBtn + .modeBtn{ margin-top:0; }
 
+  .designPickerRow{display:flex;align-items:center;justify-content:center;gap:18px;width:min(90vw,390px);margin:8px 0}
+  #hueRing{position:relative;width:min(58vw,220px);height:min(58vw,220px);flex:none;border-radius:50%;background:conic-gradient(from 0deg, hsl(0 65% 78%),hsl(60 65% 78%),hsl(120 65% 78%),hsl(180 65% 78%),hsl(240 65% 78%),hsl(300 65% 78%),hsl(360 65% 78%));touch-action:none;cursor:pointer}
+  .hueRingInner{position:absolute;inset:24%;border-radius:50%;background:rgba(255,248,253,.96);box-shadow:inset 0 0 0 2px rgba(255,255,255,.8)}
+  #hueKnob{position:absolute;width:22px;height:22px;left:50%;top:0%;margin:-11px 0 0 -11px;border:3px solid white;border-radius:50%;background:#8ecbff;box-shadow:0 1px 5px #765}
+  .designPreview{color:var(--paper);font-size:12px;font-weight:700;text-align:center;min-width:110px}
+  #designPreviewCanvas{width:150px;max-width:38vw;height:auto;background:rgba(255,255,255,.55);border-radius:14px}
   /* ---- 設定画面 ---- */
   #settingsScreen{ z-index:26; }
   .settingsBody{ display:flex; flex-direction:column; gap:26px; width:min(86vw,360px); margin:8px 0 2px; }
@@ -331,6 +337,7 @@
   .btn.multi{ background:#a8e6c8; border-color:#78cfa5; border-bottom-color:#78cfa5; }
   .btn.multi.searching{ opacity:.88; }
   /* マッチング中に右下へ出す、薄いローディング */
+  #mpStatus{position:fixed;right:max(48px, env(safe-area-inset-right, 0px) + 44px);bottom:max(14px, env(safe-area-inset-bottom, 0px) + 10px);z-index:80;color:#7a5c8a;font-size:13px;font-weight:700;text-shadow:0 1px #fff;pointer-events:none;white-space:nowrap;}
   #mpSpinner{
     position:fixed;
     right:max(14px, env(safe-area-inset-right, 0px) + 10px);
@@ -386,6 +393,7 @@
       <button class="btn modeBtn alt" id="stageLibraryOpenBtn">ステージを見る</button>
       <div class="modeBtnRow">
         <button class="btn modeBtn info" id="howToPlayBtn">ゲーム説明</button>
+        <button class="btn modeBtn info" id="designBtnTitle">デザイン</button>
         <button class="btn modeBtn info" id="settingsBtnTitle">設定</button>
       </div>
     </div>
@@ -484,6 +492,17 @@
       <button class="btn alt" id="howToPlayCloseBtn" style="margin-top:14px;">閉じる</button>
     </div>
 
+    <!-- デザイン画面 -->
+    <div id="designScreen" class="overlay hidden">
+      <h1 class="title" style="font-size:clamp(22px,6vw,32px);">デザイン</h1>
+      <div class="subtitle">円環をスライドして戦車の色を選べます</div>
+      <div class="designPickerRow">
+        <div id="hueRing" role="slider" aria-label="戦車の色" tabindex="0"><div class="hueRingInner"></div><div id="hueKnob"></div></div>
+        <div class="designPreview"><canvas id="designPreviewCanvas" width="150" height="130"></canvas><div>戦車プレビュー</div></div>
+      </div>
+      <button class="btn alt" id="designCloseBtn">閉じる</button>
+    </div>
+
     <!-- 設定画面 -->
     <div id="settingsScreen" class="overlay hidden">
       <h1 class="title" style="font-size:clamp(22px,6vw,32px);">設定</h1>
@@ -562,7 +581,7 @@
       </div>
     </div>
 
-  <div id="mpSpinner" class="hidden" aria-label="マッチング中"></div>
+  <div id="mpSpinner" class="hidden" aria-label="マッチング中"></div><div id="mpStatus" class="hidden">マッチング中...</div>
   <div id="uiToast" class="hidden"></div>
   <div id="shareDialog" class="hidden"><div class="box">
     <div class="msg" id="shareDialogTitle">共有コード</div>
@@ -819,7 +838,7 @@ const SCHEME_B_SHORT_RANGE = MISSILE_DISTANCE * 0.5; // ★タップ位置が自
 const PHOTON_APP_ID = "ff468c36-30b0-4963-83f5-e9dea506dfc7";
 const PHOTON_APP_VERSION = "1";   // ★この値が同じ人どうしだけがマッチングします（大きな変更をしたら数字を上げる）
 const PHOTON_REGION = "jp";       // ★接続するリージョン（日本は "jp"）
-const P_COLORS = [ {color:"#8ecbff", dark:"#5fa8e8"}, {color:"#ffc27a", dark:"#ee9a3c"} ]; // 1P=青 / 2P=オレンジ
+const P_COLORS = [ {color:"#8ecbff", dark:"#5fa8e8"}, {color:"#ffaaaa", dark:"#e87888"} ]; // 1P=青 / 2P=赤
 // マルチプレイの状態（ホスト＝ゲームを計算する側 / ゲスト＝映像を受け取る側）
 const mp = {
   active:false, role:null, searching:false, client:null,
@@ -1641,8 +1660,8 @@ function makePlayer(x,y,pidx=0){
     fireBuffered:false, // ★発射間隔制限中に押された入力を覚えておく（先行入力）
     invuln:2.0,  // ★復活直後の無敵時間(秒)
     blink:0,
-    color: mp.active ? P_COLORS[pidx].color : "#8ecbff",
-    dark:  mp.active ? P_COLORS[pidx].dark  : "#5fa8e8",
+    color: (pidx === (mp.role==="guest"?1:0)) ? tankDesignColor().color : (mp.active ? P_COLORS[pidx].color : tankDesignColor().color),
+    dark:  (pidx === (mp.role==="guest"?1:0)) ? tankDesignColor().dark : (mp.active ? P_COLORS[pidx].dark : tankDesignColor().dark),
     pidx, fireLock:1.0, // マルチ：2Pの開始直後の射撃ロック
   };
 }
@@ -3256,7 +3275,7 @@ function mpSend(code, obj){
 function mpPhotonReady(){
   return typeof Photon !== "undefined" && Photon && Photon.LoadBalancing && Photon.LoadBalancing.LoadBalancingClient;
 }
-function setSpinner(on){ mpSpinner.classList.toggle("hidden", !on); }
+function setSpinner(on){ mpSpinner.classList.toggle("hidden", !on); document.getElementById("mpStatus").classList.toggle("hidden", !on); }
 function updateMultiBtn(){
   const b = document.getElementById("multiBtn");
   if(!b) return;
@@ -3488,7 +3507,7 @@ function mpBeginGame(role, lv){
   setSpinner(false); updateMultiBtn();
   // 開いている画面をすべて閉じる
   for(const el of [startScreen, stageSelectScreen, continueScreen, pauseScreen, gameOverScreen, stageClearScreen,
-                   howToPlayScreen, settingsScreen, editorScreen, libraryScreen, mpOverScreen]) el.classList.add("hidden");
+                   howToPlayScreen, designScreen, settingsScreen, editorScreen, libraryScreen, mpOverScreen]) el.classList.add("hidden");
   document.getElementById("shareDialog").classList.add("hidden");
   document.getElementById("uiConfirm").classList.add("hidden");
   settingsReturnScreen = null;
@@ -3510,6 +3529,7 @@ function mpBeginGame(role, lv){
   hudStageCache = -1; hudLivesCache = -1; hudMaxCache = -1;
   flashStage(formatStageProgress(totalStageProgress));
   playBgm();
+  playStageClear();
   if(role==="host") mpSend(EV.LEVEL, {s:stageNum, l:lapNum, t:totalStageProgress});
   uiAlert(saved ? "マッチング成功！途中のデータは保存しました" : "マッチング成功！マルチプレイ開始");
 }
@@ -3606,6 +3626,7 @@ function mpRenderClear(anyDead){
   stageClearScreen.classList.remove("hidden");
 }
 function mpShowClear(){ // ホスト
+  updateMultiRecord(totalStageProgress+1);
   const anyDead = !(mp.p1.alive && mp.p2.alive);
   mpRenderClear(anyDead);
   mp.clearTimer = MP_CLEAR_DELAY;
@@ -3659,6 +3680,7 @@ function mpGuestLoadLevel(o){
   flashStage(formatStageProgress(totalStageProgress));
 }
 function mpGuestClear(o){
+  updateMultiRecord(totalStageProgress+1);
   state = "stageclear";
   mpRenderClear(!!o.d);
   if(lapNum===1 && stageNum % STAGES_PER_EXTRA_LIFE === 0) playMilestoneClear(); else playStageClear();
@@ -4270,12 +4292,16 @@ function drawMissileTargetPreview(){
 
 function drawPlayerTag(t){
   ctx.save();
+  ctx.setLineDash([5,4]); ctx.lineWidth=3.5;
+  ctx.strokeStyle = t.pidx===0 ? "rgba(105,175,255,0.78)" : "rgba(255,125,145,0.78)";
+  ctx.beginPath(); ctx.arc(t.x,t.y,t.r+7,0,Math.PI*2); ctx.stroke();
+  ctx.setLineDash([]);
   ctx.font = "bold 10px sans-serif";
   ctx.textAlign = "center"; ctx.textBaseline = "bottom";
   const label = (t.pidx===0 ? "1P" : "2P") + (t===player ? " ▼" : "");
   ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,0.95)";
   ctx.strokeText(label, t.x, t.y - t.r - 2);
-  ctx.fillStyle = t.dark;
+  ctx.fillStyle = t.pidx===0 ? "#438ed8" : "#e65f78";
   ctx.fillText(label, t.x, t.y - t.r - 2);
   ctx.restore();
 }
@@ -4537,6 +4563,19 @@ howToPlayBtn.addEventListener("click", ()=>{
 });
 howToPlayCloseBtn.addEventListener("click", ()=>{ howToPlayScreen.classList.add("hidden"); });
 
+const designScreen=document.getElementById("designScreen");
+document.getElementById("designBtnTitle").addEventListener("click",()=>{designScreen.classList.remove("hidden");paintDesignPreview();});
+document.getElementById("designCloseBtn").addEventListener("click",()=>{designScreen.classList.add("hidden");});
+const hueRing=document.getElementById("hueRing");
+function setHueFromPointer(e){
+  const r=hueRing.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);
+  tankHue=(Math.atan2(dy,dx)*180/Math.PI+90+360)%360;saveTankDesign();paintDesignPreview();
+}
+hueRing.addEventListener("pointerdown",e=>{hueRing.setPointerCapture(e.pointerId);setHueFromPointer(e);});
+hueRing.addEventListener("pointermove",e=>{if(e.buttons||e.pressure>0)setHueFromPointer(e);});
+loadTankDesign();
+
+
 // ---- 設定画面 ----
 const settingsScreen = document.getElementById("settingsScreen");
 const settingsCloseBtn = document.getElementById("settingsCloseBtn");
@@ -4671,6 +4710,29 @@ function showContinueScreen(){
   continueScreen.classList.remove("hidden");
 }
 
+const TANK_DESIGN_KEY="tankDesignHueV1";
+let tankHue=205;
+function tankDesignColor(){
+  const h=((Number(tankHue)||205)%360+360)%360;
+  return {color:`hsl(${h} 65% 78%)`,dark:`hsl(${h} 48% 62%)`};
+}
+function loadTankDesign(){try{const n=Number(localStorage.getItem(TANK_DESIGN_KEY));if(Number.isFinite(n))tankHue=n;}catch(e){}}
+function saveTankDesign(){try{localStorage.setItem(TANK_DESIGN_KEY,String(tankHue));}catch(e){}}
+function paintDesignPreview(){
+  const ring=document.getElementById("hueRing"),knob=document.getElementById("hueKnob"),cv=document.getElementById("designPreviewCanvas");
+  if(!ring||!cv)return;
+  const a=(tankHue-90)*Math.PI/180, r=ring.clientWidth/2-11;
+  knob.style.left=(50+Math.cos(a)*r/ring.clientWidth*100)+"%";
+  knob.style.top=(50+Math.sin(a)*r/ring.clientHeight*100)+"%";
+  const c=tankDesignColor(),x=cv.getContext("2d");x.clearRect(0,0,cv.width,cv.height);x.save();x.translate(75,65);
+  x.fillStyle=c.dark;x.fillRect(-42,-27,84,54);x.fillStyle=c.color;x.fillRect(-34,-20,68,40);
+  x.fillStyle=c.color;x.beginPath();x.arc(0,0,19,0,Math.PI*2);x.fill();x.strokeStyle=c.dark;x.lineWidth=3;x.stroke();
+  x.fillStyle=c.dark;x.fillRect(8,-5,48,10);x.restore();
+}
+function updateMultiRecord(progress){
+  try{const old=Number(localStorage.getItem("tankMultiMaxProgressV1"))||1;if(progress>old)localStorage.setItem("tankMultiMaxProgressV1",String(progress));}catch(e){}
+}
+
 function showTitleScreen(keepSave=false){
   customPlayActive = false;
   challengeStartNoRecord = false;
@@ -4694,7 +4756,8 @@ function showTitleScreen(keepSave=false){
 function updateModeStats(){
   const nMax = loadModeRecord("MaxStageProgress", "normal", 1) || 1;
   const rMax = loadModeRecord("MaxStageProgress", "rush", 1) || 1;
-  modeStats.innerHTML = `通常：最高 ${formatClearedStage(nMax-1)}<br>爽快：最高 ${formatClearedStage(rMax-1)}`;
+  const mMax=Number(localStorage.getItem("tankMultiMaxProgressV1"))||1;
+  modeStats.innerHTML = `通常：最高 ${formatClearedStage(nMax-1)}<br>爽快：最高 ${formatClearedStage(rMax-1)}<br>マルチ：最高 ${formatClearedStage(mMax-1)}`;
 }
 function safeStartGame(continueGame=false, selectedMode=null, startAtStage=1, noRecord=false){
   try { startGame(continueGame, selectedMode, startAtStage, noRecord); } catch(e) {
