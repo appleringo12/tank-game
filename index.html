@@ -359,7 +359,7 @@
 </style>
 </head>
 <body>
-<div id="app">
+<div id="app" class="menu-state">
 
   <!-- ============ 上段：ゲーム画面 ============ -->
   <div id="gameArea">
@@ -533,6 +533,8 @@
         <button class="btn" data-tool="X">鉄壁</button>
         <button class="btn" data-tool="W">水</button>
         <button class="btn" data-tool="P">自機スポーン</button>
+        <button class="btn" data-tool="mp1" style="background:#8ecbff;border-color:#5fa8e8;">1P</button>
+        <button class="btn" data-tool="mp2" style="background:#ffc27a;border-color:#ee9a3c;">2P</button>
         <button class="btn" data-tool="yellow">黄色敵</button>
         <button class="btn" data-tool="brown">茶色敵</button>
         <button class="btn" data-tool="green">緑敵</button>
@@ -826,6 +828,7 @@ const mp = {
   p1:null, p2:null, rin:{mx:0,my:0,mv:false,ta:-Math.PI/2},
   fxq:[], snapTimer:0, inputTimer:0, lastRecv:0, clearTimer:0, overTimer:0,
   bidSeq:0, fireCd:0, prevMyMissiles:0, hudKey:"",
+  inputSeq:0, sentLog:[], hist:[], rtt:0.1, pend:{x:0,y:0}, resumeGame:false, // ゲストの先行移動用／マルチ後に通常プレイへ戻る用
 };
 
 // --- 敵の種類ごとのパラメータ ---
@@ -1586,36 +1589,46 @@ function buildLevel(idx, customLevel=null){
   tanks.forEach((t,i)=>{ t.nid = i; });
 }
 
-// マルチプレイの出現位置を返す。ステージに mp:[[列,行],[列,行]] があればそれを使う。
-// 無い場合（オリジナルステージなど）は、自機スポーンの近くの空きマスを2Pの位置にする。
+// マルチプレイの出現位置を返す。ステージに mp:[[列,行],[列,行]] があればそれを使う（片方だけ指定でもOK）。
+// 指定が無い側は、自機スポーンの近くの空きマスから自動で決める。
 function getMpSpawns(lvl, cellAt){
   const toPos = (c,r)=>({x:c*TILE+TILE/2, y:r*TILE+TILE/2});
-  if(lvl && Array.isArray(lvl.mp) && lvl.mp.length>=2){
-    return [toPos(lvl.mp[0][0], lvl.mp[0][1]), toPos(lvl.mp[1][0], lvl.mp[1][1])];
-  }
-  let p1=null; const enemies=[];
+  const given = [0,1].map(i=>{
+    const p = lvl && Array.isArray(lvl.mp) ? lvl.mp[i] : null;
+    return (Array.isArray(p) && p.length>=2) ? {c:p[0], r:p[1]} : null;
+  });
+  if(given[0] && given[1]) return [toPos(given[0].c,given[0].r), toPos(given[1].c,given[1].r)];
+
+  let pc=null; const enemies=[];
   for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
     const ch=cellAt(r,c);
-    if(ch==="P") p1={c,r};
+    if(ch==="P") pc={c,r};
     else if(/[1-6]/.test(ch)) enemies.push({c,r});
   }
-  if(!p1) p1={c:Math.floor(COLS/2), r:Math.floor(ROWS/2)};
+  if(!pc) pc={c:Math.floor(COLS/2), r:Math.floor(ROWS/2)};
   const free=(c,r)=> c>=0&&r>=0&&c<COLS&&r<ROWS&&cellAt(r,c)===".";
-  let best=null, bestScore=1e9;
-  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-    if(!free(c,r)) continue;
-    const d=Math.hypot(c-p1.c, r-p1.r);
-    if(d<1) continue;
-    let pen=0;
-    for(const e of enemies) if(Math.hypot(c-e.c, r-e.r)<2.5) pen+=10;
-    let open=0;
-    for(const [dc,dr] of [[1,0],[-1,0],[0,1],[0,-1]]) if(free(c+dc,r+dr) || (c+dc===p1.c && r+dr===p1.r)) open++;
-    if(open<2) pen+=5;
-    const score=d+pen+(r===p1.r?0:0.3);
-    if(score<bestScore){ bestScore=score; best={c,r}; }
-  }
-  if(!best) best={c:Math.min(COLS-1,p1.c+1), r:p1.r};
-  return [toPos(p1.c,p1.r), toPos(best.c,best.r)];
+  // base の近くにある、敵から離れた空きマスを探す
+  const autoNear=(base)=>{
+    let best=null, bestScore=1e9;
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      if(!free(c,r)) continue;
+      const d=Math.hypot(c-base.c, r-base.r);
+      if(d<1) continue;
+      let pen=0;
+      for(const e of enemies) if(Math.hypot(c-e.c, r-e.r)<2.5) pen+=10;
+      let open=0;
+      for(const [dc,dr] of [[1,0],[-1,0],[0,1],[0,-1]]) if(free(c+dc,r+dr) || (c+dc===base.c && r+dr===base.r)) open++;
+      if(open<2) pen+=5;
+      const score=d+pen+(r===base.r?0:0.3);
+      if(score<bestScore){ bestScore=score; best={c,r}; }
+    }
+    return best || {c:Math.min(COLS-1,base.c+1), r:base.r};
+  };
+  let a=given[0], b=given[1];
+  if(a && !b) b=autoNear(a);
+  else if(!a && b){ a=(pc.c===b.c && pc.r===b.r) ? autoNear(b) : pc; }
+  else { a=pc; b=autoNear(pc); }
+  return [toPos(a.c,a.r), toPos(b.c,b.r)];
 }
 
 function makePlayer(x,y,pidx=0){
@@ -2770,6 +2783,7 @@ const ectx = editorCanvas.getContext("2d");
 const editorName = document.getElementById("editorName");
 const stageCards = document.getElementById("stageCards");
 let editorMap = [];
+let editorMp = [null,null]; // ★マルチプレイ用の1P・2Pのリスポーン位置 [{c,r}|null, {c,r}|null]
 let editorEnemies = [];
 let editorTool = ".";
 let editingStageId = null;
@@ -2783,7 +2797,19 @@ function fitCustomLevel(level){
   const map = Array.from({length:STAGE_ROWS},(_,r)=>Array.from({length:STAGE_COLS},(_,c)=>String(level.map?.[r]||"")[c]||".").join(""));
   const enemies = [];
   for(const row of map) for(const ch of row) if(CUSTOM_CHAR_TO_ENEMY[ch]) enemies.push(CUSTOM_CHAR_TO_ENEMY[ch]);
-  return {...level, map, enemies};
+  // ★マルチ用の1P・2P位置：範囲内で、空きマスか自機スポーンの上にあるものだけ残す（1Pと2Pは同じマスにしない）
+  const mp = [0,1].map(i=>{
+    const p = Array.isArray(level.mp) ? level.mp[i] : null;
+    if(!Array.isArray(p)) return null;
+    const c = Math.floor(Number(p[0])), r = Math.floor(Number(p[1]));
+    if(!(c>=0 && r>=0 && c<STAGE_COLS && r<STAGE_ROWS)) return null;
+    const ch = map[r][c];
+    return (ch==="." || ch==="P") ? [c,r] : null;
+  });
+  if(mp[0] && mp[1] && mp[0][0]===mp[1][0] && mp[0][1]===mp[1][1]) mp[1] = null;
+  const out = {...level, map, enemies};
+  if(mp[0] || mp[1]) out.mp = mp; else delete out.mp;
+  return out;
 }
 // alert/confirmが使えない環境（埋め込み表示など）でも動くよう、画面内の表示で代用する
 let uiToastTimer=null;
@@ -2804,7 +2830,7 @@ function readCustomStages(){
   try { const v=JSON.parse(localStorage.getItem(CUSTOM_STAGE_KEY)||"[]"); return Array.isArray(v)?v:[]; } catch(e){ return []; }
 }
 function writeCustomStages(v){ try{localStorage.setItem(CUSTOM_STAGE_KEY,JSON.stringify(v));}catch(e){uiAlert("保存容量が不足しているため保存できませんでした。");} }
-function emptyEditorMap(){ editorMap=Array.from({length:editorHeight},()=>Array(editorWidth).fill(".")); editorEnemies=[]; }
+function emptyEditorMap(){ editorMap=Array.from({length:editorHeight},()=>Array(editorWidth).fill(".")); editorEnemies=[]; editorMp=[null,null]; }
 function editorNormalize(){
   editorMap=Array.from({length:editorHeight},(_,r)=>Array.from({length:editorWidth},(_,c)=>editorMap[r]?.[c]||"."));
 }
@@ -2815,6 +2841,7 @@ function openStageEditor(stage=null, returnTo="title"){
     const fit=fitCustomLevel(stage);
     editorMap=fit.map.map(r=>Array.from(r));
     editorEnemies=[...fit.enemies];
+    editorMp=[0,1].map(i=>fit.mp&&fit.mp[i]?{c:fit.mp[i][0],r:fit.mp[i][1]}:null);
   }else{
     editorName.value="オリジナルステージ"; emptyEditorMap();
   }
@@ -2843,6 +2870,23 @@ function drawEditorMap(){
   // 水ブロック：となり同士がひと続きの水面になるようにまとめて描く
   const wp=buildWaterPaths((c,r)=>r>=0&&c>=0&&r<editorHeight&&c<editorWidth&&editorMap[r][c]==="W");
   if(wp){ ectx.save(); ectx.scale(w/TILE,h/TILE); drawWaterLayer(ectx,wp,0); ectx.restore(); }
+  // ★1P・2Pのリスポーン位置（自機スポーンに重なっているときは、自機の丸のまわりに輪と小さな文字で表す）
+  editorMp.forEach((m,i)=>{
+    if(!m) return;
+    const x=m.c*w,y=m.r*h,col=P_COLORS[i].color,dk=P_COLORS[i].dark,onP=editorMap[m.r][m.c]==="P";
+    ectx.save();
+    ectx.lineWidth=3;ectx.strokeStyle=dk;
+    if(onP){
+      ectx.beginPath();ectx.arc(x+w/2,y+h/2,Math.min(w,h)*.42,0,Math.PI*2);ectx.stroke();
+      ectx.fillStyle=dk;ectx.font=`bold ${Math.max(8,h*.24)}px sans-serif`;ectx.textAlign=i===0?"left":"right";ectx.textBaseline="top";
+      ectx.fillText(i===0?"1P":"2P",i===0?x+2:x+w-2,y+1);
+    }else{
+      ectx.fillStyle=col;ectx.beginPath();ectx.arc(x+w/2,y+h/2,Math.min(w,h)*.34,0,Math.PI*2);ectx.fill();ectx.stroke();
+      ectx.fillStyle="#4a3a63";ectx.font=`bold ${Math.max(9,h*.3)}px sans-serif`;ectx.textAlign="center";ectx.textBaseline="middle";
+      ectx.fillText(i===0?"1P":"2P",x+w/2,y+h/2);
+    }
+    ectx.restore();
+  });
 }
 // ---- 配置（なぞり配置・一つ戻る）----
 const EDITOR_DRAG_TOOLS = new Set(["#","X","W","."]); // レンガ・鉄壁・水・消しゴムはドラッグで連続操作可能
@@ -2850,8 +2894,12 @@ const EDITOR_HISTORY_MAX = 100;
 let editorHistory = [];
 let editorStroke = null;
 const editorUndoBtn = document.getElementById("editorUndoBtn");
-function cloneEditorMap(){ return editorMap.map(r=>r.slice()); }
-function editorMapKey(m){ return m.map(r=>r.join("")).join("/"); }
+// 履歴・比較用：マップと1P・2P位置をまとめて扱う（editorMapKeyには、このスナップショットか、いまのeditorMap(配列)を渡せる）
+function cloneEditorMap(){ return {m:editorMap.map(r=>r.slice()), mp:editorMp.map(p=>p?{c:p.c,r:p.r}:null)}; }
+function editorMapKey(s){
+  const m = Array.isArray(s) ? s : s.m, mp = Array.isArray(s) ? editorMp : s.mp;
+  return m.map(r=>r.join("")).join("/") + "|" + mp.map(p=>p?p.c+","+p.r:"-").join(";");
+}
 function updateEditorUndoBtn(){ editorUndoBtn.disabled = editorHistory.length===0; }
 function editorPushHistory(snapshot){
   editorHistory.push(snapshot);
@@ -2860,7 +2908,8 @@ function editorPushHistory(snapshot){
 }
 function editorUndo(){
   if(!editorHistory.length) return;
-  editorMap=editorHistory.pop();
+  const snap=editorHistory.pop();
+  editorMap=snap.m; editorMp=snap.mp;
   editorStroke=null;
   updateEditorUndoBtn(); drawEditorMap();
 }
@@ -2875,10 +2924,22 @@ function editorSetCell(c,r,first){
   const old=editorMap[r][c];
   // 消しゴムは種類に関係なく必ず空マスにする。
   // 敵・自機スポーンも消せるよう、通常配置用の上書き制限より先に処理する。
+  const mpHere = editorMp.findIndex(m=>m && m.c===c && m.r===r); // このマスにある1P/2Pの番号（無ければ-1）
   if(editorTool==="."){
     editorMap[r][c]=".";
+    editorMp = editorMp.map(m=>(m && m.c===c && m.r===r) ? null : m); // 1P・2Pも一緒に消す
     return;
   }
+  // ★1P・2P：空きマスか自機スポーンの上にだけ置ける（レンガ・敵などには重ねられない／1Pと2Pも重ねられない）
+  if(editorTool==="mp1" || editorTool==="mp2"){
+    const idx = editorTool==="mp1" ? 0 : 1;
+    if(old!=="." && old!=="P") return;
+    if(mpHere>=0 && mpHere!==idx) return;
+    editorMp[idx] = {c,r};
+    return;
+  }
+  // 1P・2Pのあるマスには、レンガ・鉄壁・水・敵を置けない（消しゴムで消してから置く）
+  if(mpHere>=0 && editorTool!=="P") return;
   if(editorTool==="P"){
     for(let y=0;y<editorHeight;y++)for(let x=0;x<editorWidth;x++)if(editorMap[y][x]==="P")editorMap[y][x]=".";
     editorMap[r][c]="P";
@@ -2936,7 +2997,9 @@ function editorToLevel(){
   const map=editorMap.map(row=>row.join(""));
   const enemies=[];
   for(const row of map)for(const ch of row)if(CUSTOM_CHAR_TO_ENEMY[ch])enemies.push(CUSTOM_CHAR_TO_ENEMY[ch]);
-  return {name:editorName.value.trim()||"オリジナルステージ",map,enemies};
+  const level={name:editorName.value.trim()||"オリジナルステージ",map,enemies};
+  if(editorMp[0]||editorMp[1]) level.mp=editorMp.map(p=>p?[p.c,p.r]:null);
+  return level;
 }
 function validateCustomLevel(level){
   const fit=fitCustomLevel(level);
@@ -2977,6 +3040,7 @@ const SHARE_CELL_CHARS = "#XPW123456";                 // 空きマス以外の1
 const SHARE_KINDS = BigInt(SHARE_CELL_CHARS.length);
 const SHARE_CELLS = STAGE_COLS * STAGE_ROWS;           // 117マス
 const SHARE_PREFIX = "S";                              // 形式の目印（名前入りの旧形式は"T"）
+const SHARE_PREFIX_MP = "M";                           // 1P・2Pのリスポーン位置つきのステージ用
 const SHARE_DEFAULT_NAME = "共有ステージ";
 const SHARE_C = (()=>{ // 組合せ数 C(n,r)
   const t=[];
@@ -3002,22 +3066,35 @@ function encodeStageCode(stage){
   let rank=0n; items.forEach((it,i)=>{ rank+=SHARE_C[it.pos][i+1]; });   // 置いたマスの位置
   let types=0n; for(let i=k-1;i>=0;i--) types=types*SHARE_KINDS+BigInt(items[i].t); // 置いたものの種類
   let n=(rank*(SHARE_KINDS**BigInt(k))+types)*118n+BigInt(k);
+  let prefix=SHARE_PREFIX;
+  if(fit.mp){ // 1P・2Pの位置（無いときは117）を後ろに付ける
+    const pos=fit.mp.map(p=>p ? p[1]*STAGE_COLS+p[0] : SHARE_CELLS);
+    n=n*13924n+BigInt(pos[0]*118+pos[1]);
+    prefix=SHARE_PREFIX_MP;
+  }
   let body="";
   if(n===0n) body="0";
   while(n>0n){ body=SHARE_ALPHABET[Number(n%32n)]+body; n/=32n; }
-  body=SHARE_PREFIX+body;
+  body=prefix+body;
   return body+shareCheckChar(body);
 }
 // コード → {name,map,enemies}。正しくなければ null
 function decodeStageCode(text){
   try{
     let c=String(text||"").toUpperCase().replace(/[\s\-_]/g,"").replace(/O/g,"0").replace(/[IL]/g,"1");
-    if(c.length<3 || c[0]!==SHARE_PREFIX) return null;
+    if(c.length<3 || (c[0]!==SHARE_PREFIX && c[0]!==SHARE_PREFIX_MP)) return null;
+    const hasMp = c[0]===SHARE_PREFIX_MP;
     for(const ch of c) if(SHARE_ALPHABET.indexOf(ch)<0) return null;
     const body=c.slice(0,-1);
     if(shareCheckChar(body)!==c[c.length-1]) return null;
     let n=0n;
     for(const ch of body.slice(1)) n=n*32n+BigInt(SHARE_ALPHABET.indexOf(ch));
+    let mpPos=null;
+    if(hasMp){
+      const info=Number(n%13924n); n/=13924n;
+      mpPos=[Math.floor(info/118), info%118];
+      if(mpPos[0]>SHARE_CELLS || mpPos[1]>SHARE_CELLS) return null;
+    }
     const k=Number(n%118n); n/=118n;
     if(k>SHARE_CELLS) return null;
     const span=SHARE_KINDS**BigInt(k);
@@ -3034,10 +3111,14 @@ function decodeStageCode(text){
       const t=Number(types%SHARE_KINDS); types/=SHARE_KINDS;
       g[Math.floor(pos[i]/STAGE_COLS)][pos[i]%STAGE_COLS]=SHARE_CELL_CHARS[t];
     }
-    const stage=fitCustomLevel({name:SHARE_DEFAULT_NAME,map:g.map(r=>r.join(""))});
+    const raw={name:SHARE_DEFAULT_NAME,map:g.map(r=>r.join(""))};
+    if(mpPos) raw.mp=mpPos.map(v=>v<SHARE_CELLS ? [v%STAGE_COLS, Math.floor(v/STAGE_COLS)] : null);
+    const stage=fitCustomLevel(raw);
     if(stage.map.join("").split("P").length!==2 || !stage.enemies.length) return null; // 自機は1か所・敵は1台以上
     if(encodeStageCode(stage)!==c) return null; // 作り直したコードが入力と一致しなければ壊れたコード
-    return {name:SHARE_DEFAULT_NAME,map:stage.map,enemies:stage.enemies};
+    const result={name:SHARE_DEFAULT_NAME,map:stage.map,enemies:stage.enemies};
+    if(stage.mp) result.mp=stage.mp;
+    return result;
   }catch(e){ return null; }
 }
 // クリップボードへコピー（使えない環境では選択状態にして手動コピーしてもらう）
@@ -3134,6 +3215,10 @@ const EV = { HELLO:1, LEVEL:2, SNAP:3, INPUT:4, FIRE:5, MISSILE:6, WALLS:7, CLEA
 const MP_SNAP_INTERVAL = 0.05;   // ホスト→ゲストの状態送信間隔(秒)
 const MP_INPUT_INTERVAL = 0.033; // ゲスト→ホストの操作送信間隔(秒)
 const MP_TIMEOUT_MS = 8000;      // これだけ相手から何も届かなければ切断扱い
+// ゲスト(2P)の自機は手元で先に動かし、ホストの位置とずれたときだけ少しずつ合わせる
+const MP_CORRECT_RATE = 10;      // ずれを合わせる速さ（大きいほど速く合わせる。10＝約0.1秒で大半を合わせる）
+const MP_DEADZONE = 2;           // これ以下のずれ(px)は無視する（細かい揺れを出さない）
+const MP_SNAP_DIST = TILE*1.5;   // これ以上ずれたら（ぶつかって弾かれた等）一気にホストの位置へ合わせる
 const MP_CLEAR_DELAY = 3.0;      // ステージクリア画面を出してから次のステージへ進むまで(秒)
 const MP_OVER_DELAY = 1.4;       // 2人ともやられてからゲームオーバー画面を出すまで(秒)
 
@@ -3313,7 +3398,7 @@ function mpOnEvent(code, data){
       if(mp.active && mp.role==="host"){
         mp.lastRecv = performance.now();
         const r = mp.rin;
-        r.mx = +o[0] || 0; r.my = +o[1] || 0; r.mv = !!o[2]; r.ta = +o[3];
+        r.mx = +o[0] || 0; r.my = +o[1] || 0; r.mv = !!o[2]; r.ta = +o[3]; r.seq = (+o[4]) | 0;
       }
       break;
     case EV.FIRE:
@@ -3353,6 +3438,7 @@ function mpOnEvent(code, data){
 // マッチング成立の瞬間に、遊んでいた内容を保存する。保存できたら true。
 function mpSuspendLocal(){
   let saved = false;
+  mp.resumeGame = false; // 通常プレイを中断してマルチに入ったか（終了後に続きから再開する用）
   try{
     const editorOpen = !editorScreen.classList.contains("hidden");
     if(editorOpen || (customPlayActive && customPlayFromEditor)){
@@ -3374,6 +3460,7 @@ function mpSuspendLocal(){
       } else if(state==="stageclear" || (state==="dying" && lives>0)){
         saved = true; // どちらもその時点で保存済み
       }
+      mp.resumeGame = saved;
     }
   }catch(e){ console.warn("suspend failed", e); }
   return saved;
@@ -3413,6 +3500,7 @@ function mpBeginGame(role, lv){
   try{ bgm.currentTime = 0; }catch(e){}
   mp.lastRecv = performance.now(); mp.snapTimer = 0; mp.inputTimer = 0; mp.fxq = []; mp.fireCd = 0;
   mp.prevMyMissiles = 0; mp.hudKey = ""; mp.rin = {mx:0,my:0,mv:false,ta:-Math.PI/2};
+  mpResetPrediction(); mp.rtt = 0.1;
   stageNum = lv ? lv.s : 1; lapNum = lv ? lv.l : 1; totalStageProgress = lv ? lv.t : 1;
   buildLevel(stageNum-1);
   state = "playing";
@@ -3439,6 +3527,9 @@ function mpEnd(msg){
   livesEl.innerHTML = ""; maxStageLabelEl.textContent = "";
   missiles = []; bullets = [];
   showTitleScreen(true); // タイトルから始まる（中断した通常プレイのデータは残す）
+  // ★マルチの前に通常プレイをしていたなら、「続きから」の画面を出す（さっきまで遊んでいたステージから再開できる）
+  if(wasActive && mp.resumeGame && loadContinueData()) showContinueScreen();
+  mp.resumeGame = false;
   if(msg) uiAlert(msg);
 }
 
@@ -3491,7 +3582,7 @@ function mpHostSnapshot(){
   for(const k of bullets) if(!k.dead) b.push([k.bid, r1(k.x), r1(k.y), r1(k.vx), r1(k.vy), k.fastBullet?1:0]);
   const m = [];
   for(const k of missiles) if(!k.dead) m.push([k.mid, r1(k.startX), r1(k.startY), r1(k.targetX), r1(k.targetY), r2(k.angle), r2(k.time), r2(k.flightTime), k.owner ? k.owner.nid : 0]);
-  const o = {t, b, m};
+  const o = {t, b, m, a:(mp.rin.seq|0)}; // a＝ホストが最後に受け取った2Pの操作の番号
   if(mp.fxq.length){ o.fx = mp.fxq; mp.fxq = []; }
   mpSend(EV.SNAP, o);
 }
@@ -3509,7 +3600,7 @@ function mpRenderClear(anyDead){
   const icons = Object.entries(counts).map(([type,count])=>
     enemyTankIcon(type).replace('COUNT_PLACEHOLDER', String(count))).join("");
   clearStageTitle.textContent = `STAGE ${stageNum} CLEAR!`;
-  clearStats.innerHTML = anyDead ? `<span style="color:var(--amber);">倒れた仲間は次のステージで復活！</span>` : `ふたりともナイス！`;
+  clearStats.innerHTML = "";
   nextStageInfo.innerHTML = `次のステージ：<b>STAGE ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${icons || "なし"}</div>`;
   clearTapHint.textContent = "まもなく次のステージへ…";
   stageClearScreen.classList.remove("hidden");
@@ -3559,6 +3650,7 @@ function mpShowOver(){ // ホスト
 function mpGuestLoadLevel(o){
   stageNum = o.s; lapNum = o.l; totalStageProgress = o.t;
   buildLevel(stageNum-1);
+  mpResetPrediction();
   state = "playing";
   stageClearScreen.classList.add("hidden");
   hudStageCache = -1;
@@ -3575,9 +3667,72 @@ function mpGuestOver(o){
   mpShowOverScreen(o.t);
 }
 
+// ---- ゲスト(2P)の先行移動 ----
+function mpResetPrediction(){
+  mp.inputSeq = 0; mp.sentLog = []; mp.hist = []; mp.pend = {x:0,y:0}; mp.lastAck = 0;
+}
+// 自分の戦車を手元で動かす（ホストと同じ移動のしかた）。ホストとずれていたら少しずつ合わせる。
+function guestPredictMove(dt){
+  const mv = readMoveInput();
+  if(mv.moving){
+    player.vx = mv.mx*player.speed; player.vy = mv.my*player.speed;
+    player.angle = lerpAngle(player.angle, Math.atan2(mv.my,mv.mx), 1-Math.pow(0.00005,dt));
+    player.x += mv.mx*player.speed*dt; player.y += mv.my*player.speed*dt;
+  } else { player.vx = 0; player.vy = 0; }
+  const pc = mp.pend;
+  if(pc.x || pc.y){
+    const f = 1 - Math.exp(-dt*MP_CORRECT_RATE);
+    const sx = pc.x*f, sy = pc.y*f;
+    player.x += sx; player.y += sy; pc.x -= sx; pc.y -= sy;
+    for(const h of mp.hist){ h.x += sx; h.y += sy; } // 合わせた分は記録にも反映（同じずれを二重に直さない）
+    if(Math.abs(pc.x)<0.05 && Math.abs(pc.y)<0.05){ pc.x = 0; pc.y = 0; }
+  }
+  resolveWallCollision(player);
+  const now = performance.now()/1000;
+  mp.hist.push({t:now, x:player.x, y:player.y});
+  while(mp.hist.length>2 && now - mp.hist[0].t > 1.5) mp.hist.shift();
+}
+// 送った操作がホストに届いて状態が返ってくるまでの往復時間を測る
+function mpUpdateRtt(ack){
+  if(!ack || ack===mp.lastAck || !mp.sentLog.length) return; // 同じ番号は1回だけ測る（通信が止まったときに往復時間が増え続けないように）
+  mp.lastAck = ack;
+  const e = mp.sentLog.find(x=>x.seq===ack);
+  if(!e) return;
+  const r = performance.now()/1000 - e.t;
+  if(r>0 && r<1.5) mp.rtt = mp.rtt*0.8 + r*0.2;
+}
+// ホストの位置(hx,hy)と、「その状態が作られた頃に自分が居たはずの位置」を比べる
+function mpReconcile(hx, hy){
+  if(!player || !player.alive || state!=="playing" || !mp.hist.length) return;
+  const q = performance.now()/1000 - mp.rtt;
+  const H = mp.hist;
+  let px = H[0].x, py = H[0].y;
+  if(q >= H[H.length-1].t){ px = H[H.length-1].x; py = H[H.length-1].y; }
+  else if(q > H[0].t){
+    for(let i=1;i<H.length;i++){
+      if(H[i].t >= q){
+        const a = H[i-1], b = H[i], u = (q-a.t)/((b.t-a.t)||1);
+        px = a.x+(b.x-a.x)*u; py = a.y+(b.y-a.y)*u;
+        break;
+      }
+    }
+  }
+  const ex = hx-px, ey = hy-py, d = Math.hypot(ex,ey);
+  if(d > MP_SNAP_DIST){
+    player.x += ex; player.y += ey;
+    for(const h of H){ h.x += ex; h.y += ey; }
+    mp.pend = {x:0,y:0};
+  } else if(d > MP_DEADZONE){
+    mp.pend = {x:ex, y:ey};
+  } else {
+    mp.pend = {x:0, y:0};
+  }
+}
+
 // ホストから届いた状態を反映する
 function mpApplySnap(s){
   mp.lastRecv = performance.now();
+  mpUpdateRtt(s.a);
   const byId = new Map();
   for(const t of tanks) byId.set(t.nid, t);
   const nt = [];
@@ -3594,10 +3749,11 @@ function mpApplySnap(s){
     const wasAlive = t.alive;
     t.alive = !!(a[5] & 1);
     t.invuln = (a[5] & 2) ? 1 : 0;
-    if(t === player && wasAlive && !t.alive) resetPlayerTransientState();
+    if(t === player && wasAlive && !t.alive){ resetPlayerTransientState(); mp.pend = {x:0,y:0}; }
     nt.push(t);
   }
   tanks = nt; // 倒された敵は、ここで消える
+  if(player && player.netInit) mpReconcile(player.tx, player.ty); // 自分の戦車：ホストの位置とのずれを確認
 
   const bm = new Map();
   for(const b of bullets) bm.set(b.bid, b);
@@ -3660,11 +3816,15 @@ function updateGuestPlayer(dt){
 function guestFrame(dt){
   if(performance.now() - mp.lastRecv > MP_TIMEOUT_MS){ mpEnd("通信が途切れたため、マルチプレイを終了しました。"); return; }
   if(state==="playing"){ updatePlayer(dt); updateSchemeB(dt); }
+  // ★自分の戦車は、ホストの返事を待たずに手元で先に動かす（ずれたときだけ少しずつ合わせる）
+  const predictOwn = !!(state==="playing" && player && player.alive && player.netInit);
+  if(predictOwn) guestPredictMove(dt);
 
   // 受け取った位置へ滑らかに近づける
   const k = 1 - Math.exp(-dt*18);
   for(const t of tanks){
-    if(t.tx !== undefined){
+    if(t === player && predictOwn){ /* 手元の動きを優先 */ }
+    else if(t.tx !== undefined){
       t.x += (t.tx - t.x)*k; t.y += (t.ty - t.y)*k;
       t.angle = lerpAngle(t.angle, t.tAng, k);
       if(t !== player && t.tTur !== undefined) t.turretAngle = lerpAngle(t.turretAngle, t.tTur, k);
@@ -3696,7 +3856,10 @@ function guestFrame(dt){
   if(mp.inputTimer <= 0){
     mp.inputTimer = MP_INPUT_INTERVAL;
     const mv = (state==="playing" && player && player.alive) ? readMoveInput() : {mx:0,my:0,moving:false};
-    mpSend(EV.INPUT, [r2(mv.mx), r2(mv.my), mv.moving?1:0, r2(player ? player.turretAngle : 0)]);
+    const seq = ++mp.inputSeq;
+    mp.sentLog.push({seq, t:performance.now()/1000});
+    if(mp.sentLog.length>120) mp.sentLog.shift();
+    mpSend(EV.INPUT, [r2(mv.mx), r2(mv.my), mv.moving?1:0, r2(player ? player.turretAngle : 0), seq]);
   }
   updateHud();
 }
