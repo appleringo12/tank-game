@@ -4294,14 +4294,26 @@ function drawMissileTargetPreview(){
 
 function drawPlayerTag(t){
   ctx.save();
-  // 端末ごとの縮小表示でも点線がつぶれにくいよう、間隔を広げて描画する。
-  ctx.setLineDash([15,36]);
-  ctx.lineWidth=5.25;
+  // setLineDash() の端末・ブラウザごとの描画差を避けるため、短い弧を個別に描いて点線を作る。
+  // 前回の間隔36を半分の18にし、線幅は視認できる範囲で極細の1にする。
+  const ringR=(t.r+7)*1.5;
+  const dashLength=15;
+  const gapLength=18;
+  const circumference=Math.PI*2*ringR;
+  ctx.lineWidth=1;
   ctx.lineCap="butt";
-  // 元の色のRGB成分を明るくし、明度を上げる。
+  // 元の色の明るさは維持。
   ctx.strokeStyle = t.pidx===0 ? "rgba(104,174,255,0.9)" : "rgba(255,124,144,0.9)";
-  ctx.beginPath(); ctx.arc(t.x,t.y,(t.r+7)*1.5,0,Math.PI*2); ctx.stroke();
-  ctx.setLineDash([]);
+  ctx.beginPath();
+  for(let distance=0; distance<circumference; distance+=dashLength+gapLength){
+    const start=distance/ringR;
+    const end=Math.min(distance+dashLength,circumference)/ringR;
+    if(end>start){
+      ctx.moveTo(t.x+Math.cos(start)*ringR,t.y+Math.sin(start)*ringR);
+      ctx.arc(t.x,t.y,ringR,start,end);
+    }
+  }
+  ctx.stroke();
   ctx.font = "bold 10px sans-serif";
   ctx.textAlign = "center"; ctx.textBaseline = "bottom";
   const label = (t.pidx===0 ? "1P" : "2P") + (t===player ? " ▼" : "");
@@ -4719,11 +4731,22 @@ function showContinueScreen(){
 const TANK_DESIGN_KEY="tankDesignHueV1";
 let tankHue=205;
 function tankDesignColor(){
-  const h=((Number(tankHue)||205)%360+360)%360;
+  const raw=Number(tankHue);
+  const h=((Number.isFinite(raw)?raw:205)%360+360)%360;
   return {color:`hsl(${h} 65% 78%)`,dark:`hsl(${h} 48% 62%)`};
 }
-function loadTankDesign(){try{const saved=localStorage.getItem(TANK_DESIGN_KEY);if(saved!==null){const n=Number(saved);if(Number.isFinite(n))tankHue=((n%360)+360)%360;}}catch(e){}}
-function saveTankDesign(){try{localStorage.setItem(TANK_DESIGN_KEY,String(tankHue));}catch(e){}}
+function loadTankDesign(){
+  try{
+    const saved=localStorage.getItem(TANK_DESIGN_KEY);
+    if(saved!==null){const n=Number(saved);if(Number.isFinite(n))tankHue=((n%360)+360)%360;}
+  }catch(e){}
+}
+function saveTankDesign(){
+  try{localStorage.setItem(TANK_DESIGN_KEY,String(((Number(tankHue)%360)+360)%360));}catch(e){}
+}
+// ページを閉じる／バックグラウンドへ移す直前にも現在の色を保存する。
+window.addEventListener("pagehide",saveTankDesign);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")saveTankDesign();});
 function paintDesignPreview(){
   const ring=document.getElementById("hueRing"),knob=document.getElementById("hueKnob"),cv=document.getElementById("designPreviewCanvas");
   if(!ring||!cv)return;
