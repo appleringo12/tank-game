@@ -3418,6 +3418,7 @@ function mpOnEvent(code, data){
         mp.lastRecv = performance.now();
         const r = mp.rin;
         r.mx = +o[0] || 0; r.my = +o[1] || 0; r.mv = !!o[2]; r.ta = +o[3]; r.seq = (+o[4]) | 0;
+        if(Number.isFinite(+o[5]) && mp.p2){ const h=((+o[5]%360)+360)%360; mp.p2.color=`hsl(${h} 65% 78%)`; mp.p2.dark=`hsl(${h} 48% 62%)`; }
       }
       break;
     case EV.FIRE:
@@ -3602,7 +3603,7 @@ function mpHostSnapshot(){
   for(const k of bullets) if(!k.dead) b.push([k.bid, r1(k.x), r1(k.y), r1(k.vx), r1(k.vy), k.fastBullet?1:0]);
   const m = [];
   for(const k of missiles) if(!k.dead) m.push([k.mid, r1(k.startX), r1(k.startY), r1(k.targetX), r1(k.targetY), r2(k.angle), r2(k.time), r2(k.flightTime), k.owner ? k.owner.nid : 0]);
-  const o = {t, b, m, a:(mp.rin.seq|0)}; // a＝ホストが最後に受け取った2Pの操作の番号
+  const o = {t, b, m, a:(mp.rin.seq|0), pc:tanks.filter(k=>k.isPlayer).map(k=>[k.pidx,k.color,k.dark])}; // a＝ホストが最後に受け取った2Pの操作の番号
   if(mp.fxq.length){ o.fx = mp.fxq; mp.fxq = []; }
   mpSend(EV.SNAP, o);
 }
@@ -3755,6 +3756,7 @@ function mpReconcile(hx, hy){
 function mpApplySnap(s){
   mp.lastRecv = performance.now();
   mpUpdateRtt(s.a);
+  if(Array.isArray(s.pc)){ for(const c of s.pc){ const t=tanks.find(k=>k.isPlayer && k.pidx===c[0]); if(t){ if(typeof c[1]==="string")t.color=c[1]; if(typeof c[2]==="string")t.dark=c[2]; } } }
   const byId = new Map();
   for(const t of tanks) byId.set(t.nid, t);
   const nt = [];
@@ -3881,7 +3883,7 @@ function guestFrame(dt){
     const seq = ++mp.inputSeq;
     mp.sentLog.push({seq, t:performance.now()/1000});
     if(mp.sentLog.length>120) mp.sentLog.shift();
-    mpSend(EV.INPUT, [r2(mv.mx), r2(mv.my), mv.moving?1:0, r2(player ? player.turretAngle : 0), seq]);
+    mpSend(EV.INPUT, [r2(mv.mx), r2(mv.my), mv.moving?1:0, r2(player ? player.turretAngle : 0), seq, tankHue]);
   }
   updateHud();
 }
@@ -4292,9 +4294,9 @@ function drawMissileTargetPreview(){
 
 function drawPlayerTag(t){
   ctx.save();
-  ctx.setLineDash([5,4]); ctx.lineWidth=3.5;
-  ctx.strokeStyle = t.pidx===0 ? "rgba(105,175,255,0.78)" : "rgba(255,125,145,0.78)";
-  ctx.beginPath(); ctx.arc(t.x,t.y,t.r+7,0,Math.PI*2); ctx.stroke();
+  ctx.setLineDash([15,12]); ctx.lineWidth=10.5;
+  ctx.strokeStyle = t.pidx===0 ? "rgba(52,87,128,0.9)" : "rgba(128,62,72,0.9)";
+  ctx.beginPath(); ctx.arc(t.x,t.y,(t.r+7)*1.5,0,Math.PI*2); ctx.stroke();
   ctx.setLineDash([]);
   ctx.font = "bold 10px sans-serif";
   ctx.textAlign = "center"; ctx.textBaseline = "bottom";
@@ -4716,7 +4718,7 @@ function tankDesignColor(){
   const h=((Number(tankHue)||205)%360+360)%360;
   return {color:`hsl(${h} 65% 78%)`,dark:`hsl(${h} 48% 62%)`};
 }
-function loadTankDesign(){try{const n=Number(localStorage.getItem(TANK_DESIGN_KEY));if(Number.isFinite(n))tankHue=n;}catch(e){}}
+function loadTankDesign(){try{const saved=localStorage.getItem(TANK_DESIGN_KEY);if(saved!==null){const n=Number(saved);if(Number.isFinite(n))tankHue=((n%360)+360)%360;}}catch(e){}}
 function saveTankDesign(){try{localStorage.setItem(TANK_DESIGN_KEY,String(tankHue));}catch(e){}}
 function paintDesignPreview(){
   const ring=document.getElementById("hueRing"),knob=document.getElementById("hueKnob"),cv=document.getElementById("designPreviewCanvas");
