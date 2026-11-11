@@ -4766,8 +4766,15 @@ window.addEventListener("pagehide",saveTankDesign);
 window.addEventListener("beforeunload",saveTankDesign);
 window.addEventListener("blur",saveTankDesign);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")saveTankDesign();});
-// 保存関数・キー・tankHueの初期化が完了してから読み込む（TDZによる読み込み失敗を防止）。
+// 保存関数・キー・tankHueの初期化が完了してから読み込む。
 loadTankDesign();
+// ブラウザによる未使用サイトデータの自動削除を避けられる場合があるため、永続化を要求する。
+// ユーザーが手動でサイトデータを消した場合まで防ぐものではない。
+try{
+  if(navigator.storage && typeof navigator.storage.persist === "function"){
+    navigator.storage.persist().catch(()=>{});
+  }
+}catch(e){}
 
 function paintDesignPreview(){
   const ring=document.getElementById("hueRing"),knob=document.getElementById("hueKnob"),cv=document.getElementById("designPreviewCanvas");
@@ -4981,12 +4988,13 @@ requestAnimationFrame(loop);
 })();
 </script>
 <script>
-// PWA: オフライン用Service Workerを登録
+// PWA: Service Workerを登録し、起動時に更新確認を行う。
+// HTMLだけ更新しても古いService Workerが古い画面を返し続けないようにする。
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").catch(err => {
-      console.warn("Service Worker registration failed:", err);
-    });
+    navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" })
+      .then(registration => registration.update().catch(() => {}))
+      .catch(err => console.warn("Service Worker registration failed:", err));
   });
 }
 </script>
