@@ -3063,17 +3063,24 @@ function mpOnError(code, msg){
   if(!errorCode) return;
   const OC = (Photon.LoadBalancing.Constants && Photon.LoadBalancing.Constants.OperationCode) || {};
   const isJoinRandom = (code === OC.JoinRandomGame) || code === 225;
+  
+  // ★追加：エラー 32737 (ExpectedGameCheckFailure) を検知したら新しい部屋を作成する
+  if(errorCode === 32737 || isJoinRandom){
+    if(mp.searching && !mp.joined && !mp.creating){
+      mpCreateRoom(c);
+      return;
+    }
+  }
+
   const isCreateOrJoin = (code === OC.CreateGame) || code === 227 || (code === OC.JoinGame) || code === 226;
-  if(isJoinRandom && mp.searching && !mp.joined && !mp.creating){
-    mpCreateRoom(c);
-  } else if(isCreateOrJoin && mp.searching && !mp.joined){
-    mpFailSearch("エラー詳細: " + errorCode + " " + errorMsg); // ←★書き換えました
+  if(isCreateOrJoin && mp.searching && !mp.joined){
+    mpFailSearch("エラー詳細: " + errorCode + " " + errorMsg);
   }
 }
   function mpCreateRoom(c){
   if(mp.creating || mp.joined) return;
   mp.creating = true;
-  try{
+    try{
     c.createRoom("tank_" + Math.random().toString(36).slice(2,10), { maxPlayers:2, isVisible:true, isOpen:true });
   }catch(e){ console.warn(e); mpFailSearch("マッチング用の部屋を作れませんでした。"); }
 }
