@@ -2725,7 +2725,7 @@ function updateEnemy(t, dt){
    ・プレイヤーのミサイル発射を検知した瞬間に着弾地点を読み、爆風圏外へ移動する。
    ・通常弾も他の回避型戦車と同じように避ける。
    ・通常弾4発が出ている状態で自分に当たりそうな弾を見つけた場合、5発目で迎撃する。
-     防御弾の発射後は10秒間、防御弾を再発射できない。
+     防御弾のクールタイムは0秒。迎撃弾が消費されたら、次の危険にも即座に対応できる。
    ================================================================ */
 const GRAY_THINK_INTERVAL = 0.25;       // 重い射撃予測の更新間隔
 const GRAY_SHOT_STEP = 1/30;            // 弾道シミュレーションの時間刻み
@@ -2735,7 +2735,9 @@ const GRAY_SHOT_REFINE_STEP = 0.35;     // 惜しい角度を細かく調べる�
 const GRAY_SHOT_NEAR_MISS = 38;         // この距離以内に近づく角度を再探索
 const GRAY_TURN_SPEED = 6.2;            // 砲塔の旋回速度（ラジアン/秒）
 const GRAY_DODGE_RADIUS = ENEMY_DODGE_RADIUS;
-const GRAY_DEFENSE_COOLDOWN = 10.0;     // 5発目の防御弾のクールタイム
+const GRAY_DODGE_COOLDOWN = 0.0;         // 通常弾の回避クールタイムも0秒
+const GRAY_SELF_BULLET_DODGE_AGE = 1.0; // 自分の弾も発射から1秒以上経過したら回避対象にする
+const GRAY_DEFENSE_COOLDOWN = 0.0;     // 5発目の防御弾のクールタイム（無効）
 const GRAY_DEFENSE_THREAT_TIME = 1.25;  // この時間以内に被弾しそうなら迎撃を試みる
 
 function grayCountAttackBullets(t){
@@ -2957,17 +2959,28 @@ function updateGrayTank(t,dt){
   if(t.aiThinkTimer<=0){
     t.aiThinkTimer+=GRAY_THINK_INTERVAL;
     // 通常弾は既存の敵戦車と同じく、近づいた弾から離れる。
-    if(t.dodge && t.dodgeActiveTimer<=0 && t.dodgeCooldownTimer<=0){
+    // ただし自分が撃った弾も、発射から1秒以上経過して近づいてきた場合は回避対象にする。
+    // 自分の古い弾は自滅防止のため、通常の弾避けクールタイム中でも優先して避ける。
+    if(t.dodge && t.dodgeActiveTimer<=0){
       let dodgeDir=null,dodgeDistSq=GRAY_DODGE_RADIUS*GRAY_DODGE_RADIUS;
+      let ownDodgeDir=null,ownDodgeDistSq=GRAY_DODGE_RADIUS*GRAY_DODGE_RADIUS;
       for(const b of bullets){
-        if(b.dead || b.owner===t) continue;
+        if(b.dead) continue;
+        const isOldOwnShot = b.owner===t && b.age>=GRAY_SELF_BULLET_DODGE_AGE;
+        if(b.owner===t && !isOldOwnShot) continue;
         const dx=t.x-b.x,dy=t.y-b.y,ds=dx*dx+dy*dy;
-        if(ds<dodgeDistSq){dodgeDistSq=ds;dodgeDir=Math.atan2(dy,dx);}
+        if(isOldOwnShot){
+          if(ds<ownDodgeDistSq){ownDodgeDistSq=ds;ownDodgeDir=Math.atan2(dy,dx);}
+        }else if(t.dodgeCooldownTimer<=0 && ds<dodgeDistSq){
+          dodgeDistSq=ds;dodgeDir=Math.atan2(dy,dx);
+        }
       }
+      // クールタイム中は自分の古い弾だけを優先。通常の敵弾回避は従来どおり。
+      if(ownDodgeDir!==null) dodgeDir=ownDodgeDir;
       if(dodgeDir!==null){
         t.dodgeDirCache=dodgeDir;
         t.dodgeActiveTimer=0.5;
-        t.dodgeCooldownTimer=2.0;
+        t.dodgeCooldownTimer=GRAY_DODGE_COOLDOWN;
       }
     }
     t.grayAimSolution=grayFindShot(t,p);
