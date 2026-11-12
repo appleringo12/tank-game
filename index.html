@@ -273,6 +273,8 @@
   .keyBtn.listening{ background:#ff8ab2; color:#fff; }
   .keyResetBtn{ align-self:center; padding:6px 16px; font-size:13px; }
   #app.pc-mode canvas, #app.pc-mode #controls{ cursor:crosshair; }
+  /* PC版：ページ全体（ゲーム外も含む）で、マウスカーソルを黒い十字にする（暗い所でも見えるよう、ごく細い白フチつき） */
+  html.pc-cursor, html.pc-cursor *:not(input):not(textarea){ cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 3V29M3 16H29' stroke='white' stroke-width='4'/%3E%3Cpath d='M16 3V29M3 16H29' stroke='black' stroke-width='2'/%3E%3C/svg%3E") 16 16, crosshair !important; }
 
   .schemeToggle{ display:flex; gap:10px; }
   .schemeBtn{ flex:1; padding:8px 0; font-size:clamp(13px,3.6vw,16px); letter-spacing:1px; opacity:0.55; }
@@ -361,6 +363,17 @@
   }
   @keyframes mpSpin{ to{ transform:rotate(360deg); } }
   #mpOverScreen{ z-index:27; }
+  /* Ping表示（PC版・左下）。低い＝緑／中くらい＝黄色／高い＝赤 */
+  #mpPing{
+    position:fixed; left:max(10px, env(safe-area-inset-left, 0px) + 8px); bottom:max(10px, env(safe-area-inset-bottom, 0px) + 8px);
+    z-index:80; padding:4px 10px; border-radius:12px; background:rgba(255,255,255,0.85);
+    font:700 13px/1.2 ui-monospace,Menlo,Consolas,monospace; letter-spacing:0.5px;
+    color:#8a8a8a; pointer-events:none; white-space:nowrap; box-shadow:0 1px 4px rgba(120,80,140,0.2);
+  }
+  #mpPing::before{ content:""; display:inline-block; width:9px; height:9px; border-radius:50%; background:currentColor; margin-right:6px; vertical-align:-1px; }
+  #mpPing.good{ color:#1fa35c; }
+  #mpPing.mid{ color:#d99a00; }
+  #mpPing.bad{ color:#e03b45; }
   .mpTag{
     display:inline-block; padding:1px 7px; border-radius:9px; font-size:11px; font-weight:700; letter-spacing:1px;
     color:#fff; text-shadow:none; border:2px solid rgba(255,255,255,0.9);
@@ -562,7 +575,7 @@
         <button class="btn" data-tool="W">水</button>
         <button class="btn" data-tool="P">自機スポーン</button>
         <button class="btn" data-tool="mp1" style="background:#8ecbff;border-color:#5fa8e8;">1P</button>
-        <button class="btn" data-tool="mp2" style="background:#ffc27a;border-color:#ee9a3c;">2P</button>
+        <button class="btn" data-tool="mp2" style="background:#ffaaaa;border-color:#e87888;border-bottom-color:#e87888;">2P</button>
         <button class="btn" data-tool="yellow">黄色敵</button>
         <button class="btn" data-tool="brown">茶色敵</button>
         <button class="btn" data-tool="green">緑敵</button>
@@ -589,7 +602,7 @@
       </div>
     </div>
 
-  <div id="mpSpinner" class="hidden" aria-label="マッチング中"></div><div id="mpStatus" class="hidden">マッチング中...</div>
+  <div id="mpSpinner" class="hidden" aria-label="マッチング中"></div><div id="mpStatus" class="hidden">マッチング中...</div><div id="mpPing" class="hidden">Ping --</div>
   <div id="uiToast" class="hidden"></div>
   <div id="shareDialog" class="hidden"><div class="box">
     <div class="msg" id="shareDialogTitle">共有コード</div>
@@ -891,36 +904,36 @@ const ENEMY_TYPES = {
 
   
 const LEVELS = [
-  { enemies:["yellow"], map:[".............", ".##...X...##.", ".#....X....#.", "......#......", "..P...#...1..", "......#......", ".#....X....#.", ".##...X...##.", "............."], mp:[[2,4],[1,4]] },
-  { enemies:["brown", "yellow"], map:[".............", "...2.....1...", "..###...###..", ".............", ".............", ".............", "..###.P.###..", ".............", "............."], mp:[[6,6],[5,6]] },
-  { enemies:["brown", "brown"], map:[".............", "......#......", "......#...2..", ".............", "..P..........", "......#...2..", "......#......", ".............", "............."], mp:[[2,4],[1,4]] },
-  { enemies:["brown", "yellow", "brown"], map:[".............", ".............", "....#...#2...", "....W...#....", "..P.W...W.1..", "....W...#....", "....#...#2...", ".............", "............."], mp:[[2,4],[1,4]] },
-  { enemies:["green", "green"], map:[".............", ".............", "...X.........", "...X......3..", ".P.#.........", "...X......3..", "...X.........", ".............", "............."], mp:[[1,4],[0,4]] },
-  { enemies:["green", "green", "brown"], map:[".............", ".............", "...XXX#XXX...", "....3...3....", "......2......", "...X##X##X...", ".............", "......P......", "............."], mp:[[6,7],[5,7]] },
-  { enemies:["brown", "yellow", "brown", "yellow"], map:["...WW...WW...", ".2.WW...WW.1.", "...WW...WW...", "#WWWW...WWWW#", "####..P..####", "#WWWW...WWWW#", "...WW...WW...", ".2.WW...WW.1.", "...WW...WW..."], mp:[[6,4],[5,4]] },
-  { enemies:["red", "red"], map:[".............", ".............", "....4...4....", "..X##WWW##X..", ".............", ".............", "..#...P...#..", "..##.....##..", "............."], mp:[[6,6],[5,6]] },
-  { enemies:["brown", "red", "green", "yellow", "green"], map:[".............", "...2.....4...", "..####W####..", ".............", "...3.....1...", ".............", "..XXXXWXXXX..", ".............", "...P.....3..."], mp:[[3,8],[2,8]] },
-  { enemies:["black"], map:[".............", "......X......", "......X......", "...#..W..#...", "..P#..W..#5..", "...#..W..#...", "......X......", "......X......", "............."], mp:[[2,4],[1,4]] },
-  { enemies:["brown", "brown", "red", "red", "green", "green", "black"], map:["......#......", ".2..2.#.4..4.", "......#......", "......#......", "...#..#..#...", "...#..#..#...", "...#.....#...", ".P.#.3.3.#.5.", "...#.....#..."], mp:[[1,7],[0,7]] },
-  { enemies:["green", "green", "brown", "green"], map:[".............", "..3..........", "..WWWW.####..", "..W.......#..", ".3..2...P....", "..W.......#..", "..WWWW.####..", "..3..........", "............."], mp:[[8,4],[7,4]] },
-  { enemies:["green", "black", "brown", "black"], map:[".............", ".3.........5.", "..XXX...XXX..", "..X.......X..", "........2....", "..X.......X..", "..XXX...XXX..", ".P.........5.", "............."], mp:[[1,7],[0,7]] },
-  { enemies:["yellow", "red", "green", "brown", "black"], map:[".............", ".1WWW.X.WWW4.", "..WWW.X.WWW..", "......#......", "....3...2....", "......#......", "..WWW.X.WWW..", ".PWWW.X.WWW5.", "............."], mp:[[1,7],[0,7]] },
-  { enemies:["cyan", "cyan"], map:[".............", "........#..6.", "........#....", "....#...W.##.", "..P.#...W....", "....#...W.##.", "........#....", "........#..6.", "............."], mp:[[2,4],[1,4]] },
-  { enemies:["red", "brown", "black", "cyan", "black", "red", "brown"], map:[".............", "..#..4..2.#..", "..#.......#5.", "..W..###..#..", ".PW..###..W6.", "..W..###..#..", "..#.......#5.", "..#..4..2.#..", "............."], mp:[[1,4],[0,4]] },
-  { enemies:["green", "green", "green", "green", "green", "green"], map:[".............", ".....WWW...3.", "....WWWWW3...", "...WWWWWWW.3.", ".P.WWWWWWW...", "...WWWWWWW.3.", "....WWWWW3...", ".....WWW...3.", "............."], mp:[[1,4],[0,4]] },
-  { enemies:["red", "red", "red", "red", "red", "red", "red"], map:[".............", ".4..4.4.4..4.", "XW..XWXWX..WX", ".............", "...4.....4...", ".............", "XWXWX...XWXWX", "......P......", "............."], mp:[[6,7],[5,7]] },
-  { enemies:["black", "black", "black", "black", "black", "black"], map:[".............", "...5..5..5...", ".XXW##W##WXX.", ".............", "...5.....5...", ".............", ".XXW##W##WXX.", "...P.....5...", "............."], mp:[[3,7],[2,7]] },
-  { enemies:["cyan", "cyan", "cyan", "cyan", "cyan", "cyan"], map:["....X...X....", ".6..X.6.X..6.", "XXX.X...X.XXX", ".............", "...........6.", ".............", "XXX.X...X.XXX", ".P..X.6.X..6.", "....X...X...."], mp:[[1,7],[0,7]] },
-  { enemies:["brown", "yellow", "green", "red"], map:["............",".1........2.",".....X##....","............","......#.....",".#.......X#.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["yellow", "green", "red", "black"], map:["............",".#...#....1.","............",".X..##....4.","............",".#...X......",".2....P...3.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["green", "red", "black", "brown"], map:["............",".1........2.","............",".X#.#X#...#.","......#.....",".......#X#..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["red", "black", "brown", "yellow"], map:["............",".X4.X#....1.","........#...",".2..#...#.3.","........X...","........#...",".X....P...#.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["black", "brown", "yellow", "green"], map:["............",".1........2.","...##.......","............","......#.....",".......X#...",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["brown", "yellow", "green", "red"], map:["............",".X#X....##1.","............",".4..#.......","............","..X#....#X..",".2....P...3.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["yellow", "green", "red", "black"], map:["............",".1........2.","..X.........","..#.........",".....#X.....",".........#..",".3....P..#4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["green", "red", "black", "brown"], map:["............",".X...#....1.",".....#......",".4..#X......","............",".......#....",".2....P#..3.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["red", "black", "brown", "yellow"], map:["............",".1........2.","...#X#......","............","......#.....",".......#X#..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["black", "brown", "yellow", "green"], map:["............",".X.X.....#1.","............",".4.##....#..","............","...#.....X..",".2....P...3.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["yellow"], map:["##.........##","#.....X.....#","......X......","......#......","..P...#...1..","......#......","......X......","#.....X.....#","##.........##"], mp:[[2,2],[2,6]] },
+  { enemies:["brown","brown"], map:[".............","...1.....2...","..###...###..",".............",".............",".............","..###.P.###..",".............","............."], mp:[[3,5],[9,5]] },
+  { enemies:["yellow","brown","brown","yellow"], map:[".............","......#1.....","......#...2..",".............","..P..........",".............","......#...3..","......#4.....","............."], mp:[[2,2],[2,6]] },
+  { enemies:["brown","yellow","brown"], map:[".............",".............","....W....1...","....W........","...PW.....2..","....W........","....W....3...",".............","............."], mp:[[3,2],[3,6]] },
+  { enemies:["green","green"], map:[".............",".............","...X.........","...X......1..",".P.#.........","...X......2..","...X.........",".............","............."], mp:[[1,2],[1,6]] },
+  { enemies:["green","green","brown"], map:[".............",".............","...XXX#XXX...","....1...2....","......3......","...X##X##X...",".............","......P......","............."], mp:[[4,7],[8,7]] },
+  { enemies:["brown","brown","yellow","yellow"], map:["...WW...WW...",".1.WW...WW.2.","...WW...WW...","#WWWW...WWWW#","####..P..####","#WWWW...WWWW#","...WW...WW...",".3.WW...WW.4.","...WW...WW..."], mp:[[5,4],[7,4]] },
+  { enemies:["red","red"], map:[".............",".............","....1...2....","..X##WWW##X..",".............",".............","..#...P...#..","..##.....##..","............."], mp:[[4,6],[8,6]] },
+  { enemies:["red","red","green","green"], map:[".............","...1.....2...","..####W####..",".............","...3.....4...",".............","..XXXXWXXXX..",".............","......P......"], mp:[[4,8],[8,8]] },
+  { enemies:["black"], map:[".............","......X......","......X......","......W......","..P...W...1..","......W......","......X......","......X......","............."], mp:[[2,2],[2,6]] },
+  { enemies:["brown","brown","red","red","green","green","black"], map:["......#......",".1..2.#.3..4.","......#......","......#......","...#..#..#...","...#..#..#...","...#.....#...",".P.#.5.6.#.7.","...#.....#..."], mp:[[0,7],[2,7]] },
+  { enemies:["green","yellow","brown","green"], map:[".............","...........1.","..WWWW.####..","..W.......#..",".P....2.....3","..W.......#..","..WWWW.####..","...........4.","............."], mp:[[1,1],[1,7]] },
+  { enemies:["black","brown","yellow","black"], map:[".............","...........1.","..XXX...XXX..","..X.......X..",".P......2...3","..X.......X..","..XXX...XXX..","...........4.","............."], mp:[[1,2],[1,6]] },
+  { enemies:["red","yellow","brown","green","yellow","black"], map:[".............","..WWW.X.WWW.1","..WWW.X.WWW..","......#..2...",".P......3..4.","......#..5...","..WWW.X.WWW..","..WWW.X.WWW.6","............."], mp:[[1,2],[1,6]] },
+  { enemies:["cyan","cyan"], map:[".............",".......#..1..",".......#.....","...#...W.##..",".P.#...W.....","...#...W.##..",".......#.....",".......#..2..","............."], mp:[[1,2],[1,6]] },
+  { enemies:["red","brown","black","cyan","black","red","brown"], map:[".............","..#..1..2.#..","..#.......#3.","..W..###..#..",".PW..###..W4.","..W..###..#..","..#.......#5.","..#..6..7.#..","............."], mp:[[1,2],[1,6]] },
+  { enemies:["green","green","green","green","green","green"], map:[".............",".....WWW...1.","....WWWWW2...","...WWWWWWW.3.",".P.WWWWWWW...","...WWWWWWW.4.","....WWWWW5...",".....WWW...6.","............."], mp:[[1,2],[1,6]] },
+  { enemies:["red","red","red","red","red","red","red"], map:[".............",".1..2.3.4..5.","XW..XWXWX..WX",".............","...6.....7...",".............","XWXWX...XWXWX","......P......","............."], mp:[[5,7],[7,7]] },
+  { enemies:["black","black","black","black","black","black"], map:[".............","...1..2..3...",".XXW##W##WXX.",".............","...4.....5...",".............",".XXW##W##WXX.","...P.....6...","............."], mp:[[3,7],[3,8]] },
+  { enemies:["cyan","cyan","cyan","cyan","cyan","cyan"], map:["....X...X....",".1..X.2.X..3.","XXX.X...X.XXX",".............","...........4.",".............","XXX.X...X.XXX",".P..X.5.X..6.","....X...X...."], mp:[[0,7],[0,8]] },
+  { enemies:["black","red","red","black","yellow","yellow"], map:[".1..2...3..4.",".X..#...#..X.",".............",".5.........6.",".#..#...#..#.",".............",".............",".X..#...#..X.","......P......"], mp:[[4,8],[8,8]] },
+  { enemies:["cyan","green","green","cyan","yellow","brown","brown","yellow"], map:[".............",".1.2.....3.4.",".............",".5.6..#..7.8.","......#......","XXXX..X..XXXX","......X......","......X......",".P....#......"], mp:[[1,8],[11,8]] },
+  { enemies:["green","brown","red","cyan","brown","red","cyan","green"], map:[".............",".WWWW...WWWW.",".W........1W.","....#2.3#..4.",".P...........","....#5.6#..7.",".W........8W.",".WWWW...WWWW.","............."], mp:[[1,3],[1,5]] },
+  { enemies:["brown","cyan","yellow","cyan","cyan","yellow","cyan","brown","cyan"], map:[".....1X.....2","....#.X.#....","......X..3..4","......X......",".P..........5","......X......","......X..6..7","....#.X.#....",".....8X.....9"], mp:[[1,2],[1,6]] },
+  { enemies:["red","brown","brown","red","green","green","black","black","cyan","cyan","cyan"], map:[".............",".1.2.....3.4.",".............","....##.##....","....#...#....","....#5.6#....","....#...#....","..P.#7.8#....","....#91011#...."], mp:[[2,7],[10,7]] },
+  { enemies:["green","brown","cyan","red","yellow","red","brown","cyan","green"], map:["WW....#....WW","WW.##...##1WW","WWP##.2.##..3","WW....#.4..WW","WW#..###.5#WW","WW....#.6..WW","WW.##.7.##..8","WW.##...##9WW","WW....#....WW"], mp:[[2,2],[2,6]] },
+  { enemies:["cyan","green","red","black","yellow","black","green","red","cyan"], map:["............1","...##2.3##...","...###.###.4.","....##.##....",".P....5......","....##.##....","...###.###.6.","...##7.8##...","............9"], mp:[[1,2],[1,6]] },
+  { enemies:["green","yellow","cyan","yellow","yellow","green"], map:["WW..1........",".WW.......23.","..WW......45.","...WWW.......",".............",".......WWW...",".........WW.6","..........WW.","...P.......WW"], mp:[[1,8],[5,8]] },
+  { enemies:["yellow","black","yellow","cyan","yellow","yellow","black","yellow","cyan","yellow"], map:["..........1..","......2...34.","......X...5..","......X......",".P....X......","......X......","......X...6..","......7...89.","..........10.."], mp:[[1,2],[1,6]] },
+  { enemies:["cyan","green","red","yellow","red","red","green","red","cyan"], map:["WWWWWWWWWWWWW","W..........1W","W...........W","W..X.....X23W","W.PX..4..X56W","W..X.....X78W","W...........W","W..........9W","WWWWWWWWWWWWW"], mp:[[2,3],[2,5]] },
   { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".1........2.","..#.........",".5##X...##X.","......#.....",".....##X....",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
   { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".X#X......1.","......X.....",".4..#.#...5.","......#.....","......XX....",".2....P.##3.","............"], mp:[[6,6],[5,6]] },
   { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".1........2.","..#.X#......",".5..........","......#.....","........#X..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
@@ -940,7 +953,7 @@ const LEVELS = [
   { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".5........2.","..#.........",".X#.#X#...#.",".....X#.....",".......#X#..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
   { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".X34X#5...#.","........#...",".1..#...#.2.","........X...",".......X#...",".X....P...#.","............"], mp:[[6,6],[5,6]] },
   { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".1........2.","..###.......",".5..........",".....X#.....",".......X#...",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".X#X5...###.","............",".3..#.....4.","............","..X#...X#X..",".1....P...2.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".X#X5...###.","............",".3..#.....4.","............","..X#...X#X..",".1....P...2.","............"], mp:[[6,6],[5,6]] }
 ];
 
 // マップの行数・列数が足りない場合に自動で埋める（12×8で作られた既存ステージは、右と下に空きマスが足されて13×9になる）
@@ -1119,7 +1132,7 @@ function pcUpdateAim(){
 function pcIsUiTarget(t){
   return !!(t && t.closest && t.closest("button,input,textarea,select,.overlay,#uiConfirm,#shareDialog,#uiToast"));
 }
-window.addEventListener("mousemove", e=>{ pcAim.mx=e.clientX; pcAim.my=e.clientY; });
+window.addEventListener("mousemove", e=>{ pcAim.mx=e.clientX; pcAim.my=e.clientY; }, true);
 window.addEventListener("mousedown", e=>{
   if(!IS_PC) return;
   pcAim.mx=e.clientX; pcAim.my=e.clientY;
@@ -1132,7 +1145,7 @@ window.addEventListener("mousedown", e=>{
   } else if(e.button===2){
     pcMouse.rightDown=true; pcMouse.rightStart=performance.now()/1000; pcMouse.rightTriggered=false;
   }
-});
+}, true); // ★キャプチャ段階で受け取る：キャンバスの外（操作エリアや余白）をクリックしても弾・ミサイルを撃てる
 window.addEventListener("mouseup", e=>{
   if(!IS_PC || e.button!==2 || !pcMouse.rightDown) return;
   pcMouse.rightDown=false;
@@ -1146,7 +1159,7 @@ window.addEventListener("mouseup", e=>{
   }
   if(pcMouse.rightTriggered) schemeB.pendingAngle = null; // 長押しの先行入力は、離したら消す
   pcMouse.rightTriggered=false;
-});
+}, true);
 // 右クリックの長押し判定（毎フレーム）
 function updatePcMouse(dt){
   if(pcMouse.pendingT>0){
@@ -1702,10 +1715,12 @@ function playMilestoneClear(){
 }
 
 let respawnTimer = 0;
+let mpTagAge = 0; // ステージ開始からの経過秒（マルチの1P/2P表記を5秒後に消す用）
 let gameStartFireLock = 0; // ゲーム開始直後の1秒間は自機の射撃を禁止
 
 // マップ文字列から壁・スポーン地点を作る
 function buildLevel(idx, customLevel=null){
+  mpTagAge = 0;
   const lvl = customLevel || LEVELS[idx % LEVELS.length];
   // ★ステージの大きさは通常・爽快・オリジナルすべて 13×9 マスで固定。
   ROWS = STAGE_ROWS; COLS = STAGE_COLS;
@@ -3425,6 +3440,38 @@ function mpq(k,a,b,c){
   mp.fxq.push(e);
 }
 
+// ================================================================
+// Ping表示（PC版・左下）。PhotonのサーバーとのPingを1秒ごとに測って表示する
+//   マッチング中＝マスターサーバー／対戦中＝ゲームサーバーとのPing
+//   ～99ms＝緑、100～199ms＝黄色、200ms以上＝赤
+// ================================================================
+const mpPingEl = document.getElementById("mpPing");
+function mpPingPeer(){
+  const c = mp.client;
+  if(!c) return null;
+  try{
+    if(c.gamePeer && c.gamePeer.isConnected && c.gamePeer.isConnected()) return c.gamePeer;
+    if(c.masterPeer && c.masterPeer.isConnected && c.masterPeer.isConnected()) return c.masterPeer;
+  }catch(e){}
+  return null;
+}
+function mpPingTick(){
+  if(!IS_PC || !(mp.searching || mp.active)){ mpPingEl.classList.add("hidden"); return; }
+  const p = mpPingPeer();
+  let ms = null;
+  if(p){
+    try{
+      if(p._pingSent) ms = Math.round(p.getRtt()); // 前回送ったPingの返事から求めた値
+      p.ping(); p._pingSent = true;                // 次の測定を送る
+    }catch(e){}
+  }
+  mpPingEl.classList.remove("hidden", "good", "mid", "bad");
+  if(ms === null){ mpPingEl.textContent = "Ping --"; return; }
+  mpPingEl.textContent = "Ping " + ms + "ms";
+  mpPingEl.classList.add(ms < 100 ? "good" : ms < 200 ? "mid" : "bad");
+}
+setInterval(mpPingTick, 1000);
+
 function mpSend(code, obj){
   const c = mp.client;
   if(!c) return;
@@ -4082,6 +4129,7 @@ function loop(ts){
   let dt = (ts-lastTime)/1000;
   lastTime = ts;
   dt = Math.max(0, Math.min(dt, 0.05)); // 端末が重いときに一気に進みすぎない上限と、タイムスタンプ逆転時の下限(0)
+  if(state==="playing") mpTagAge += dt;
 
   // ★マルチのゲストは計算をせず、ホストから届いた状態を表示するだけ
   if(mp.active && mp.role==="guest"){ guestFrame(dt); render(); return; }
@@ -4456,33 +4504,23 @@ function drawMissileTargetPreview(){
 
 function drawPlayerTag(t){
   ctx.save();
-  // setLineDash() の端末・ブラウザごとの描画差を避けるため、短い弧を個別に描いて点線を作る。
-  // 前回の間隔36を半分の18にし、線幅は視認できる範囲で極細の1にする。
+  // 戦車のまわりの円（実線）
   const ringR=(t.r+7)*1.5;
-  const dashLength=15;
-  const gapLength=18;
-  const circumference=Math.PI*2*ringR;
   ctx.lineWidth=1;
-  ctx.lineCap="butt";
-  // 元の色の明るさは維持。
   ctx.strokeStyle = t.pidx===0 ? "rgba(104,174,255,0.9)" : "rgba(255,124,144,0.9)";
   ctx.beginPath();
-  for(let distance=0; distance<circumference; distance+=dashLength+gapLength){
-    const start=distance/ringR;
-    const end=Math.min(distance+dashLength,circumference)/ringR;
-    if(end>start){
-      ctx.moveTo(t.x+Math.cos(start)*ringR,t.y+Math.sin(start)*ringR);
-      ctx.arc(t.x,t.y,ringR,start,end);
-    }
-  }
+  ctx.arc(t.x,t.y,ringR,0,Math.PI*2);
   ctx.stroke();
-  ctx.font = "bold 10px sans-serif";
-  ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-  const label = (t.pidx===0 ? "1P" : "2P") + (t===player ? " ▼" : "");
-  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,0.95)";
-  ctx.strokeText(label, t.x, t.y - t.r - 2);
-  ctx.fillStyle = t.pidx===0 ? "#438ed8" : "#e65f78";
-  ctx.fillText(label, t.x, t.y - t.r - 2);
+  // 「1P」「2P」の表記は、ステージ開始から5秒たつと消える（円は残る）
+  if(mpTagAge < 5){
+    ctx.font = "bold 10px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    const label = (t.pidx===0 ? "1P" : "2P") + (t===player ? " ▼" : "");
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.strokeText(label, t.x, t.y - t.r - 2);
+    ctx.fillStyle = t.pidx===0 ? "#438ed8" : "#e65f78";
+    ctx.fillText(label, t.x, t.y - t.r - 2);
+  }
   ctx.restore();
 }
 
@@ -4883,6 +4921,7 @@ keyResetBtn.addEventListener("click", ()=>{
 });
 if(IS_PC){
   document.getElementById("app").classList.add("pc-mode");
+  document.documentElement.classList.add("pc-cursor"); // ゲーム外も黒い十字カーソルに
   schemeRowEl.classList.add("hidden");      // 通常操作／簡単操作はスマホ用
   keyConfigRow.classList.remove("hidden");
   renderKeyGrid();
