@@ -262,6 +262,17 @@
   .settingsLabel{ font-size:clamp(15px,4.2vw,19px); color:var(--paper); font-weight:700; letter-spacing:2px; }
   .settingsToggleBtn{ min-width:96px; padding:8px 0; font-size:clamp(14px,3.8vw,17px); letter-spacing:2px; }
   .settingsToggleBtn.alt{ opacity:0.7; }
+  /* 設定画面は項目が増えても上下にスクロールできるようにする */
+  #settingsScreen{ overflow-y:auto; justify-content:flex-start; }
+  #settingsScreen > :first-child{ margin-top:auto; }
+  #settingsScreen > :last-child{ margin-bottom:auto; }
+  /* ---- PC用：キー設定 ---- */
+  .keyGrid{ display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; }
+  .keyItem{ display:flex; flex-direction:column; align-items:stretch; gap:4px; font-size:12px; color:var(--paper); font-weight:700; letter-spacing:1px; }
+  .keyBtn{ padding:6px 4px; font-size:14px; letter-spacing:1px; min-width:0; }
+  .keyBtn.listening{ background:#ff8ab2; color:#fff; }
+  .keyResetBtn{ align-self:center; padding:6px 16px; font-size:13px; }
+  #app.pc-mode canvas, #app.pc-mode #controls{ cursor:crosshair; }
 
   .schemeToggle{ display:flex; gap:10px; }
   .schemeBtn{ flex:1; padding:8px 0; font-size:clamp(13px,3.6vw,16px); letter-spacing:1px; opacity:0.55; }
@@ -467,13 +478,6 @@
         1. 爽快モードは自機の戦車の移動速度２倍<br>
         2. 爽快モードは自機の戦車の砲弾速度２倍<br>
 
-        <span class="sectionTitle">■ マルチプレイ</span>
-        タイトルの「マルチプレイ」をタップするとマッチング開始（右下にぐるぐるが出ます）<br>
-        マッチング中も、他のモードやステージ作成で遊べます<br>
-        マッチングすると自動で2人プレイが始まり、遊んでいた途中のデータは保存されます<br>
-        2人同時にやられるとゲームオーバー。片方が生きていれば次のステージで復活！<br>
-        ミサイルは味方に当たりませんが、通常弾は味方にも当たります<br>
-
         <span class="sectionTitle">■ Androidでホーム画面に追加する方法</span>
         1. Chromeでこのゲームのページを開く<br>
         2. 右上の「⋮」（メニュー）をタップ<br>
@@ -527,13 +531,18 @@
             <div class="volumeSliderHandle" id="seVolumeHandle"></div>
           </div>
         </div>
-        <div class="settingsRow settingsRowVolume">
+        <div class="settingsRow settingsRowVolume" id="schemeRow">
           <span class="settingsLabel">操作方法</span>
           <div class="schemeToggle">
             <button class="btn schemeBtn" id="controlSchemeABtn">通常操作</button>
             <button class="btn schemeBtn" id="controlSchemeBBtn">簡単操作</button>
           </div>
           <div class="schemeDesc" id="controlSchemeDesc"></div>
+        </div>
+        <div class="settingsRow settingsRowVolume hidden" id="keyConfigRow">
+          <span class="settingsLabel">キー設定</span>
+          <div class="keyGrid" id="keyGrid"></div>
+          <button class="btn alt keyResetBtn" id="keyResetBtn">初期設定に戻す</button>
         </div>
       </div>
       <button class="btn alt" id="settingsCloseBtn" style="margin-top:14px;">閉じる</button>
@@ -566,7 +575,6 @@
         <button class="btn selected" data-tool=".">消しゴム</button>
         <button class="btn info" id="editorUndoBtn" disabled>一つ戻る</button>
         <button class="btn alt" id="editorClearBtn">全消去</button>
-        <button class="btn alt" id="editorTestBtn">テストプレイ</button>
         <button class="btn" id="editorSaveBtn">保存する</button>
       </div>
     </div>
@@ -1000,9 +1008,162 @@ function screenToWorld(clientX, clientY){
    ・左ゾーン：ドラッグした方向へ戦車が移動する（バーチャルスティック）
    ・右ゾーン：ドラッグで照準、ドラッグ中に2本目の指でタップすると発射／長押しでミサイル設置
    ================================================================ */
-const keys = {}; // キーボード操作（PCでの動作確認用）
-window.addEventListener("keydown", e=>{ keys[e.key.toLowerCase()]=true; });
-window.addEventListener("keyup", e=>{ keys[e.key.toLowerCase()]=false; });
+const keys = {};   // e.key（小文字）ごとの押下状態（PC以外のキー操作用）
+const codes = {};  // e.code ごとの押下状態（PCのキー設定用。キー配列に依存しない）
+
+// ================================================================
+// PC版の操作
+//   WASD（設定で変更可）で移動／砲塔は画面内のマウスポインターの方向を向く／左クリック＝通常弾
+//   右クリック＝短いミサイル／右クリック長押し＝長距離ミサイル
+// ================================================================
+const IS_PC = !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  && !(/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+  && !!(window.matchMedia && window.matchMedia("(pointer:fine)").matches);
+
+const KEYBIND_KEY = "tankBattleKeybindsV1";
+const KEYBIND_DEFAULT = { up:"KeyW", down:"KeyS", left:"KeyA", right:"KeyD" };
+const KEYBIND_LABEL = { up:"上へ移動", down:"下へ移動", left:"左へ移動", right:"右へ移動" };
+let keybinds = Object.assign({}, KEYBIND_DEFAULT);
+function loadKeybinds(){
+  try{
+    const d = JSON.parse(localStorage.getItem(KEYBIND_KEY) || "null");
+    if(d && typeof d === "object") for(const a in KEYBIND_DEFAULT) if(typeof d[a]==="string" && d[a]) keybinds[a] = d[a];
+  }catch(e){}
+}
+function saveKeybinds(){ try{ localStorage.setItem(KEYBIND_KEY, JSON.stringify(keybinds)); }catch(e){} }
+loadKeybinds();
+function keyCodeLabel(code){
+  if(!code) return "—";
+  let m;
+  if((m=/^Key([A-Z])$/.exec(code))) return m[1];
+  if((m=/^Digit(\d)$/.exec(code))) return m[1];
+  if((m=/^Numpad(.+)$/.exec(code))) return "Num" + m[1].replace("Decimal",".").replace("Add","+").replace("Subtract","-").replace("Multiply","*").replace("Divide","/");
+  const map = { Space:"Space", ArrowUp:"↑", ArrowDown:"↓", ArrowLeft:"←", ArrowRight:"→",
+    ShiftLeft:"Shift(左)", ShiftRight:"Shift(右)", ControlLeft:"Ctrl(左)", ControlRight:"Ctrl(右)", AltLeft:"Alt(左)", AltRight:"Alt(右)",
+    Enter:"Enter", Tab:"Tab", Backspace:"BackSpace", Semicolon:";", Comma:",", Period:".", Slash:"/", Quote:"'", Backquote:"`",
+    BracketLeft:"[", BracketRight:"]", Backslash:"\\", Minus:"-", Equal:"=" };
+  return map[code] || code;
+}
+
+let keyCapture = null; // 設定画面でキー割り当て待ちのとき、押されたキーを受け取る関数が入る
+function pcBoundCode(code){
+  return code===keybinds.up || code===keybinds.down || code===keybinds.left || code===keybinds.right;
+}
+function pcTypingTarget(t){ return !!(t && t.closest && t.closest("input,textarea")); }
+
+window.addEventListener("keydown", e=>{
+  if(keyCapture){ e.preventDefault(); e.stopPropagation(); keyCapture(e); return; }
+  keys[(e.key||"").toLowerCase()] = true;
+  codes[e.code] = true;
+  if(IS_PC && state==="playing" && pcBoundCode(e.code) && !pcTypingTarget(e.target)){
+    e.preventDefault(); // 移動キーで画面がスクロールしたりしないようにする
+  }
+}, true);
+window.addEventListener("keyup", e=>{
+  keys[(e.key||"").toLowerCase()] = false;
+  codes[e.code] = false;
+  if(IS_PC && state==="playing" && pcBoundCode(e.code) && !pcTypingTarget(e.target)) e.preventDefault();
+}, true);
+window.addEventListener("blur", ()=>{
+  for(const k in keys) keys[k]=false;
+  for(const k in codes) codes[k]=false;
+  pcMouse.rightDown=false; pcMouse.rightTriggered=false;
+});
+
+// キーボードによる移動入力（PCは設定したキー、それ以外は従来どおりWASD＋矢印キー）
+function keyboardMove(){
+  let x=0, y=0, moving=false;
+  if(IS_PC){
+    if(codes[keybinds.up]){ y-=1; moving=true; }
+    if(codes[keybinds.down]){ y+=1; moving=true; }
+    if(codes[keybinds.left]){ x-=1; moving=true; }
+    if(codes[keybinds.right]){ x+=1; moving=true; }
+  } else {
+    if(keys["w"]||keys["arrowup"]){ y-=1; moving=true; }
+    if(keys["s"]||keys["arrowdown"]){ y+=1; moving=true; }
+    if(keys["a"]||keys["arrowleft"]){ x-=1; moving=true; }
+    if(keys["d"]||keys["arrowright"]){ x+=1; moving=true; }
+  }
+  return {x, y, moving};
+}
+
+// ---- マウスによる照準 ----
+const PC_AIM_DEADZONE = 6;          // ポインターが自機の中心からこの距離(px)未満のときは向きを変えない
+const PC_MISSILE_HOLD_TIME = 0.25;  // 右クリックをこの時間以上押し続けると長距離ミサイル
+const pcAim = { mx:null, my:null, angle:0, valid:false };
+const pcMouse = { rightDown:false, rightStart:0, rightTriggered:false, pendingT:0 };
+
+// ワールド座標を画面上の座標(clientX/clientY)に変換する（screenToWorldの逆変換）
+function worldToScreen(wx, wy){
+  const rect = canvas.getBoundingClientRect();
+  const viewW = WORLD_W / CAMERA_ZOOM;
+  const viewH = WORLD_H / CAMERA_ZOOM;
+  const halfViewW = Math.min(viewW/2, WORLD_W/2);
+  const halfViewH = Math.min(viewH/2, WORLD_H/2);
+  const px = player ? player.x : WORLD_W/2;
+  const py = player ? player.y : WORLD_H/2;
+  const cameraX = clamp(px, halfViewW, WORLD_W-halfViewW);
+  const cameraY = clamp(py, halfViewH, WORLD_H-halfViewH);
+  return {
+    x: rect.left + (wx - cameraX + viewW/2) * scale * CAMERA_ZOOM,
+    y: rect.top  + (wy - cameraY + viewH/2) * scale * CAMERA_ZOOM
+  };
+}
+// 自機の画面上の位置から、マウスポインターへの向きを求める
+function pcUpdateAim(){
+  if(!IS_PC || pcAim.mx===null || !player) return;
+  const sp = worldToScreen(player.x, player.y);
+  const dx = pcAim.mx - sp.x, dy = pcAim.my - sp.y;
+  if(Math.hypot(dx,dy) >= PC_AIM_DEADZONE){ pcAim.angle = Math.atan2(dy,dx); pcAim.valid = true; }
+}
+function pcIsUiTarget(t){
+  return !!(t && t.closest && t.closest("button,input,textarea,select,.overlay,#uiConfirm,#shareDialog,#uiToast"));
+}
+window.addEventListener("mousemove", e=>{ pcAim.mx=e.clientX; pcAim.my=e.clientY; });
+window.addEventListener("mousedown", e=>{
+  if(!IS_PC) return;
+  pcAim.mx=e.clientX; pcAim.my=e.clientY;
+  if(state!=="playing" || !player || !player.alive || pcIsUiTarget(e.target)) return;
+  if(e.button===0){
+    // 左クリック＝通常弾（クリックした瞬間の狙う方向へ撃つ）
+    pcUpdateAim();
+    if(pcAim.valid) player.turretAngle = pcAim.angle;
+    input.fireRequested = true;
+  } else if(e.button===2){
+    pcMouse.rightDown=true; pcMouse.rightStart=performance.now()/1000; pcMouse.rightTriggered=false;
+  }
+});
+window.addEventListener("mouseup", e=>{
+  if(!IS_PC || e.button!==2 || !pcMouse.rightDown) return;
+  pcMouse.rightDown=false;
+  if(!pcMouse.rightTriggered && state==="playing" && player && player.alive){
+    // 短く押して離した＝短いミサイル。ミサイルが飛行中なら、着弾した瞬間に撃つ先行入力として少しだけ覚えておく
+    pcUpdateAim();
+    const ang = pcAim.valid ? pcAim.angle : player.turretAngle;
+    if(!fireMissile(ang, MISSILE_TRIPLE_DISTANCE)){
+      schemeB.pendingAngle = ang; schemeB.pendingDistance = MISSILE_TRIPLE_DISTANCE; pcMouse.pendingT = 0.4;
+    }
+  }
+  if(pcMouse.rightTriggered) schemeB.pendingAngle = null; // 長押しの先行入力は、離したら消す
+  pcMouse.rightTriggered=false;
+});
+// 右クリックの長押し判定（毎フレーム）
+function updatePcMouse(dt){
+  if(pcMouse.pendingT>0){
+    pcMouse.pendingT -= dt;
+    if(pcMouse.pendingT<=0 && !pcMouse.rightDown) schemeB.pendingAngle = null;
+  }
+  if(!pcMouse.rightDown || pcMouse.rightTriggered || !player || !player.alive) return;
+  if(performance.now()/1000 - pcMouse.rightStart < PC_MISSILE_HOLD_TIME) return;
+  pcMouse.rightTriggered = true;
+  pcUpdateAim();
+  const ang = pcAim.valid ? pcAim.angle : player.turretAngle;
+  if(!fireMissile(ang, MISSILE_DISTANCE)){
+    schemeB.pendingAngle = ang; schemeB.pendingDistance = MISSILE_DISTANCE;
+  }
+}
+// 右クリックのブラウザメニューは出さない（入力欄では通常どおり出す）
+window.addEventListener("contextmenu", e=>{ if(IS_PC && !pcTypingTarget(e.target)) e.preventDefault(); });
 
 const input = {
   moveX:0, moveY:0, moving:false,   // 左スティックの入力状態
@@ -1153,7 +1314,7 @@ function bindZone(el, onStart, onMove, onEnd){
   });
   // マウス操作（PC確認用のフォールバック）
   let down=false;
-  el.addEventListener("mousedown", e=>{ down=true; onStart(e.clientX,e.clientY,"mouse"); });
+  el.addEventListener("mousedown", e=>{ if(IS_PC) return; down=true; onStart(e.clientX,e.clientY,"mouse"); });
   window.addEventListener("mousemove", e=>{ if(down) onMove(e.clientX,e.clientY,"mouse"); });
   window.addEventListener("mouseup", e=>{ if(down){ onEnd("mouse"); down=false; } });
 }
@@ -1255,6 +1416,7 @@ function schemeBEnd(id){
   schemeB.pendingAngle = null; // 指を離した時点で、まだ発射していない先行入力は消す
 }
 function updateSchemeB(dt){
+  if(IS_PC){ updatePcMouse(dt); return; }
   if(controlScheme!=="B" || !schemeB.active || schemeB.holdTriggered || !player || !player.alive) return;
   const held = performance.now()/1000 - schemeB.startTime;
   if(held < SCHEME_B_HOLD_TIME) return;
@@ -1276,6 +1438,7 @@ function resetAllControlInputs(){
   if(leftJoy.active) leftEnd(leftJoy.id);
   if(schemeB.active) schemeBEnd(schemeB.id);
   schemeB.active=false; schemeB.id=null; schemeB.holdTriggered=false; schemeB.pendingAngle=null;
+  pcMouse.rightDown=false; pcMouse.rightTriggered=false; pcMouse.pendingT=0;
   input.fireRequested=false; input.aiming=false; input.aimMag=0;
 }
 
@@ -2664,10 +2827,7 @@ function updatePlayer(dt){
   // ---- 移動（左スティック／WASD／矢印キー） ----
   let mx=0,my=0, moving=false;
   if(input.moving){ mx=input.moveX; my=input.moveY; moving=true; }
-  if(keys["w"]||keys["arrowup"]){ my-=1; moving=true; }
-  if(keys["s"]||keys["arrowdown"]){ my+=1; moving=true; }
-  if(keys["a"]||keys["arrowleft"]){ mx-=1; moving=true; }
-  if(keys["d"]||keys["arrowright"]){ mx+=1; moving=true; }
+  { const k=keyboardMove(); mx+=k.x; my+=k.y; if(k.moving) moving=true; }
   player.vx = 0; player.vy = 0; // ★水色戦車の偏差射撃のために、今の移動速度を記録する
   if(moving){
     const len=Math.hypot(mx,my)||1;
@@ -2683,7 +2843,10 @@ function updatePlayer(dt){
 
   // ---- 砲塔の向き（右スティックでドラッグ中はその方向、それ以外は徐々に車体方向へ） ----
   // 操作Bでは、砲台の向きは発射した瞬間にだけ変える（このロジックでは動かさない）。
-  if(input.aiming && input.aimMag>0.2){
+  if(IS_PC){ pcUpdateAim(); }
+  if(IS_PC && pcAim.valid){
+    player.turretAngle = pcAim.angle; // PC：マウスの向き
+  } else if(input.aiming && input.aimMag>0.2){
     player.turretAngle = input.aimAngle;
   } else if(!input.aiming && controlScheme!=="B"){
     player.turretAngle = lerpAngle(player.turretAngle, player.angle, 1-Math.pow(0.02,dt));
@@ -2699,7 +2862,7 @@ function updatePlayer(dt){
   //   すぐには撃てないだけで入力自体は覚えておき、次に撃てる状態になった
   //   瞬間に自動的に発射する。ただし画面上の弾が上限（5発）に達している
   //   ときは、先行入力として記憶しない（＝5発目を撃った後は自動発射しない）。
-  if((input.fireRequested || keys[" "]) && countBullets(player) < player.maxBullets){
+  if((input.fireRequested || (!IS_PC && keys[" "])) && countBullets(player) < player.maxBullets){
     player.fireBuffered = true;
   }
   input.fireRequested = false;
@@ -3203,7 +3366,6 @@ document.getElementById("editorClearBtn").onclick=()=>uiConfirm("配置をすべ
   drawEditorMap();
 });
 document.getElementById("editorSaveBtn").onclick=saveEditorStage;
-document.getElementById("editorTestBtn").onclick=()=>{const l=customLevelFromEditor();if(l){startCustomStage(l);customPlayFromEditor=customPlayActive;}};
 function importStageFromCode(){
   const input=document.getElementById("importCodeInput");
   const stage=decodeStageCode(input.value);
@@ -3812,10 +3974,7 @@ function mpApplySnap(s){
 function readMoveInput(){
   let mx=0, my=0, moving=false;
   if(input.moving){ mx=input.moveX; my=input.moveY; moving=true; }
-  if(keys["w"]||keys["arrowup"]){ my-=1; moving=true; }
-  if(keys["s"]||keys["arrowdown"]){ my+=1; moving=true; }
-  if(keys["a"]||keys["arrowleft"]){ mx-=1; moving=true; }
-  if(keys["d"]||keys["arrowright"]){ mx+=1; moving=true; }
+  { const k=keyboardMove(); mx+=k.x; my+=k.y; if(k.moving) moving=true; }
   if(moving){ const len=Math.hypot(mx,my)||1; mx/=len; my/=len; }
   return {mx, my, moving};
 }
@@ -3823,13 +3982,16 @@ function readMoveInput(){
 // ゲストの自機まわりの入力処理（砲塔の向き・発射の要求・ミサイル）
 function updateGuestPlayer(dt){
   if(!player || !player.alive){ input.fireRequested = false; return; }
-  if(input.aiming && input.aimMag>0.2){
+  if(IS_PC){ pcUpdateAim(); }
+  if(IS_PC && pcAim.valid){
+    player.turretAngle = pcAim.angle; // PC：マウスの向き
+  } else if(input.aiming && input.aimMag>0.2){
     player.turretAngle = input.aimAngle;
   } else if(!input.aiming && controlScheme!=="B"){
     player.turretAngle = lerpAngle(player.turretAngle, player.angle, 1-Math.pow(0.02,dt));
   }
   mp.fireCd = Math.max(0, mp.fireCd - dt);
-  if(input.fireRequested || (keys[" "] && mp.fireCd<=0)){
+  if(input.fireRequested || (!IS_PC && keys[" "] && mp.fireCd<=0)){
     mpSend(EV.FIRE, [r2(player.turretAngle)]);
     mp.fireCd = 0.12;
   }
@@ -4173,9 +4335,9 @@ function render(){
   }
 
   // 自機の砲塔方向と、壁で1回反射した弾道を点線で表示（操作Bでは照準そのものが不要なので出さない）
-  if(controlScheme!=="B") drawAimPreview(player);
+  if(IS_PC || controlScheme!=="B") drawAimPreview(player);
   // ミサイルの着弾予測地点（二重丸＋十字）（操作Bでは出さない）
-  if(controlScheme!=="B") drawMissileTargetPreview();
+  if(IS_PC || controlScheme!=="B") drawMissileTargetPreview();
 
   // 戦車
   for(const t of tanks){
@@ -4603,8 +4765,8 @@ const controlSchemeABtn = document.getElementById("controlSchemeABtn");
 const controlSchemeBBtn = document.getElementById("controlSchemeBBtn");
 const controlSchemeDesc = document.getElementById("controlSchemeDesc");
 const CONTROL_SCHEME_DESC = {
-  A: "ドラッグで照準、長押しでミサイル発射（従来の操作）。",
-  B: "画面をタップした方向に通常弾が飛ぶ。長押しでミサイル発射、狙った位置が近いほど短距離ミサイルになる。",
+  A: "ドラッグで照準、長押しでミサイル発射。",
+  B: "画面をタップした方向に通常弾が飛ぶ。長押しでミサイル発射、狙った位置が近いと短距離ミサイルになる。",
 };
 const seVolumeSlider = document.getElementById("seVolumeSlider");
 const seVolumeHandle = document.getElementById("seVolumeHandle");
@@ -4619,7 +4781,18 @@ function updateControlSchemeUI(){
   controlSchemeABtn.classList.toggle("active", controlScheme==="A");
   controlSchemeBBtn.classList.toggle("active", controlScheme==="B");
   controlSchemeDesc.textContent = CONTROL_SCHEME_DESC[controlScheme] || "";
-  rightZoneEl.querySelector(".zone-label").innerHTML = controlScheme==="B"
+  updateZoneLabels();
+}
+function updateZoneLabels(){
+  const rl = rightZoneEl.querySelector(".zone-label");
+  const ll = leftZoneEl.querySelector(".zone-label");
+  if(IS_PC){
+    const K = a=>keyCodeLabel(keybinds[a]);
+    ll.innerHTML = `${K("up")} / ${K("left")} / ${K("down")} / ${K("right")}＝移動`;
+    rl.innerHTML = `マウスポインター＝照準<br>左クリック＝通常弾<br>右クリック＝短いミサイル<br>右クリック長押し＝長距離ミサイル`;
+    return;
+  }
+  rl.innerHTML = controlScheme==="B"
     ? "操作Bでは使いません<br>ゲーム画面をタップ／長押し"
     : "ドラッグ＝照準<br>ドラッグ中にタップ＝発射<br>長押し＝ミサイル発射";
 }
@@ -4651,6 +4824,7 @@ function openSettings(returnScreen){
   settingsScreen.classList.remove("hidden");
 }
 function closeSettings(){
+  cancelKeyCapture();
   settingsScreen.classList.add("hidden");
   setMenuLayout(settingsPrevMenuState); // 設定を開く前の表示状態に戻す
   if(settingsReturnScreen) settingsReturnScreen.classList.remove("hidden");
@@ -4659,6 +4833,61 @@ function closeSettings(){
 settingsBtnTitle.addEventListener("click", ()=>openSettings(startScreen));
 settingsBtnPause.addEventListener("click", ()=>openSettings(pauseScreen));
 settingsCloseBtn.addEventListener("click", closeSettings);
+
+// ---- キー設定（PCのみ表示） ----
+const schemeRowEl = document.getElementById("schemeRow");
+const keyConfigRow = document.getElementById("keyConfigRow");
+const keyGrid = document.getElementById("keyGrid");
+const keyResetBtn = document.getElementById("keyResetBtn");
+let keyCaptureAct = null;
+function renderKeyGrid(){
+  keyGrid.innerHTML = "";
+  for(const act of Object.keys(KEYBIND_LABEL)){
+    const item = document.createElement("div");
+    item.className = "keyItem";
+    const lab = document.createElement("span");
+    lab.textContent = KEYBIND_LABEL[act];
+    const btn = document.createElement("button");
+    const listening = keyCaptureAct === act;
+    btn.className = "btn keyBtn" + (listening ? " listening" : "");
+    btn.textContent = listening ? "キーを押す…" : keyCodeLabel(keybinds[act]);
+    btn.addEventListener("click", ()=>startKeyCapture(act));
+    item.appendChild(lab); item.appendChild(btn);
+    keyGrid.appendChild(item);
+  }
+}
+function cancelKeyCapture(){
+  keyCapture = null; keyCaptureAct = null;
+  renderKeyGrid();
+}
+function startKeyCapture(act){
+  if(keyCaptureAct === act){ cancelKeyCapture(); return; }
+  keyCaptureAct = act;
+  keyCapture = e=>{
+    if(e.code === "Escape"){ cancelKeyCapture(); return; }
+    if(e.repeat) return;
+    // すでに別の操作に使っているキーなら、お互いのキーを入れ替える
+    const other = Object.keys(keybinds).find(a=>a!==act && keybinds[a]===e.code);
+    if(other) keybinds[other] = keybinds[act];
+    keybinds[act] = e.code;
+    saveKeybinds();
+    keyCapture = null; keyCaptureAct = null;
+    renderKeyGrid(); updateZoneLabels();
+  };
+  renderKeyGrid();
+}
+keyResetBtn.addEventListener("click", ()=>{
+  keybinds = Object.assign({}, KEYBIND_DEFAULT);
+  saveKeybinds();
+  cancelKeyCapture(); updateZoneLabels();
+});
+if(IS_PC){
+  document.getElementById("app").classList.add("pc-mode");
+  schemeRowEl.classList.add("hidden");      // 通常操作／簡単操作はスマホ用
+  keyConfigRow.classList.remove("hidden");
+  renderKeyGrid();
+}
+updateZoneLabels();
 bgmToggleBtn.addEventListener("click", ()=>{
   setBgmEnabled(!bgmEnabled);
   updateBgmToggleUI();
@@ -4815,7 +5044,7 @@ function updateModeStats(){
   const nMax = loadModeRecord("MaxStageProgress", "normal", 1) || 1;
   const rMax = loadModeRecord("MaxStageProgress", "rush", 1) || 1;
   const mMax=Number(localStorage.getItem("tankMultiMaxProgressV1"))||1;
-  modeStats.innerHTML = `通常：最高 ${formatClearedStage(nMax-1)}<br>爽快：最高 ${formatClearedStage(rMax-1)}<br>マルチ：最高 ${formatClearedStage(mMax-1)}`;
+  modeStats.innerHTML = `通常：MAX ${formatClearedStage(nMax-1)}<br>爽快：MAX ${formatClearedStage(rMax-1)}<br>マルチ：MAX ${formatClearedStage(mMax-1)}`;
 }
 function safeStartGame(continueGame=false, selectedMode=null, startAtStage=1, noRecord=false){
   try { startGame(continueGame, selectedMode, startAtStage, noRecord); } catch(e) {
