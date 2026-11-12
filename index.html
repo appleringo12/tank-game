@@ -580,8 +580,9 @@
         <button class="btn" data-tool="brown">茶色敵</button>
         <button class="btn" data-tool="green">緑敵</button>
         <button class="btn" data-tool="red">赤敵</button>
-        <button class="btn" data-tool="black">黒敵</button>
+        <button class="btn" data-tool="purple">紫敵</button>
         <button class="btn" data-tool="cyan">水色敵</button>
+        <button class="btn" data-tool="gray">灰色敵</button>
       </div>
       <canvas id="editorCanvas" width="728" height="504"></canvas>
       <div class="editorTools">
@@ -873,15 +874,17 @@ const mp = {
 
 // --- 敵の種類ごとのパラメータ ---
 // speed=移動速度 / hp=耐久力（弾を何発で倒せるか）
-// maxBullets=画面上に同時に出せる自分の弾の最大数（一番強いheavyだけ自機と同じ5発、他は1発）
+// maxBullets=画面上に同時に出せる自分の弾の最大数。赤・灰色は5発、それ以外は各種類の設定値。
 // color/dark=見た目の色 / r=当たり判定の半径
 const ENEMY_TYPES = {
   yellow:{ speed:0,  hp:1, color:"#ffe999", dark:"#f0c95c", maxBullets:1, bulletSpeed:80,  r:TANK_R, fastBullet:false, fireInterval:10.0, dodge:false },
   brown: { speed:50, hp:1, color:"#e0c09a", dark:"#c99a68", maxBullets:1, bulletSpeed:80,  r:TANK_R, fastBullet:false, fireInterval:10.0, dodge:false },
   green: { speed:50, hp:1, color:"#a8e6b0", dark:"#7ecb8c", maxBullets:1, bulletSpeed:240, r:TANK_R, fastBullet:true  },
   red:   { speed:50, hp:1, color:"#ff9aa8", dark:"#e06b7d", maxBullets:5, bulletSpeed:80,  r:TANK_R, fastBullet:false, fireInterval:1.0 },
-  black: { speed:100,hp:1, color:"#c3aef0", dark:"#a186e0", maxBullets:2, bulletSpeed:240, r:TANK_R, fastBullet:true, fireInterval:2.0},
-  // ★水色：その場から動かない反射狙撃タンク。弾は1発まで／弾速は緑と同じ／壁で2回まで反射。
+  purple: { speed:100,hp:1, color:"#c3aef0", dark:"#a186e0", maxBullets:2, bulletSpeed:240, r:TANK_R, fastBullet:true, fireInterval:2.0},
+  // ★灰色：赤戦車と同じ基本性能。通常攻撃は同時4発まで、5発目は危険な弾を相殺する防御専用弾。
+  gray:   { speed:50, hp:1, color:"#c4c8ce", dark:"#8e959e", maxBullets:5, attackBulletLimit:4, bulletSpeed:80, r:TANK_R, fastBullet:false, fireInterval:1.0, dodge:true, ai:"gray" },
+  // ★水色：その場から動かない反射狙撃タンク。弾は1発まで／弾速は緑と同じ／壁で2回まで反射.
   //   壁の反射を使って自機に当たる角度を探して撃つ（ai:"reflect"）。撃った後のクールタイムは長め。
   cyan:  { speed:0,  hp:1, color:"#7fe4f2", dark:"#34b8d0", maxBullets:1, bulletSpeed:240, r:TANK_R, fastBullet:true, maxBounce:2, bulletColor:"#48c96a", reflectSfx:"cyan", fireInterval:5.0, dodge:false, ai:"reflect" },
 };
@@ -893,7 +896,8 @@ const ENEMY_TYPES = {
      "#" = レンガの壁
      "X" = 鉄の壁（壊れない。弾は跳ね返る）
      "P" = 自機の初期位置（各ステージに1つだけ）
-     "1"〜"5" = 敵の出現位置（enemiesの配列の順番に対応）
+     "1"〜"6" = 通常ステージの敵の出現位置（enemiesの配列の順番に対応）
+     オリジナルステージは "1"〜"7" を敵の種類として使用（5＝紫、7＝灰色）
    ・ステージを増やしたい場合は、この配列に要素を追加するだけでOK
    ================================================================ */
 
@@ -913,47 +917,47 @@ const LEVELS = [
   { enemies:["brown","brown","yellow","yellow"], map:["...WW...WW...",".1.WW...WW.2.","...WW...WW...","#WWWW...WWWW#","####..P..####","#WWWW...WWWW#","...WW...WW...",".3.WW...WW.4.","...WW...WW..."], mp:[[5,4],[7,4]] },
   { enemies:["red","red"], map:[".............",".............","....1...2....","..X##WWW##X..",".............",".............","..#...P...#..","..##.....##..","............."], mp:[[4,6],[8,6]] },
   { enemies:["red","red","green","green"], map:[".............","...1.....2...","..####W####..",".............","...3.....4...",".............","..XXXXWXXXX..",".............","......P......"], mp:[[4,8],[8,8]] },
-  { enemies:["black"], map:[".............","......X......","......X......","......W......","..P...W...1..","......W......","......X......","......X......","............."], mp:[[2,2],[2,6]] },
-  { enemies:["brown","brown","red","red","green","green","black"], map:["......#......",".1..2.#.3..4.","......#......","......#......","...#..#..#...","...#..#..#...","...#.....#...",".P.#.5.6.#.7.","...#.....#..."], mp:[[0,7],[2,7]] },
-  { enemies:["green","yellow","brown","green"], map:[".............","...........1.","..WWWW.####..","..W.......#..",".P....2.....3","..W.......#..","..WWWW.####..","...........4.","............."], mp:[[1,1],[1,7]] },
-  { enemies:["black","brown","yellow","black"], map:[".............","...........1.","..XXX...XXX..","..X.......X..",".P......2...3","..X.......X..","..XXX...XXX..","...........4.","............."], mp:[[1,2],[1,6]] },
-  { enemies:["red","yellow","brown","green","yellow","black"], map:[".............","..WWW.X.WWW.1","..WWW.X.WWW..","......#..2...",".P......3..4.","......#..5...","..WWW.X.WWW..","..WWW.X.WWW.6","............."], mp:[[1,2],[1,6]] },
-  { enemies:["cyan","cyan"], map:[".............",".......#..1..",".......#.....","...#...W.##..",".P.#...W.....","...#...W.##..",".......#.....",".......#..2..","............."], mp:[[1,2],[1,6]] },
-  { enemies:["red","brown","black","cyan","black","red","brown"], map:[".............","..#..1..2.#..","..#.......#3.","..W..###..#..",".PW..###..W4.","..W..###..#..","..#.......#5.","..#..6..7.#..","............."], mp:[[1,2],[1,6]] },
-  { enemies:["green","green","green","green","green","green"], map:[".............",".....WWW...1.","....WWWWW2...","...WWWWWWW.3.",".P.WWWWWWW...","...WWWWWWW.4.","....WWWWW5...",".....WWW...6.","............."], mp:[[1,2],[1,6]] },
-  { enemies:["red","red","red","red","red","red","red"], map:[".............",".1..2.3.4..5.","XW..XWXWX..WX",".............","...6.....7...",".............","XWXWX...XWXWX","......P......","............."], mp:[[5,7],[7,7]] },
-  { enemies:["black","black","black","black","black","black"], map:[".............","...1..2..3...",".XXW##W##WXX.",".............","...4.....5...",".............",".XXW##W##WXX.","...P.....6...","............."], mp:[[3,7],[3,8]] },
-  { enemies:["cyan","cyan","cyan","cyan","cyan","cyan"], map:["....X...X....",".1..X.2.X..3.","XXX.X...X.XXX",".............","...........4.",".............","XXX.X...X.XXX",".P..X.5.X..6.","....X...X...."], mp:[[0,7],[0,8]] },
-  { enemies:["black","red","red","black","yellow","yellow"], map:[".1..2...3..4.",".X..#...#..X.",".............",".5.........6.",".#..#...#..#.",".............",".............",".X..#...#..X.","......P......"], mp:[[4,8],[8,8]] },
-  { enemies:["cyan","green","green","cyan","yellow","brown","brown","yellow"], map:[".............",".1.2.....3.4.",".............",".5.6..#..7.8.","......#......","XXXX..X..XXXX","......X......","......X......",".P....#......"], mp:[[1,8],[11,8]] },
-  { enemies:["green","brown","red","cyan","brown","red","cyan","green"], map:[".............",".WWWW...WWWW.",".W........1W.","....#2.3#..4.",".P...........","....#5.6#..7.",".W........8W.",".WWWW...WWWW.","............."], mp:[[1,3],[1,5]] },
-  { enemies:["brown","cyan","yellow","cyan","cyan","yellow","cyan","brown","cyan"], map:[".....1X.....2","....#.X.#....","......X..3..4","......X......",".P..........5","......X......","......X..6..7","....#.X.#....",".....8X.....9"], mp:[[1,2],[1,6]] },
-  { enemies:["red","brown","brown","red","green","green","black","black","cyan","cyan","cyan"], map:[".............",".1.2.....3.4.",".............","....##.##....","....#...#....","....#5.6#....","....#...#....","..P.#7.8#....","....#91011#...."], mp:[[2,7],[10,7]] },
-  { enemies:["green","brown","cyan","red","yellow","red","brown","cyan","green"], map:["WW....#....WW","WW.##...##1WW","WWP##.2.##..3","WW....#.4..WW","WW#..###.5#WW","WW....#.6..WW","WW.##.7.##..8","WW.##...##9WW","WW....#....WW"], mp:[[2,2],[2,6]] },
-  { enemies:["cyan","green","red","black","yellow","black","green","red","cyan"], map:["............1","...##2.3##...","...###.###.4.","....##.##....",".P....5......","....##.##....","...###.###.6.","...##7.8##...","............9"], mp:[[1,2],[1,6]] },
-  { enemies:["green","yellow","cyan","yellow","yellow","green"], map:["WW..1........",".WW.......23.","..WW......45.","...WWW.......",".............",".......WWW...",".........WW.6","..........WW.","...P.......WW"], mp:[[1,8],[5,8]] },
-  { enemies:["yellow","black","yellow","cyan","yellow","yellow","black","yellow","cyan","yellow"], map:["..........1..","......2...34.","......X...5..","......X......",".P....X......","......X......","......X...6..","......7...89.","..........10.."], mp:[[1,2],[1,6]] },
-  { enemies:["cyan","green","red","yellow","red","red","green","red","cyan"], map:["WWWWWWWWWWWWW","W..........1W","W...........W","W..X.....X23W","W.PX..4..X56W","W..X.....X78W","W...........W","W..........9W","WWWWWWWWWWWWW"], mp:[[2,3],[2,5]] },
-  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".1........2.","..#.........",".5##X...##X.","......#.....",".....##X....",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".X#X......1.","......X.....",".4..#.#...5.","......#.....","......XX....",".2....P.##3.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".1........2.","..#.X#......",".5..........","......#.....","........#X..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".X5##....X#.","............",".3..#.....4.","............","...#X..X.##.",".1....P...2.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".1........2.","..##........",".4.X......5.","......##....","..........X.",".3....P..X#.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".X....X...1.","......#.....",".4..#.#...5.","............",".......XX...",".2....P.#.3.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".1........2.","..#.##X.....",".5..........","......#.....","........##X.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".X45#.....X.","............",".3..X.....#.","............","....#..X..#.",".1....P...2.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".5........2.","..#.........",".#.X##...X#.","......#.....","......X##...",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".X5##.....1.",".......#....",".3..#..X..4.",".......#....",".......#....",".2....P..X#.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".1........2.","..#..#X.....",".5..........",".....X#.....",".........##.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".X5.X#....#.","............",".3..#.....4.","............",".#..##.X..X.",".1....P...2.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".1........2.","..#.#.......",".4..#.....5.",".....X#X#...",".#..........",".X....P..X3.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".X5....#..#.",".......X....",".3..#..#..4.","............",".......X.#..",".1....P..X2.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".1........2.","..#..X##....",".5..........",".....X#.....",".#.......X#.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["brown", "yellow", "green", "red", "black"], map:["............",".#45.#....#.","............",".X..##....3.","............",".#...X.X....",".1....P...2.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["yellow", "green", "red", "black", "brown"], map:["............",".5........2.","..#.........",".X#.#X#...#.",".....X#.....",".......#X#..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["green", "red", "black", "brown", "yellow"], map:["............",".X34X#5...#.","........#...",".1..#...#.2.","........X...",".......X#...",".X....P...#.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["red", "black", "brown", "yellow", "green"], map:["............",".1........2.","..###.......",".5..........",".....X#.....",".......X#...",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["black", "brown", "yellow", "green", "red"], map:["............",".X#X5...###.","............",".3..#.....4.","............","..X#...X#X..",".1....P...2.","............"], mp:[[6,6],[5,6]] }
+  { enemies:["purple"], map:[".............","......X......","......X......","......W......","..P...W...1..","......W......","......X......","......X......","............."], mp:[[2,2],[2,6]] },
+  { colored:true, enemies:["brown","brown","red","red","green","green","purple"], map:["......#......",".2..2.#.4..4.","......#......","......#......","...#..#..#...","...#..#..#...","...#.....#...",".P.#.3.3.#.5.","...#.....#..."], mp:[[0,7],[2,7]] },
+  { colored:true, enemies:["green","yellow","brown","green"], map:[".............","...........3.","..WWWW.####..","..W.......#..",".P....1.....2","..W.......#..","..WWWW.####..","...........3.","............."], mp:[[1,1],[1,7]] },
+  { colored:true, enemies:["purple","brown","yellow","purple"], map:[".............","...........5.","..XXX...XXX..","..X.......X..",".P......2...1","..X.......X..","..XXX...XXX..","...........5.","............."], mp:[[1,2],[1,6]] },
+  { colored:true, enemies:["red","yellow","brown","green","yellow","purple"], map:[".............","..WWW.X.WWW.4","..WWW.X.WWW..","......#..1...",".P......2..3.","......#..1...","..WWW.X.WWW..","..WWW.X.WWW.5","............."], mp:[[1,2],[1,6]] },
+  { colored:true, enemies:["cyan","cyan"], map:[".............",".......#..6..",".......#.....","...#...W.##..",".P.#...W.....","...#...W.##..",".......#.....",".......#..6..","............."], mp:[[1,2],[1,6]] },
+  { colored:true, enemies:["red","brown","purple","cyan","purple","red","brown"], map:[".............","..#..4..2.#..","..#.......#5.","..W..###..#..",".PW..###..W6.","..W..###..#..","..#.......#5.","..#..4..2.#..","............."], mp:[[1,2],[1,6]] },
+  { colored:true, enemies:["green","green","green","green","green","green"], map:[".............",".....WWW...3.","....WWWWW3...","...WWWWWWW.3.",".P.WWWWWWW...","...WWWWWWW.3.","....WWWWW3...",".....WWW...3.","............."], mp:[[1,2],[1,6]] },
+  { colored:true, enemies:["red","red","red","red","red","red","red"], map:[".............",".4..4.4.4..4.","XW..XWXWX..WX",".............","...4.....4...",".............","XWXWX...XWXWX","......P......","............."], mp:[[5,7],[7,7]] },
+  { colored:true, enemies:["purple","purple","purple","purple","purple","purple"], map:[".............","...5..5..5...",".XXW##W##WXX.",".............","...5.....5...",".............",".XXW##W##WXX.","...P.....5...","............."], mp:[[3,7],[3,8]] },
+  { colored:true, enemies:["cyan","cyan","cyan","cyan","cyan","cyan"], map:["....X...X....",".6..X.6.X..6.","XXX.X...X.XXX",".............","...........6.",".............","XXX.X...X.XXX",".P..X.6.X..6.","....X...X...."], mp:[[0,7],[0,8]] },
+  { colored:true, enemies:["purple","red","red","purple","yellow","yellow"], map:[".5..4...4..5.",".X..#...#..X.",".............",".1.........1.",".#..#...#..#.",".............",".............",".X..#...#..X.","......P......"], mp:[[4,8],[8,8]] },
+  { colored:true, enemies:["cyan","green","green","cyan","yellow","brown","brown","yellow"], map:[".............",".6.3.....3.6.",".............",".1.2..#..2.1.","......#......","XXXX..X..XXXX","......X......","......X......",".P....#......"], mp:[[1,8],[11,8]] },
+  { colored:true, enemies:["green","brown","red","cyan","brown","red","cyan","green"], map:[".............",".WWWW...WWWW.",".W........3W.","....#2.4#..6.",".P...........","....#2.4#..6.",".W........3W.",".WWWW...WWWW.","............."], mp:[[1,3],[1,5]] },
+  { colored:true, enemies:["brown","cyan","yellow","cyan","cyan","yellow","cyan","brown","cyan"], map:[".....2X.....6","....#.X.#....","......X..1..6","......X......",".P..........6","......X......","......X..1..6","....#.X.#....",".....2X.....6"], mp:[[1,2],[1,6]] },
+  { colored:true, enemies:["red","brown","brown","red","green","green","purple","purple","cyan","cyan","cyan"], map:[".............",".4.2.....2.4.",".............","....##.##....","....#...#....","....#3.3#....","....#...#....","..P.#5.5#....","....#666#...."], mp:[[2,7],[10,7]] },
+  { colored:true, enemies:["green","brown","cyan","red","yellow","red","brown","cyan","green"], map:["WW....#....WW","WW.##...##3WW","WWP##.2.##..6","WW....#.4..WW","WW#..###.1#WW","WW....#.4..WW","WW.##.2.##..6","WW.##...##3WW","WW....#....WW"], mp:[[2,2],[2,6]] },
+  { colored:true, enemies:["cyan","green","red","purple","yellow","purple","green","red","cyan"], map:["............6","...##3.4##...","...###.###.5.","....##.##....",".P....1......","....##.##....","...###.###.5.","...##3.4##...","............6"], mp:[[1,2],[1,6]] },
+  { colored:true, enemies:["green","yellow","cyan","yellow","yellow","green"], map:["WW..3........",".WW.......16.","..WW......11.","...WWW.......",".............",".......WWW...",".........WW.3","..........WW.","...P.......WW"], mp:[[1,8],[5,8]] },
+  { colored:true, enemies:["yellow","purple","yellow","cyan","yellow","yellow","purple","yellow","cyan","yellow"], map:["..........1..","......5...16.","......X...1..","......X......",".P....X......","......X......","......X...1..","......5...16.","..........1.."], mp:[[1,2],[1,6]] },
+  { colored:true, enemies:["cyan","green","red","yellow","red","red","green","red","cyan"], map:["WWWWWWWWWWWWW","W..........6W","W...........W","W..X.....X34W","W.PX..1..X44W","W..X.....X34W","W...........W","W..........6W","WWWWWWWWWWWWW"], mp:[[2,3],[2,5]] },
+  { enemies:["brown", "yellow", "green", "red", "purple"], map:["............",".1........2.","..#.........",".5##X...##X.","......#.....",".....##X....",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["yellow", "green", "red", "purple", "brown"], map:["............",".X#X......1.","......X.....",".4..#.#...5.","......#.....","......XX....",".2....P.##3.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["green", "red", "purple", "brown", "yellow"], map:["............",".1........2.","..#.X#......",".5..........","......#.....","........#X..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["red", "purple", "brown", "yellow", "green"], map:["............",".X5##....X#.","............",".3..#.....4.","............","...#X..X.##.",".1....P...2.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["purple", "brown", "yellow", "green", "red"], map:["............",".1........2.","..##........",".4.X......5.","......##....","..........X.",".3....P..X#.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["brown", "yellow", "green", "red", "purple"], map:["............",".X....X...1.","......#.....",".4..#.#...5.","............",".......XX...",".2....P.#.3.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["yellow", "green", "red", "purple", "brown"], map:["............",".1........2.","..#.##X.....",".5..........","......#.....","........##X.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["green", "red", "purple", "brown", "yellow"], map:["............",".X45#.....X.","............",".3..X.....#.","............","....#..X..#.",".1....P...2.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["red", "purple", "brown", "yellow", "green"], map:["............",".5........2.","..#.........",".#.X##...X#.","......#.....","......X##...",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["purple", "brown", "yellow", "green", "red"], map:["............",".X5##.....1.",".......#....",".3..#..X..4.",".......#....",".......#....",".2....P..X#.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["brown", "yellow", "green", "red", "purple"], map:["............",".1........2.","..#..#X.....",".5..........",".....X#.....",".........##.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["yellow", "green", "red", "purple", "brown"], map:["............",".X5.X#....#.","............",".3..#.....4.","............",".#..##.X..X.",".1....P...2.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["green", "red", "purple", "brown", "yellow"], map:["............",".1........2.","..#.#.......",".4..#.....5.",".....X#X#...",".#..........",".X....P..X3.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["red", "purple", "brown", "yellow", "green"], map:["............",".X5....#..#.",".......X....",".3..#..#..4.","............",".......X.#..",".1....P..X2.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["purple", "brown", "yellow", "green", "red"], map:["............",".1........2.","..#..X##....",".5..........",".....X#.....",".#.......X#.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["brown", "yellow", "green", "red", "purple"], map:["............",".#45.#....#.","............",".X..##....3.","............",".#...X.X....",".1....P...2.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["yellow", "green", "red", "purple", "brown"], map:["............",".5........2.","..#.........",".X#.#X#...#.",".....X#.....",".......#X#..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["green", "red", "purple", "brown", "yellow"], map:["............",".X34X#5...#.","........#...",".1..#...#.2.","........X...",".......X#...",".X....P...#.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["red", "purple", "brown", "yellow", "green"], map:["............",".1........2.","..###.......",".5..........",".....X#.....",".......X#...",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
+  { enemies:["purple", "brown", "yellow", "green", "red"], map:["............",".X#X5...###.","............",".3..#.....4.","............","..X#...X#X..",".1....P...2.","............"], mp:[[6,6],[5,6]] }
 ];
 
 // マップの行数・列数が足りない場合に自動で埋める（12×8で作られた既存ステージは、右と下に空きマスが足されて13×9になる）
@@ -1676,7 +1680,7 @@ function playTankDefeatSlowRetro(){
   setTimeout(()=>playTone(770,0.06,"square",0.06,0),140);
   setTimeout(()=>playTone(1050,0.18,"square",0.06,-400),210);
 }
-// 緑・赤・黒の戦車用の撃破音（レトロアーケード系・音を1つ追加したリッチ版）
+// 緑・赤・紫の戦車用の撃破音（レトロアーケード系・音を1つ追加したリッチ版）
 function playTankDefeatRichRetro(){
   mpq("d2");
   initAudio();
@@ -1749,13 +1753,14 @@ function buildLevel(idx, customLevel=null){
   let playerSpawn = {x:WORLD_W/2, y:WORLD_H/2};
   const enemySpawns = [];
   const customEnemies = []; // オリジナルステージ用：マス目の数字そのものが敵の種類
+  const coloredEnemies = !!(customLevel || lvl.colored); // ★colored:true のステージは、数字がそのまま敵の色（オリジナルステージと同じ書き方）
   for(let r=0;r<ROWS;r++){
     for(let c=0;c<COLS;c++){
       const ch = cellAt(r,c);
       const wx = c*TILE+TILE/2, wy = r*TILE+TILE/2;
       if(ch==="P") playerSpawn = {x:wx,y:wy};
-      else if(customLevel && CUSTOM_CHAR_TO_ENEMY[ch]) customEnemies.push({type:CUSTOM_CHAR_TO_ENEMY[ch], x:wx, y:wy});
-      else if(!customLevel && /[1-6]/.test(ch)) enemySpawns.push({x:wx,y:wy, order:parseInt(ch,10)});
+      else if(coloredEnemies && CUSTOM_CHAR_TO_ENEMY[ch]) customEnemies.push({type:CUSTOM_CHAR_TO_ENEMY[ch], x:wx, y:wy});
+      else if(!coloredEnemies && /[1-6]/.test(ch)) enemySpawns.push({x:wx,y:wy, order:parseInt(ch,10)});
     }
   }
   enemySpawns.sort((a,b)=>a.order-b.order);
@@ -1772,7 +1777,7 @@ function buildLevel(idx, customLevel=null){
     tanks.push(player);
   }
 
-  if(customLevel){
+  if(coloredEnemies){
     // 置いたマスの色の敵がそのマスに出る（行の順番と数字の順番がずれても入れ替わらない）
     for(const e of customEnemies) tanks.push(makeEnemy(e.type, e.x, e.y));
   } else {
@@ -1800,7 +1805,7 @@ function getMpSpawns(lvl, cellAt){
   for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
     const ch=cellAt(r,c);
     if(ch==="P") pc={c,r};
-    else if(/[1-6]/.test(ch)) enemies.push({c,r});
+    else if(/[1-7]/.test(ch)) enemies.push({c,r});
   }
   if(!pc) pc={c:Math.floor(COLS/2), r:Math.floor(ROWS/2)};
   const free=(c,r)=> c>=0&&r>=0&&c<COLS&&r<ROWS&&cellAt(r,c)===".";
@@ -1850,6 +1855,7 @@ function makeEnemy(type,x,y){
     r:t.r, speed:t.speed, hp:t.hp, maxHp:t.hp, alive:true,
     spawnX:x, spawnY:y, // 復活時にこの位置へ戻す
     maxBullets:t.maxBullets, // 画面上に同時に出せる自分の弾の最大数
+    attackBulletLimit:t.attackBulletLimit ?? t.maxBullets, // 通常攻撃で同時に出せる弾数（灰色は4発）
     fireInterval:t.fireInterval, // 敵ごとの発射間隔を実体にも保持
     bulletCount:0,
     fireCooldown: rand(0, t.fireInterval ?? ENEMY_FIRE_INTERVAL), // 敵ごとに少しずつ発射タイミングをずらす
@@ -1865,9 +1871,14 @@ function makeEnemy(type,x,y){
     dodgeActiveTimer: 0, // 弾避けを続ける時間（秒）
     dodgeCooldownTimer: 0, // 次に弾避けを開始できるまでの時間（秒）
     shouldShootCache: false,
-    ai: t.ai || null,       // "reflect"＝水色の反射狙撃AI
+    ai: t.ai || null,       // "reflect"＝水色の反射狙撃AI / "gray"＝灰色の高性能AI
     aimSolution: null,      // 水色：今狙っている反射ショットの角度など
-    reactTimer: 0,          // 水色：狙いを見つけてから撃つまでの猶予
+    reactTimer: 0,          // 水色：狙いを見つけてから撃つまでの猶予(秒)
+    defenseCooldownTimer: 0, // 灰色：5発目の防御弾を再び撃てるまでの時間
+    grayAimSolution: null,
+    grayDefenseAngle: null,
+    missileDodgeDir: null,
+    missileDodgeTimer: 0
   };
 }
 
@@ -2066,7 +2077,7 @@ function hasLineOfSight(x0,y0,x1,y1){
 /* ================================================================
    弾
    ================================================================ */
-function spawnBullet(owner){
+function spawnBullet(owner, options = {}){
   const enemyType = !owner.isPlayer ? ENEMY_TYPES[owner.type] : null;
   const fastBullet = !!enemyType?.fastBullet;
   // ★爽快モードでは自機の弾速のみ2倍にする（敵の弾速は変えない）
@@ -2081,6 +2092,7 @@ function spawnBullet(owner){
     vy: Math.sin(owner.turretAngle)*speed,
     owner, bounces:0, dead:false, trail:[], fastBullet, age:0, bid:++mp.bidSeq,
     maxBounce, reflectSfx: enemyType?.reflectSfx || null, tint: enemyType?.bulletColor || null,
+    defensiveShot: !!options.defensiveShot, // 灰色戦車の5発目：敵弾との相殺専用
   });
   owner.bulletCount = (owner.bulletCount || 0) + 1;
   playShot(fastBullet);
@@ -2098,7 +2110,7 @@ function updateBullets(dt){
     b.x += b.vx*dt;
     b.y += b.vy*dt;
 
-    // 反射できない弾（緑・黒の高速弾）は、外周の壁に当たったら消える。
+    // 反射できない弾（緑・紫の高速弾）は、外周の壁に当たったら消える。
     if(b.maxBounce<=0){
       if(b.x<BULLET_R || b.x>WORLD_W-BULLET_R ||
          b.y<BULLET_R || b.y>WORLD_H-BULLET_R){
@@ -2130,7 +2142,7 @@ function updateBullets(dt){
     const col=Math.floor(b.x/TILE), row=Math.floor(b.y/TILE);
     if(row>=0&&col>=0&&row<ROWS&&col<COLS && blocksBullet(walls[row][col])){
       if(walls[row][col]===BRICK){
-        // 木箱は弾では壊れず、反射できる弾だけ反射。反射できない弾（緑・黒）は消える。
+        // 木箱は弾では壊れず、反射できる弾だけ反射。反射できない弾（緑・紫）は消える。
         if(b.maxBounce<=0){
           spawnFastBulletImpactFx(b.x,b.y);
           playBulletImpactSound(true);
@@ -2151,7 +2163,7 @@ function updateBullets(dt){
         }
         continue;
       } else {
-        // 鉄壁：反射できる弾は跳ね返し、反射できない弾（緑・黒）は消える。
+        // 鉄壁：反射できる弾は跳ね返し、反射できない弾（緑・紫）は消える。
         if(b.maxBounce<=0){
           spawnFastBulletImpactFx(b.x,b.y);
           playBulletImpactSound(true);
@@ -2179,6 +2191,10 @@ function updateBullets(dt){
       b.dead=true;
       continue;
     }
+
+    // 灰色戦車の5発目は弾同士を相殺する防御専用。戦車にはダメージを与えず、
+    // 下の弾同士の判定だけに参加させる。
+    if(b.defensiveShot) continue;
 
     // 戦車との当たり判定。
     for(const candidate of querySpatialGrid(tankGrid,b.x,b.y,1)){
@@ -2240,7 +2256,7 @@ function damageTank(t){
       if(mp.active) onMpPlayerDeath(t); else onPlayerDeath();
     } else if(t.type === "yellow" || t.type === "brown") {
       playTankDefeatSlowRetro();
-    } else if(t.type === "green" || t.type === "red" || t.type === "black" || t.type === "cyan") {
+    } else if(t.type === "green" || t.type === "red" || t.type === "purple" || t.type === "cyan" || t.type === "gray") {
       playTankDefeatRichRetro();
     } else {
       playTankDefeat();
@@ -2354,6 +2370,11 @@ function onPlayerDeath(){
     t.shouldShootCache = false;
     t.aimSolution = null;
     t.reactTimer = 0;
+    t.grayAimSolution = null;
+    t.grayDefenseAngle = null;
+    t.missileDodgeDir = null;
+    t.missileDodgeTimer = 0;
+    t.defenseCooldownTimer = 0;
     t.bulletCount = 0;
     const type = ENEMY_TYPES[t.type];
     t.fireCooldown = rand(0, type.fireInterval ?? ENEMY_FIRE_INTERVAL);
@@ -2611,6 +2632,7 @@ function updateEnemy(t, dt){
   if(!t.alive) return;
   const p = nearestAlivePlayer(t);
   if(t.ai === "reflect"){ updateReflectSniper(t, dt); return; } // 水色：反射狙撃AI
+  if(t.ai === "gray"){ updateGrayTank(t, dt); return; } // 灰色：偏差・反射射撃／ミサイル回避／防御弾AI
 
   // 弾避けは開始後0.5秒だけ継続し、次の開始まで2秒のクールタイムを設ける。
   t.dodgeActiveTimer = Math.max(0, (t.dodgeActiveTimer || 0) - dt);
@@ -2696,6 +2718,306 @@ function updateEnemy(t, dt){
   }
 }
 
+
+/* ================================================================
+   灰色戦車の高性能AI
+   ・通常弾は同時4発まで。プレイヤーの移動を先読みし、壁・鉄壁での1回反射も含めて狙う。
+   ・プレイヤーのミサイル発射を検知した瞬間に着弾地点を読み、爆風圏外へ移動する。
+   ・通常弾も他の回避型戦車と同じように避ける。
+   ・通常弾4発が出ている状態で自分に当たりそうな弾を見つけた場合、5発目で迎撃する。
+     防御弾の発射後は10秒間、防御弾を再発射できない。
+   ================================================================ */
+const GRAY_THINK_INTERVAL = 0.25;       // 重い射撃予測の更新間隔
+const GRAY_SHOT_STEP = 1/30;            // 弾道シミュレーションの時間刻み
+const GRAY_SHOT_MAX_TIME = 7.5;         // 先読みする弾道の最大時間
+const GRAY_SHOT_ANGLE_STEP = 5;         // 全方向の初回探索幅（度）
+const GRAY_SHOT_REFINE_STEP = 0.35;     // 惜しい角度を細かく調べる幅（度）
+const GRAY_SHOT_NEAR_MISS = 38;         // この距離以内に近づく角度を再探索
+const GRAY_TURN_SPEED = 6.2;            // 砲塔の旋回速度（ラジアン/秒）
+const GRAY_DODGE_RADIUS = ENEMY_DODGE_RADIUS;
+const GRAY_DEFENSE_COOLDOWN = 10.0;     // 5発目の防御弾のクールタイム
+const GRAY_DEFENSE_THREAT_TIME = 1.25;  // この時間以内に被弾しそうなら迎撃を試みる
+
+function grayCountAttackBullets(t){
+  let n=0;
+  for(const b of bullets) if(!b.dead && b.owner===t && !b.defensiveShot) n++;
+  return n;
+}
+
+// プレイヤーの現在速度と壁への衝突を含め、数秒先までの位置を一度だけ作る。
+function grayBuildTargetPath(target){
+  const path=[];
+  const sim={x:target.x,y:target.y,r:target.r};
+  const steps=Math.ceil(GRAY_SHOT_MAX_TIME/GRAY_SHOT_STEP);
+  const vx=Number.isFinite(target.vx)?target.vx:0;
+  const vy=Number.isFinite(target.vy)?target.vy:0;
+  for(let i=0;i<=steps;i++){
+    path.push({x:sim.x,y:sim.y});
+    sim.x += vx*GRAY_SHOT_STEP;
+    sim.y += vy*GRAY_SHOT_STEP;
+    resolveWallCollision(sim);
+  }
+  return path;
+}
+
+// 通常弾の実際の反射ルールに合わせて、指定角度の弾道を予測する。
+function graySimulateShot(t, angle, target, targetPath, othersGrid, out){
+  const type=ENEMY_TYPES.gray;
+  const maxBounce=type.maxBounce ?? (type.fastBullet?0:BULLET_MAX_BOUNCE);
+  const speed=type.bulletSpeed;
+  let x=t.x+Math.cos(angle)*(t.r+6), y=t.y+Math.sin(angle)*(t.r+6);
+  let vx=Math.cos(angle)*speed, vy=Math.sin(angle)*speed;
+  let bounces=0, minD2=1e12;
+  const steps=Math.min(targetPath.length-1,Math.ceil(GRAY_SHOT_MAX_TIME/GRAY_SHOT_STEP));
+  const hitR=(target.r+BULLET_R)*0.96, hitR2=hitR*hitR;
+  out.hit=false; out.time=0; out.miss=1e6; out.bounces=0;
+  for(let i=1;i<=steps;i++){
+    x+=vx*GRAY_SHOT_STEP; y+=vy*GRAY_SHOT_STEP;
+    // 外周での反射（通常弾と同じく合計1回まで）。
+    if(x<BULLET_R){x=BULLET_R;vx=-vx;bounces++;}
+    else if(x>WORLD_W-BULLET_R){x=WORLD_W-BULLET_R;vx=-vx;bounces++;}
+    if(y<BULLET_R){y=BULLET_R;vy=-vy;bounces++;}
+    else if(y>WORLD_H-BULLET_R){y=WORLD_H-BULLET_R;vy=-vy;bounces++;}
+    if(bounces>maxBounce) break;
+
+    const col=Math.floor(x/TILE), row=Math.floor(y/TILE);
+    if(row>=0&&col>=0&&row<ROWS&&col<COLS&&blocksBullet(walls[row][col])){
+      if(bounces<maxBounce){
+        const cx=col*TILE+TILE/2, cy=row*TILE+TILE/2;
+        if(Math.abs(x-cx)>Math.abs(y-cy)) vx=-vx; else vy=-vy;
+        bounces++;
+        x+=vx*GRAY_SHOT_STEP*2; y+=vy*GRAY_SHOT_STEP*2;
+      }else break;
+    }
+    if(bounces>maxBounce) break;
+
+    // プレイヤー以外の戦車に先に当たる軌道は選ばない。
+    let blockedByTank=false;
+    for(const candidate of querySpatialGrid(othersGrid,x,y,1)){
+      const o=candidate.item, dx=x-o.x, dy=y-o.y;
+      const blockR=o.r+BULLET_R+2;
+      if(dx*dx+dy*dy < blockR*blockR){blockedByTank=true;break;}
+    }
+    if(blockedByTank) break;
+
+    const targetPos=targetPath[i];
+    const dx=x-targetPos.x, dy=y-targetPos.y, d2=dx*dx+dy*dy;
+    if(d2<minD2) minD2=d2;
+    if(d2<hitR2){
+      out.hit=true;out.time=i*GRAY_SHOT_STEP;out.miss=0;out.bounces=bounces;return;
+    }
+  }
+  out.miss=Math.sqrt(minD2);
+}
+
+// 見えていない位置にいるプレイヤーにも、跳ね返りを利用して当たる角度を探す。
+function grayFindShot(t,p){
+  if(!p || !p.alive || p.invuln>0) return null;
+  const targetPath=grayBuildTargetPath(p);
+  // 味方戦車などに先に当たる軌道を除外するため、他の戦車を空間分割しておく。
+  // 敵を大量配置したオリジナルステージでも、全戦車を毎ステップ走査しない。
+  const othersGrid=buildSpatialGrid(tanks,TILE,o=>o.alive && o!==p && o!==t);
+  const res={hit:false,time:0,miss:0,bounces:0};
+  let best=null;
+  const near=[];
+  const consider=a=>{
+    graySimulateShot(t,a,p,targetPath,othersGrid,res);
+    if(res.hit){
+      if(!best || res.time<best.time) best={angle:a,time:res.time,bounces:res.bounces};
+    }else if(res.miss<GRAY_SHOT_NEAR_MISS){near.push(a);}
+  };
+  for(let deg=0;deg<360;deg+=GRAY_SHOT_ANGLE_STEP) consider(deg*Math.PI/180);
+  if(!best){
+    const coarse=near.slice();
+    const seen=new Set();
+    for(const a0 of coarse){
+      for(let k=-5;k<=5;k++){
+        if(!k) continue;
+        const a=a0+k*GRAY_SHOT_REFINE_STEP*Math.PI/180;
+        const key=Math.round((((a%(Math.PI*2))+Math.PI*2)%(Math.PI*2))*100000);
+        if(seen.has(key)) continue;
+        seen.add(key);consider(a);
+      }
+    }
+  }
+  return best;
+}
+
+// プレイヤーの弾が灰色戦車へ接近しているかを予測し、相殺できる迎撃角度を探す。
+function grayFindDefenseIntercept(t){
+  const speed=ENEMY_TYPES.gray.bulletSpeed;
+  let best=null;
+  for(const b of bullets){
+    if(b.dead || !b.owner || !b.owner.isPlayer) continue;
+    const rx=b.x-t.x, ry=b.y-t.y;
+    const tvx=t.vx||0, tvy=t.vy||0;
+    const rvx=b.vx-tvx, rvy=b.vy-tvy;
+    const vv=rvx*rvx+rvy*rvy;
+    if(vv<1) continue;
+    const closestT=-(rx*rvx+ry*rvy)/vv;
+    if(closestT<=0.02 || closestT>GRAY_DEFENSE_THREAT_TIME) continue;
+    const cx=rx+rvx*closestT, cy=ry+rvy*closestT;
+    const danger=t.r+BULLET_R+10;
+    if(cx*cx+cy*cy>danger*danger) continue;
+
+    // 灰色戦車から撃つ弾と、飛来中の弾が交差する時刻を二次方程式で求める。
+    const A=b.vx*b.vx+b.vy*b.vy-speed*speed;
+    const B=2*(rx*b.vx+ry*b.vy);
+    const C=rx*rx+ry*ry;
+    let hitTime=Infinity;
+    if(Math.abs(A)<0.0001){
+      if(Math.abs(B)>0.0001){const q=-C/B;if(q>0)hitTime=q;}
+    }else{
+      const disc=B*B-4*A*C;
+      if(disc>=0){
+        const root=Math.sqrt(disc);
+        const q1=(-B-root)/(2*A),q2=(-B+root)/(2*A);
+        if(q1>0) hitTime=Math.min(hitTime,q1);
+        if(q2>0) hitTime=Math.min(hitTime,q2);
+      }
+    }
+    if(!Number.isFinite(hitTime) || hitTime>closestT-0.08 || hitTime>1.8) continue;
+    const ix=b.x+b.vx*hitTime, iy=b.y+b.vy*hitTime;
+    // 壁で遮られている迎撃は実弾が届かないため候補から外す。
+    if(!hasLineOfSight(t.x,t.y,ix,iy)) continue;
+    const angle=Math.atan2(iy-t.y,ix-t.x);
+    if(!best || closestT<best.threatTime) best={angle,threatTime:closestT,interceptTime:hitTime};
+  }
+  return best;
+}
+
+// ミサイルの着弾予告から爆風圏を計算し、壁に阻まれない最善の逃げ道を選ぶ。
+function grayFindMissileEscape(t){
+  let best=null;
+  const danger=MISSILE_BLAST_RADIUS+t.r+12;
+  for(const m of missiles){
+    if(m.dead || !m.owner || !m.owner.isPlayer) continue;
+    const c=Math.floor(m.targetX/TILE), r=Math.floor(m.targetY/TILE);
+    if(r>=0&&c>=0&&r<ROWS&&c<COLS&&walls[r][c]===WATER) continue; // 水上着弾は爆発しない
+    const remaining=Math.max(0,m.flightTime-m.time);
+    const dx=t.x-m.targetX, dy=t.y-m.targetY;
+    const distance=Math.hypot(dx,dy);
+    // 今の進行方向を保った場合の着弾時位置を予測し、爆風圏へ入るミサイルだけ避ける。
+    const expected={x:t.x,y:t.y,r:t.r};
+    const expectedSteps=Math.max(1,Math.min(28,Math.ceil(remaining/0.07)));
+    const expectedDt=remaining/expectedSteps;
+    const expectedDir=Number.isFinite(t.wanderDir)?t.wanderDir:t.angle;
+    for(let j=0;j<expectedSteps;j++){
+      expected.x+=Math.cos(expectedDir)*t.speed*expectedDt;
+      expected.y+=Math.sin(expectedDir)*t.speed*expectedDt;
+      resolveWallCollision(expected);
+    }
+    const expectedDistance=Math.hypot(expected.x-m.targetX,expected.y-m.targetY);
+    if(distance>danger && expectedDistance>danger) continue;
+
+    let bestAngle=0,bestScore=-1e9;
+    const steps=Math.max(1,Math.min(28,Math.ceil(remaining/0.07)));
+    const stepDt=remaining/steps;
+    for(let k=0;k<16;k++){
+      const a=k*Math.PI/8;
+      const sim={x:t.x,y:t.y,r:t.r};
+      let travelled=0;
+      for(let j=0;j<steps;j++){
+        const ox=sim.x,oy=sim.y;
+        sim.x+=Math.cos(a)*t.speed*stepDt;
+        sim.y+=Math.sin(a)*t.speed*stepDt;
+        resolveWallCollision(sim);
+        travelled+=Math.hypot(sim.x-ox,sim.y-oy);
+      }
+      const endDistance=Math.hypot(sim.x-m.targetX,sim.y-m.targetY);
+      const progress=endDistance-distance;
+      const score=endDistance+travelled*0.12+progress*0.25;
+      if(score>bestScore){bestScore=score;bestAngle=a;}
+    }
+    const risk=danger+t.speed*remaining-distance;
+    if(!best || risk>best.risk) best={angle:bestAngle,risk,remaining};
+  }
+  return best;
+}
+
+function updateGrayTank(t,dt){
+  const p=nearestAlivePlayer(t);
+  t.fireCooldown=Math.max(0,(t.fireCooldown??0)-dt);
+  t.defenseCooldownTimer=Math.max(0,(t.defenseCooldownTimer??0)-dt);
+  t.dodgeActiveTimer=Math.max(0,(t.dodgeActiveTimer||0)-dt);
+  t.dodgeCooldownTimer=Math.max(0,(t.dodgeCooldownTimer||0)-dt);
+  if(t.dodgeActiveTimer<=0) t.dodgeDirCache=null;
+
+  // ミサイルは発射されたフレームの直後から毎フレーム確認する。
+  const missileEscape=grayFindMissileEscape(t);
+  if(missileEscape){
+    t.missileDodgeDir=missileEscape.angle;
+    t.missileDodgeTimer=Math.max(0.08,missileEscape.remaining+0.08);
+  }else{
+    t.missileDodgeTimer=Math.max(0,(t.missileDodgeTimer||0)-dt);
+    if(t.missileDodgeTimer<=0) t.missileDodgeDir=null;
+  }
+
+  t.aiThinkTimer-=dt;
+  if(t.aiThinkTimer<=0){
+    t.aiThinkTimer+=GRAY_THINK_INTERVAL;
+    // 通常弾は既存の敵戦車と同じく、近づいた弾から離れる。
+    if(t.dodge && t.dodgeActiveTimer<=0 && t.dodgeCooldownTimer<=0){
+      let dodgeDir=null,dodgeDistSq=GRAY_DODGE_RADIUS*GRAY_DODGE_RADIUS;
+      for(const b of bullets){
+        if(b.dead || b.owner===t) continue;
+        const dx=t.x-b.x,dy=t.y-b.y,ds=dx*dx+dy*dy;
+        if(ds<dodgeDistSq){dodgeDistSq=ds;dodgeDir=Math.atan2(dy,dx);}
+      }
+      if(dodgeDir!==null){
+        t.dodgeDirCache=dodgeDir;
+        t.dodgeActiveTimer=0.5;
+        t.dodgeCooldownTimer=2.0;
+      }
+    }
+    t.grayAimSolution=grayFindShot(t,p);
+  }
+
+  // 移動優先順位：ミサイルの爆風回避 ＞ 通常弾回避 ＞ プレイヤー方向への移動／徘徊。
+  t.wanderTimer-=dt;
+  if(t.wanderTimer<=0 || t.stuckTimer>0.4){
+    t.wanderDir=(p&&p.alive)?Math.atan2(p.y-t.y,p.x-t.x)+rand(-0.35,0.35):Math.random()*Math.PI*2;
+    t.wanderTimer=rand(0.8,1.6);
+    t.stuckTimer=0;
+  }
+  let moveDir=t.wanderDir;
+  if(t.dodgeActiveTimer>0 && t.dodgeDirCache!==null) moveDir=t.dodgeDirCache;
+  if(t.missileDodgeDir!==null) moveDir=t.missileDodgeDir;
+  const prevX=t.x,prevY=t.y;
+  t.angle=lerpAngle(t.angle,moveDir,1-Math.pow(0.001,dt));
+  t.x+=Math.cos(t.angle)*t.speed*dt;
+  t.y+=Math.sin(t.angle)*t.speed*dt;
+  resolveWallCollision(t);
+  t.vx=dt>0?(t.x-prevX)/dt:0;
+  t.vy=dt>0?(t.y-prevY)/dt:0;
+  const moved=Math.hypot(t.x-prevX,t.y-prevY);
+  if(moved<t.speed*dt*0.3) t.stuckTimer+=dt; else t.stuckTimer=0;
+
+  // 5発目は防御専用。4発の通常弾が場にあり、被弾が迫っている場合だけ迎撃する。防御弾は敵弾との相殺のみで戦車には当たらない。
+  let defense=null;
+  if(grayCountAttackBullets(t)>=4 && t.bulletCount<t.maxBullets && t.defenseCooldownTimer<=0){
+    defense=grayFindDefenseIntercept(t);
+  }
+  t.grayDefenseAngle=defense?defense.angle:null;
+  const aim=defense?defense.angle:(t.grayAimSolution?.angle ?? (p&&p.alive?Math.atan2(p.y-t.y,p.x-t.x):t.turretAngle));
+  t.turretAngle=rotateToward(t.turretAngle,aim,GRAY_TURN_SPEED*dt);
+
+  if(defense && grayCountAttackBullets(t)>=4 && t.bulletCount<t.maxBullets && t.defenseCooldownTimer<=0 && angleDiffAbs(t.turretAngle,defense.angle)<0.055){
+    spawnBullet(t,{defensiveShot:true});
+    t.defenseCooldownTimer=GRAY_DEFENSE_COOLDOWN;
+    t.grayDefenseAngle=null;
+    return;
+  }
+
+  // 攻撃弾は最大4発。壁の反射とプレイヤーの移動先を計算した軌道だけを採用する。
+  if(t.grayAimSolution && p&&p.alive && p.invuln<=0 && t.fireCooldown<=0 && grayCountAttackBullets(t)<t.attackBulletLimit && t.bulletCount<t.maxBullets && !defense){
+    if(angleDiffAbs(t.turretAngle,t.grayAimSolution.angle)<0.055){
+      spawnBullet(t);
+      t.fireCooldown=t.fireInterval??1.0;
+      t.grayAimSolution=null;
+    }
+  }
+}
 
 /* ================================================================
    水色戦車の反射狙撃AI
@@ -2986,8 +3308,8 @@ let editorTool = ".";
 let editingStageId = null;
 let editorReturnTo = "title";
 const editorWidth = STAGE_COLS, editorHeight = STAGE_ROWS; // ★オリジナルステージの広さは固定（変更不可）
-const CUSTOM_ENEMY_TO_CHAR = {yellow:"1",brown:"2",green:"3",red:"4",black:"5",cyan:"6"};
-const CUSTOM_CHAR_TO_ENEMY = {"1":"yellow","2":"brown","3":"green","4":"red","5":"black","6":"cyan"};
+const CUSTOM_ENEMY_TO_CHAR = {yellow:"1",brown:"2",green:"3",red:"4",purple:"5",cyan:"6",gray:"7"};
+const CUSTOM_CHAR_TO_ENEMY = {"1":"yellow","2":"brown","3":"green","4":"red","5":"purple","6":"cyan","7":"gray"};
 // 保存済みステージを固定サイズ(13×9)に合わせる。足りない分は空きマス、はみ出した分は切り捨て。
 // 敵のリストも、マップ上に置かれた敵から作り直す。
 function fitCustomLevel(level){
@@ -3233,8 +3555,10 @@ function startCustomStage(level){
 // ・文字は 0-9 と英大文字（I,L,O,Uを除く32種）。先頭は"T"、末尾は入力ミス検出用のチェック文字。
 // ================================================================
 const SHARE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-const SHARE_CELL_CHARS = "#XPW123456";                 // 空きマス以外の10種類
+const SHARE_CELL_CHARS = "#XPW1234567";                // 空きマス以外の11種類（7＝灰色戦車）
 const SHARE_KINDS = BigInt(SHARE_CELL_CHARS.length);
+const SHARE_CELL_CHARS_LEGACY = "#XPW123456";           // 灰色戦車追加前の共有コードを読むために残す
+const SHARE_KINDS_LEGACY = BigInt(SHARE_CELL_CHARS_LEGACY.length);
 const SHARE_CELLS = STAGE_COLS * STAGE_ROWS;           // 117マス
 const SHARE_PREFIX = "S";                              // 形式の目印（名前入りの旧形式は"T"）
 const SHARE_PREFIX_MP = "M";                           // 1P・2Pのリスポーン位置つきのステージ用
@@ -3255,14 +3579,15 @@ function shareCheckChar(body){
   for(let i=0;i<body.length;i++) sum+=SHARE_ALPHABET.indexOf(body[i])*(i+1);
   return SHARE_ALPHABET[sum%32];
 }
-function encodeStageCode(stage){
+function encodeStageCode(stage, cellChars=SHARE_CELL_CHARS){
+  const kinds=BigInt(cellChars.length);
   const fit=fitCustomLevel(stage);
   const items=[];
-  fit.map.forEach((row,r)=>{ for(let c=0;c<STAGE_COLS;c++){ const t=SHARE_CELL_CHARS.indexOf(row[c]); if(t>=0) items.push({pos:r*STAGE_COLS+c,t}); } });
+  fit.map.forEach((row,r)=>{ for(let c=0;c<STAGE_COLS;c++){ const t=cellChars.indexOf(row[c]); if(t>=0) items.push({pos:r*STAGE_COLS+c,t}); } });
   const k=items.length;
   let rank=0n; items.forEach((it,i)=>{ rank+=SHARE_C[it.pos][i+1]; });   // 置いたマスの位置
-  let types=0n; for(let i=k-1;i>=0;i--) types=types*SHARE_KINDS+BigInt(items[i].t); // 置いたものの種類
-  let n=(rank*(SHARE_KINDS**BigInt(k))+types)*118n+BigInt(k);
+  let types=0n; for(let i=k-1;i>=0;i--) types=types*kinds+BigInt(items[i].t); // 置いたものの種類
+  let n=(rank*(kinds**BigInt(k))+types)*118n+BigInt(k);
   let prefix=SHARE_PREFIX;
   if(fit.mp){ // 1P・2Pの位置（無いときは117）を後ろに付ける
     const pos=fit.mp.map(p=>p ? p[1]*STAGE_COLS+p[0] : SHARE_CELLS);
@@ -3280,43 +3605,51 @@ function decodeStageCode(text){
   try{
     let c=String(text||"").toUpperCase().replace(/[\s\-_]/g,"").replace(/O/g,"0").replace(/[IL]/g,"1");
     if(c.length<3 || (c[0]!==SHARE_PREFIX && c[0]!==SHARE_PREFIX_MP)) return null;
-    const hasMp = c[0]===SHARE_PREFIX_MP;
+    const hasMp=c[0]===SHARE_PREFIX_MP;
     for(const ch of c) if(SHARE_ALPHABET.indexOf(ch)<0) return null;
     const body=c.slice(0,-1);
     if(shareCheckChar(body)!==c[c.length-1]) return null;
-    let n=0n;
-    for(const ch of body.slice(1)) n=n*32n+BigInt(SHARE_ALPHABET.indexOf(ch));
-    let mpPos=null;
-    if(hasMp){
-      const info=Number(n%13924n); n/=13924n;
-      mpPos=[Math.floor(info/118), info%118];
-      if(mpPos[0]>SHARE_CELLS || mpPos[1]>SHARE_CELLS) return null;
-    }
-    const k=Number(n%118n); n/=118n;
-    if(k>SHARE_CELLS) return null;
-    const span=SHARE_KINDS**BigInt(k);
-    let types=n%span, rank=n/span;
-    if(rank>=SHARE_C[SHARE_CELLS][k]) return null;
-    const pos=new Array(k);
-    for(let i=k;i>=1;i--){
-      let p=SHARE_CELLS-1;
-      while(p>0 && SHARE_C[p][i]>rank) p--;
-      pos[i-1]=p; rank-=SHARE_C[p][i];
-    }
-    const g=Array.from({length:STAGE_ROWS},()=>Array(STAGE_COLS).fill("."));
-    for(let i=0;i<k;i++){
-      const t=Number(types%SHARE_KINDS); types/=SHARE_KINDS;
-      g[Math.floor(pos[i]/STAGE_COLS)][pos[i]%STAGE_COLS]=SHARE_CELL_CHARS[t];
-    }
-    const raw={name:SHARE_DEFAULT_NAME,map:g.map(r=>r.join(""))};
-    if(mpPos) raw.mp=mpPos.map(v=>v<SHARE_CELLS ? [v%STAGE_COLS, Math.floor(v/STAGE_COLS)] : null);
-    const stage=fitCustomLevel(raw);
-    if(stage.map.join("").split("P").length!==2 || !stage.enemies.length) return null; // 自機は1か所・敵は1台以上
-    if(encodeStageCode(stage)!==c) return null; // 作り直したコードが入力と一致しなければ壊れたコード
-    const result={name:SHARE_DEFAULT_NAME,map:stage.map,enemies:stage.enemies};
-    if(stage.mp) result.mp=stage.mp;
-    return result;
-  }catch(e){ return null; }
+
+    // 新形式（灰色＝7）を先に試し、旧形式も読めるようにする。
+    // これにより、紫戦車が含まれる旧形式の共有コードも引き続き使える。
+    const decodeWithCharset=(cellChars)=>{
+      const kinds=BigInt(cellChars.length);
+      let n=0n;
+      for(const ch of body.slice(1)) n=n*32n+BigInt(SHARE_ALPHABET.indexOf(ch));
+      let mpPos=null;
+      if(hasMp){
+        const info=Number(n%13924n); n/=13924n;
+        mpPos=[Math.floor(info/118),info%118];
+        if(mpPos[0]>SHARE_CELLS || mpPos[1]>SHARE_CELLS) return null;
+      }
+      const k=Number(n%118n); n/=118n;
+      if(k>SHARE_CELLS) return null;
+      const span=kinds**BigInt(k);
+      let types=n%span,rank=n/span;
+      if(rank>=SHARE_C[SHARE_CELLS][k]) return null;
+      const pos=new Array(k);
+      for(let i=k;i>=1;i--){
+        let p=SHARE_CELLS-1;
+        while(p>0 && SHARE_C[p][i]>rank) p--;
+        pos[i-1]=p; rank-=SHARE_C[p][i];
+      }
+      const g=Array.from({length:STAGE_ROWS},()=>Array(STAGE_COLS).fill("."));
+      for(let i=0;i<k;i++){
+        const t=Number(types%kinds); types/=kinds;
+        if(!cellChars[t]) return null;
+        g[Math.floor(pos[i]/STAGE_COLS)][pos[i]%STAGE_COLS]=cellChars[t];
+      }
+      const raw={name:SHARE_DEFAULT_NAME,map:g.map(r=>r.join(""))};
+      if(mpPos) raw.mp=mpPos.map(v=>v<SHARE_CELLS?[v%STAGE_COLS,Math.floor(v/STAGE_COLS)]:null);
+      const stage=fitCustomLevel(raw);
+      if(stage.map.join("").split("P").length!==2 || !stage.enemies.length) return null;
+      if(encodeStageCode(stage,cellChars)!==c) return null;
+      const result={name:SHARE_DEFAULT_NAME,map:stage.map,enemies:stage.enemies};
+      if(stage.mp) result.mp=stage.mp;
+      return result;
+    };
+    return decodeWithCharset(SHARE_CELL_CHARS) || decodeWithCharset(SHARE_CELL_CHARS_LEGACY);
+  }catch(e){return null;}
 }
 // クリップボードへコピー（使えない環境では選択状態にして手動コピーしてもらう）
 async function copyTextToClipboard(text, box){
@@ -4659,8 +4992,9 @@ const ENEMY_NAMES = {
   brown:"茶色戦車",
   green:"緑戦車",
   red:"赤戦車",
-  black:"黒戦車",
-  cyan:"水色戦車"
+  purple:"紫戦車",
+  cyan:"水色戦車",
+  gray:"灰色戦車"
 };
 
 // クリア画面用の戦車アイコン。ゲーム中の戦車と同じ配色・形を使う。
