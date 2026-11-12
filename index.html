@@ -1878,7 +1878,8 @@ function makeEnemy(type,x,y){
     grayAimSolution: null,
     grayDefenseAngle: null,
     missileDodgeDir: null,
-    missileDodgeTimer: 0
+    missileDodgeTimer: 0,
+    grayWallEscapeTimer: 0
   };
 }
 
@@ -2374,6 +2375,7 @@ function onPlayerDeath(){
     t.grayDefenseAngle = null;
     t.missileDodgeDir = null;
     t.missileDodgeTimer = 0;
+    t.grayWallEscapeTimer = 0;
     t.defenseCooldownTimer = 0;
     t.bulletCount = 0;
     const type = ENEMY_TYPES[t.type];
@@ -2734,7 +2736,7 @@ const GRAY_SHOT_ANGLE_STEP = 5;         // 全方向の初回探索幅（度）
 const GRAY_SHOT_REFINE_STEP = 0.35;     // 惜しい角度を細かく調べる幅（度）
 const GRAY_SHOT_NEAR_MISS = 38;         // この距離以内に近づく角度を再探索
 const GRAY_TURN_SPEED = 6.2;            // 砲塔の旋回速度（ラジアン/秒）
-const GRAY_DODGE_RADIUS = ENEMY_DODGE_RADIUS;
+const GRAY_DODGE_RADIUS = ENEMY_DODGE_RADIUS * 2; // 他の戦車の2倍遠い距離から回避を開始
 const GRAY_DODGE_COOLDOWN = 0.0;         // 通常弾の回避クールタイムも0秒
 const GRAY_SELF_BULLET_DODGE_AGE = 1.0; // 自分の弾も発射から1秒以上経過したら回避対象にする
 const GRAY_DEFENSE_COOLDOWN = 0.0;     // 5発目の防御弾のクールタイム（無効）
@@ -2888,6 +2890,79 @@ function grayFindDefenseIntercept(t){
   return best;
 }
 
+// 灰色戦車へ向かって飛んでくる弾だけを回避対象にする。
+// 相対速度から最接近時刻を求め、発射から1秒以上たった自分の弾も同じ基準で判定する。
+function grayFindIncomingBulletDodge(t){
+  let best=null;
+  const tvx=t.vx||0, tvy=t.vy||0;
+  const rangeSq=GRAY_DODGE_RADIUS*GRAY_DODGE_RADIUS;
+  const dangerRadius=t.r+BULLET_R+18;
+  for(const b of bullets){
+    if(b.dead) continue;
+    if(b.owner===t && (b.age||0)<GRAY_SELF_BULLET_DODGE_AGE) continue;
+    const rx=t.x-b.x, ry=t.y-b.y;
+    const distSq=rx*rx+ry*ry;
+    if(distSq>rangeSq || distSq<0.01) continue;
+    const rvx=tvx-b.vx, rvy=tvy-b.vy;
+    const vv=rvx*rvx+rvy*rvy;
+    if(vv<1) continue;
+    const closingDot=rx*rvx+ry*rvy;
+    if(closingDot>=-0.01) continue; // 相対距離が縮まっていない弾は無視
+    const closestT=-closingDot/vv;
+    if(closestT<=0.015 || closestT>2.25) continue;
+    const cx=rx+rvx*closestT, cy=ry+rvy*closestT;
+    const miss=Math.hypot(cx,cy);
+    if(miss>dangerRadius) continue; // こちらへ向かっていても、十分離れて通過する弾は無視
+    const bulletAtX=b.x+b.vx*closestT;
+    const bulletAtY=b.y+b.vy*closestT;
+    const tankAtX=t.x+tvx*closestT;
+    const tankAtY=t.y+tvy*closestT;
+    const away=Math.atan2(tankAtY-bulletAtY,tankAtX-bulletAtX);
+    const urgency=miss+closestT*14;
+    if(!best || urgency<best.urgency){
+      best={angle:away,miss,time:closestT,urgency};
+    }
+  }
+  return best;
+}
+
+// 弾避けの進路が壁に塞がれたとき、進行方向に対して左右の横道を短時間試走し、
+// 壁に詰まりにくく、飛来弾や他の戦車から距離を取れる側を選ぶ。
+function grayChooseWallEscapeSide(t,baseAngle){
+  const duration=0.56, step=0.07;
+  const candidates=[baseAngle-Math.PI/2,baseAngle+Math.PI/2];
+  let bestAngle=null,bestScore=-Infinity;
+  for(const angle of candidates){
+    const sim={x:t.x,y:t.y,r:t.r};
+    let travelled=0,blocked=0,minBullet=140,minTank=120;
+    for(let i=1;i<=Math.ceil(duration/step);i++){
+      const dt=Math.min(step,duration-(i-1)*step);
+      const ox=sim.x,oy=sim.y;
+      const want=t.speed*dt;
+      sim.x+=Math.cos(angle)*want;
+      sim.y+=Math.sin(angle)*want;
+      const ix=sim.x,iy=sim.y;
+      resolveWallCollision(sim);
+      const moved=Math.hypot(sim.x-ox,sim.y-oy);
+      travelled+=moved;
+      if(moved<want*0.7 || Math.hypot(sim.x-ix,sim.y-iy)>2) blocked+=want-moved+8;
+      const elapsed=i*step;
+      for(const b of bullets){
+        if(b.dead) continue;
+        const bx=b.x+b.vx*elapsed,by=b.y+b.vy*elapsed;
+        minBullet=Math.min(minBullet,Math.hypot(sim.x-bx,sim.y-by));
+      }
+      for(const other of tanks){
+        if(!other.alive || other===t) continue;
+        minTank=Math.min(minTank,Math.hypot(sim.x-other.x,sim.y-other.y)-t.r-other.r);
+      }
+    }
+    const score=travelled + Math.min(minBullet,120)*0.72 + Math.max(-30,Math.min(minTank,100))*0.35 - blocked*2.5;
+    if(score>bestScore){bestScore=score;bestAngle=angle;}
+  }
+  return bestAngle;
+}
+
 // ミサイルの着弾予告から爆風圏を計算し、壁に阻まれない最善の逃げ道を選ぶ。
 function grayFindMissileEscape(t){
   let best=null;
@@ -2943,6 +3018,7 @@ function updateGrayTank(t,dt){
   t.defenseCooldownTimer=Math.max(0,(t.defenseCooldownTimer??0)-dt);
   t.dodgeActiveTimer=Math.max(0,(t.dodgeActiveTimer||0)-dt);
   t.dodgeCooldownTimer=Math.max(0,(t.dodgeCooldownTimer||0)-dt);
+  t.grayWallEscapeTimer=Math.max(0,(t.grayWallEscapeTimer||0)-dt);
   if(t.dodgeActiveTimer<=0) t.dodgeDirCache=null;
 
   // ミサイルは発射されたフレームの直後から毎フレーム確認する。
@@ -2958,27 +3034,12 @@ function updateGrayTank(t,dt){
   t.aiThinkTimer-=dt;
   if(t.aiThinkTimer<=0){
     t.aiThinkTimer+=GRAY_THINK_INTERVAL;
-    // 通常弾は既存の敵戦車と同じく、近づいた弾から離れる。
-    // ただし自分が撃った弾も、発射から1秒以上経過して近づいてきた場合は回避対象にする。
-    // 自分の古い弾は自滅防止のため、通常の弾避けクールタイム中でも優先して避ける。
+    // 自分へ接近してくる弾だけを回避対象にする。回避開始距離は他の戦車の2倍。
+    // 自分の弾は発射から1秒以上経過したものだけを対象にし、反射して戻る弾による自滅も防ぐ。
     if(t.dodge && t.dodgeActiveTimer<=0){
-      let dodgeDir=null,dodgeDistSq=GRAY_DODGE_RADIUS*GRAY_DODGE_RADIUS;
-      let ownDodgeDir=null,ownDodgeDistSq=GRAY_DODGE_RADIUS*GRAY_DODGE_RADIUS;
-      for(const b of bullets){
-        if(b.dead) continue;
-        const isOldOwnShot = b.owner===t && b.age>=GRAY_SELF_BULLET_DODGE_AGE;
-        if(b.owner===t && !isOldOwnShot) continue;
-        const dx=t.x-b.x,dy=t.y-b.y,ds=dx*dx+dy*dy;
-        if(isOldOwnShot){
-          if(ds<ownDodgeDistSq){ownDodgeDistSq=ds;ownDodgeDir=Math.atan2(dy,dx);}
-        }else if(t.dodgeCooldownTimer<=0 && ds<dodgeDistSq){
-          dodgeDistSq=ds;dodgeDir=Math.atan2(dy,dx);
-        }
-      }
-      // クールタイム中は自分の古い弾だけを優先。通常の敵弾回避は従来どおり。
-      if(ownDodgeDir!==null) dodgeDir=ownDodgeDir;
-      if(dodgeDir!==null){
-        t.dodgeDirCache=dodgeDir;
+      const threat=grayFindIncomingBulletDodge(t);
+      if(threat){
+        t.dodgeDirCache=threat.angle;
         t.dodgeActiveTimer=0.5;
         t.dodgeCooldownTimer=GRAY_DODGE_COOLDOWN;
       }
@@ -2998,9 +3059,27 @@ function updateGrayTank(t,dt){
   if(t.missileDodgeDir!==null) moveDir=t.missileDodgeDir;
   const prevX=t.x,prevY=t.y;
   t.angle=lerpAngle(t.angle,moveDir,1-Math.pow(0.001,dt));
-  t.x+=Math.cos(t.angle)*t.speed*dt;
-  t.y+=Math.sin(t.angle)*t.speed*dt;
+  const plannedX=t.x+Math.cos(t.angle)*t.speed*dt;
+  const plannedY=t.y+Math.sin(t.angle)*t.speed*dt;
+  t.x=plannedX;
+  t.y=plannedY;
   resolveWallCollision(t);
+  const wallPush=Math.hypot(t.x-plannedX,t.y-plannedY);
+  const movedBeforeSideStep=Math.hypot(t.x-prevX,t.y-prevY);
+  const isDodgingBullets=t.dodgeActiveTimer>0 && t.dodgeDirCache!==null && !(t.missileDodgeTimer>0);
+  if(isDodgingBullets && t.grayWallEscapeTimer<=0 &&
+     (wallPush>1.5 || movedBeforeSideStep<t.speed*dt*0.62)){
+    const side=grayChooseWallEscapeSide(t,t.angle);
+    if(side!==null){
+      // 壁に押し戻されたら、左右のうち安全な側へ即座に向きを変える。
+      t.dodgeDirCache=side;
+      t.angle=side;
+      t.x=prevX+Math.cos(side)*t.speed*dt;
+      t.y=prevY+Math.sin(side)*t.speed*dt;
+      resolveWallCollision(t);
+      t.grayWallEscapeTimer=0.32;
+    }
+  }
   t.vx=dt>0?(t.x-prevX)/dt:0;
   t.vy=dt>0?(t.y-prevY)/dt:0;
   const moved=Math.hypot(t.x-prevX,t.y-prevY);
