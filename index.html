@@ -3441,7 +3441,7 @@ function mpq(k,a,b,c){
 }
 
 // ================================================================
-// Ping表示（PC版・左下）。PhotonのサーバーとのPingを1秒ごとに測って表示する
+// Ping表示（PC・スマホ共通、左下）。PhotonのサーバーとのPingを1秒ごとに測って表示する
 //   マッチング中＝マスターサーバー／対戦中＝ゲームサーバーとのPing
 //   ～99ms＝緑、100～199ms＝黄色、200ms以上＝赤
 // ================================================================
@@ -3456,7 +3456,7 @@ function mpPingPeer(){
   return null;
 }
 function mpPingTick(){
-  if(!IS_PC || !(mp.searching || mp.active)){ mpPingEl.classList.add("hidden"); return; }
+  if(!(mp.searching || mp.active)){ mpPingEl.classList.add("hidden"); return; }
   const p = mpPingPeer();
   let ms = null;
   if(p){
