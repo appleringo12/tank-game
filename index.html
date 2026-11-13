@@ -78,6 +78,9 @@
   /* タイトル／続き画面では操作エリアを消して、ゲームエリア全体を中央表示にする */
   #app.menu-state #gameArea{ flex:1 1 100%; border-bottom:0; }
   #app.menu-state #controls{ display:none; }
+  /* PC版は下段のタッチ操作UIを表示せず、ゲーム画面をウィンドウ全体に広げる */
+  #app.pc-mode #controls{ display:none; }
+  #app.pc-mode #gameArea{ flex:1 1 100%; border-bottom:0; }
   canvas{ display:block; touch-action:none; background:#ffeef7; border-radius:14px; }
 
   /* ---- 下段：操作エリア ---- */
@@ -387,6 +390,27 @@
     #startScreen .modeBtn{ min-height:58px; padding-top:9px; padding-bottom:9px; }
     #startScreen .modeBtn + .modeBtn{ margin-top:4px; }
   }
+
+  /* ---- 報酬・エフェクト ---- */
+  #startScreen .modeBtnRow .modeBtn{ position:relative; font-size:clamp(10px,3vw,15px); letter-spacing:0; }
+  .redDot{ position:absolute; top:-8px; right:-6px; width:20px; height:20px; border-radius:50%; background:#ff3b3b; border:3px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.3); pointer-events:none; }
+  #designScreen, #rewardScreen{ overflow-y:auto; justify-content:safe center; }
+  #designPreviewCanvas{ width:130px; height:auto; }
+  #rewardList{ width:min(88vw,390px); display:flex; flex-direction:column; gap:8px; text-align:left; }
+  .rwSec{ font-size:14px; color:#ff8fc4; margin-top:6px; }
+  .rwCard{ display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.75); border:2px solid #e3d9ff; border-radius:16px; padding:8px 12px; }
+  .rwCard.lock{ opacity:.7; }
+  .rwText{ flex:1; min-width:0; }
+  .rwName{ font-size:17px; font-weight:700; }
+  .rwCond{ font-size:12px; color:#8a6f97; }
+  .rwGet{ font-size:15px; padding:6px 14px; letter-spacing:1px; border-radius:16px; }
+  .rwDone{ font-size:12px; color:#8a6f97; }
+  #rwEquip{ width:min(90vw,390px); }
+  .rwRowLabel{ font-size:13px; color:#8a6f97; margin-top:6px; }
+  .rwChips{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:4px; }
+  .rwChip{ font-family:inherit; font-weight:700; font-size:14px; padding:6px 12px; border-radius:14px; border:2px solid #c9baf5; background:#fff; color:#7a5c8a; cursor:pointer; }
+  .rwChip.on{ background:#c9baf5; color:#fff; }
+  .rwHint{ font-size:12px; color:#8a6f97; }
 </style>
 </head>
 <body>
@@ -418,6 +442,7 @@
       <div class="modeBtnRow">
         <button class="btn modeBtn info" id="howToPlayBtn">ゲーム説明</button>
         <button class="btn modeBtn info" id="designBtnTitle">デザイン</button>
+        <button class="btn modeBtn info" id="rewardBtnTitle">報酬<span class="redDot hidden" id="rewardDot"></span></button>
         <button class="btn modeBtn info" id="settingsBtnTitle">設定</button>
       </div>
     </div>
@@ -512,12 +537,19 @@
     <!-- デザイン画面 -->
     <div id="designScreen" class="overlay hidden">
       <h1 class="title" style="font-size:clamp(22px,6vw,32px);">デザイン</h1>
-      <div class="subtitle">円環をスライドして戦車の色を選べます</div>
       <div class="designPickerRow">
         <div id="hueRing" role="slider" aria-label="戦車の色" tabindex="0"><div class="hueRingInner"></div><div id="hueKnob"></div></div>
-        <div class="designPreview"><canvas id="designPreviewCanvas" width="150" height="130"></canvas><div>戦車プレビュー</div></div>
+        <div class="designPreview"><canvas id="designPreviewCanvas" width="280" height="180"></canvas><div>戦車プレビュー</div></div>
       </div>
+      <div id="rwEquip"></div>
       <button class="btn alt" id="designCloseBtn">閉じる</button>
+    </div>
+
+    <!-- 報酬画面 -->
+    <div id="rewardScreen" class="overlay hidden">
+      <h1 class="title" style="font-size:clamp(22px,6vw,32px);">報酬</h1>
+      <div id="rewardList"></div>
+      <button class="btn alt" id="rewardCloseBtn">閉じる</button>
     </div>
 
     <!-- 設定画面 -->
@@ -882,8 +914,8 @@ const ENEMY_TYPES = {
   green: { speed:50, hp:1, color:"#a8e6b0", dark:"#7ecb8c", maxBullets:1, bulletSpeed:240, r:TANK_R, fastBullet:true  },
   red:   { speed:50, hp:1, color:"#ff9aa8", dark:"#e06b7d", maxBullets:5, bulletSpeed:80,  r:TANK_R, fastBullet:false, fireInterval:1.0 },
   purple: { speed:100,hp:1, color:"#c3aef0", dark:"#a186e0", maxBullets:2, bulletSpeed:240, r:TANK_R, fastBullet:true, fireInterval:2.0},
-  // ★灰色：赤戦車と同じ基本性能。通常攻撃は同時4発まで、5発目は危険な弾を相殺する防御専用弾。
-  gray:   { speed:50, hp:1, color:"#c4c8ce", dark:"#8e959e", maxBullets:5, attackBulletLimit:4, bulletSpeed:80, r:TANK_R, fastBullet:false, fireInterval:1.0, dodge:true, ai:"gray" },
+  // ★灰色：同時に出せる弾は合計5発。通常攻撃は最大4発、迎撃用に1発分を確保する。
+  gray:   { speed:50, hp:1, color:"#c4c8ce", dark:"#8e959e", maxBullets:5, attackBulletLimit:4, bulletSpeed:80, r:TANK_R, fastBullet:false, fireInterval:PLAYER_FIRE_INTERVAL, dodge:true, ai:"gray" },
   // ★水色：その場から動かない反射狙撃タンク。弾は1発まで／弾速は緑と同じ／壁で2回まで反射.
   //   壁の反射を使って自機に当たる角度を探して撃つ（ai:"reflect"）。撃った後のクールタイムは長め。
   cyan:  { speed:0,  hp:1, color:"#7fe4f2", dark:"#34b8d0", maxBullets:1, bulletSpeed:240, r:TANK_R, fastBullet:true, maxBounce:2, bulletColor:"#48c96a", reflectSfx:"cyan", fireInterval:5.0, dodge:false, ai:"reflect" },
@@ -1106,7 +1138,7 @@ function keyboardMove(){
 
 // ---- マウスによる照準 ----
 const PC_AIM_DEADZONE = 6;          // ポインターが自機の中心からこの距離(px)未満のときは向きを変えない
-const PC_MISSILE_HOLD_TIME = 0.25;  // 右クリックをこの時間以上押し続けると長距離ミサイル
+const PC_MISSILE_HOLD_TIME = 0.125; // PC版のみ：右クリック長押し0.125秒で長距離ミサイル
 const pcAim = { mx:null, my:null, angle:0, valid:false };
 const pcMouse = { rightDown:false, rightStart:0, rightTriggered:false, pendingT:0 };
 
@@ -1876,6 +1908,9 @@ function makeEnemy(type,x,y){
     reactTimer: 0,          // 水色：狙いを見つけてから撃つまでの猶予(秒)
     defenseCooldownTimer: 0, // 灰色：5発目の防御弾を再び撃てるまでの時間
     grayAimSolution: null,
+    grayVolleyFractions: [], // 今回の攻撃判断時点で確保できた弾数に応じた射撃順
+    grayVolleyTargetSnapshot: null, // 1回の扇状射撃で共通して使う、判断時点のプレイヤー座標・速度
+    grayUnavoidableBullets: [], // 回避経路を選んでも約1ブロック以内に残る危険弾
     grayDefenseAngle: null,
     missileDodgeDir: null,
     missileDodgeTimer: 0,
@@ -2372,6 +2407,9 @@ function onPlayerDeath(){
     t.aimSolution = null;
     t.reactTimer = 0;
     t.grayAimSolution = null;
+    t.grayVolleyFractions = [];
+    t.grayVolleyTargetSnapshot = null;
+    t.grayUnavoidableBullets = [];
     t.grayDefenseAngle = null;
     t.missileDodgeDir = null;
     t.missileDodgeTimer = 0;
@@ -2723,11 +2761,13 @@ function updateEnemy(t, dt){
 
 /* ================================================================
    灰色戦車の高性能AI
-   ・通常弾は同時4発まで。プレイヤーの移動を先読みし、壁・鉄壁での1回反射も含めて狙う。
+   ・同時に最大5発。通常攻撃は最大4発、残り1発分は迎撃専用に確保する。
+   ・射撃を判断した瞬間のプレイヤー座標・速度と、その時点で撃てる弾数から扇状射撃を組み立てる。
+   ・弾がすべて消えるまで待たず、通常攻撃の空き枠ができた時点で次の射撃を判断する。
+   ・射線が通るときは直接狙い、壁・鉄壁に遮られるときだけ反射も使う。
    ・プレイヤーのミサイル発射を検知した瞬間に着弾地点を読み、爆風圏外へ移動する。
    ・通常弾も他の回避型戦車と同じように避ける。
-   ・通常弾4発が出ている状態で自分に当たりそうな弾を見つけた場合、5発目で迎撃する。
-     防御弾のクールタイムは0秒。迎撃弾が消費されたら、次の危険にも即座に対応できる。
+   ・迎撃弾は回避経路を選んでも自分の周囲約1ブロック以内に残る危険弾だけを狙う。
    ================================================================ */
 const GRAY_THINK_INTERVAL = 0.25;       // 重い射撃予測の更新間隔
 const GRAY_SHOT_STEP = 1/30;            // 弾道シミュレーションの時間刻み
@@ -2749,14 +2789,17 @@ function grayCountAttackBullets(t){
 }
 
 // プレイヤーの現在速度と壁への衝突を含め、数秒先までの位置を一度だけ作る。
-function grayBuildTargetPath(target){
+function grayBuildTargetPath(target, leadFraction=1){
   const path=[];
   const sim={x:target.x,y:target.y,r:target.r};
+  const startX=target.x, startY=target.y;
+  const blend=clamp(leadFraction,0,1);
   const steps=Math.ceil(GRAY_SHOT_MAX_TIME/GRAY_SHOT_STEP);
   const vx=Number.isFinite(target.vx)?target.vx:0;
   const vy=Number.isFinite(target.vy)?target.vy:0;
   for(let i=0;i<=steps;i++){
-    path.push({x:sim.x,y:sim.y});
+    // 0＝現在位置、0.5＝現在と全予測位置の中間、1＝通常の未来予測位置。
+    path.push({x:startX+(sim.x-startX)*blend,y:startY+(sim.y-startY)*blend});
     sim.x += vx*GRAY_SHOT_STEP;
     sim.y += vy*GRAY_SHOT_STEP;
     resolveWallCollision(sim);
@@ -2765,9 +2808,11 @@ function grayBuildTargetPath(target){
 }
 
 // 通常弾の実際の反射ルールに合わせて、指定角度の弾道を予測する。
-function graySimulateShot(t, angle, target, targetPath, othersGrid, out){
+function graySimulateShot(t, angle, target, targetPath, othersGrid, out, maxBounceOverride=null){
   const type=ENEMY_TYPES.gray;
-  const maxBounce=type.maxBounce ?? (type.fastBullet?0:BULLET_MAX_BOUNCE);
+  const maxBounce=Number.isFinite(maxBounceOverride)
+    ? Math.max(0, maxBounceOverride)
+    : (type.maxBounce ?? (type.fastBullet?0:BULLET_MAX_BOUNCE));
   const speed=type.bulletSpeed;
   let x=t.x+Math.cos(angle)*(t.r+6), y=t.y+Math.sin(angle)*(t.r+6);
   let vx=Math.cos(angle)*speed, vy=Math.sin(angle)*speed;
@@ -2814,18 +2859,22 @@ function graySimulateShot(t, angle, target, targetPath, othersGrid, out){
   out.miss=Math.sqrt(minD2);
 }
 
-// 見えていない位置にいるプレイヤーにも、跳ね返りを利用して当たる角度を探す。
-function grayFindShot(t,p){
+// 射線が通っている場合は直線弾だけで狙い、壁などで遮られている場合に限って反射弾道も探索する。
+function grayFindShot(t,p,leadFraction=1){
   if(!p || !p.alive || p.invuln>0) return null;
-  const targetPath=grayBuildTargetPath(p);
+  const targetPath=grayBuildTargetPath(p,leadFraction);
   // 味方戦車などに先に当たる軌道を除外するため、他の戦車を空間分割しておく。
   // 敵を大量配置したオリジナルステージでも、全戦車を毎ステップ走査しない。
   const othersGrid=buildSpatialGrid(tanks,TILE,o=>o.alive && o!==p && o!==t);
   const res={hit:false,time:0,miss:0,bounces:0};
+  // レンガ・鉄壁が射線上にないときは反射回数0に固定。
+  // 水は弾が通るため、障害物として扱わない（hasLineOfSightと同じ判定）。
+  const canShootDirectly=hasLineOfSight(t.x,t.y,p.x,p.y);
+  const maxBounce=canShootDirectly ? 0 : (ENEMY_TYPES.gray.maxBounce ?? (ENEMY_TYPES.gray.fastBullet?0:BULLET_MAX_BOUNCE));
   let best=null;
   const near=[];
   const consider=a=>{
-    graySimulateShot(t,a,p,targetPath,othersGrid,res);
+    graySimulateShot(t,a,p,targetPath,othersGrid,res,maxBounce);
     if(res.hit){
       if(!best || res.time<best.time) best={angle:a,time:res.time,bounces:res.bounces};
     }else if(res.miss<GRAY_SHOT_NEAR_MISS){near.push(a);}
@@ -2848,11 +2897,13 @@ function grayFindShot(t,p){
 }
 
 // プレイヤーの弾が灰色戦車へ接近しているかを予測し、相殺できる迎撃角度を探す。
-function grayFindDefenseIntercept(t){
+function grayFindDefenseIntercept(t, unavoidableBullets=[]){
   const speed=ENEMY_TYPES.gray.bulletSpeed;
+  if(!unavoidableBullets.length) return null;
+  const unavoidable=new Set(unavoidableBullets);
   let best=null;
   for(const b of bullets){
-    if(b.dead || !b.owner || !b.owner.isPlayer) continue;
+    if(b.dead || !unavoidable.has(b)) continue;
     const rx=b.x-t.x, ry=b.y-t.y;
     const tvx=t.vx||0, tvy=t.vy||0;
     const rvx=b.vx-tvx, rvy=b.vy-tvy;
@@ -2861,7 +2912,8 @@ function grayFindDefenseIntercept(t){
     const closestT=-(rx*rvx+ry*rvy)/vv;
     if(closestT<=0.02 || closestT>GRAY_DEFENSE_THREAT_TIME) continue;
     const cx=rx+rvx*closestT, cy=ry+rvy*closestT;
-    const danger=t.r+BULLET_R+10;
+    // 戦車の周囲およそ1ブロック以内まで接近する、回避不能判定済みの弾だけ迎撃する。
+    const danger=Math.max(t.r+BULLET_R+10,TILE*0.9);
     if(cx*cx+cy*cy>danger*danger) continue;
 
     // 灰色戦車から撃つ弾と、飛来中の弾が交差する時刻を二次方程式で求める。
@@ -2890,37 +2942,165 @@ function grayFindDefenseIntercept(t){
   return best;
 }
 
-// 灰色戦車へ向かって飛んでくる弾だけを回避対象にする。
-// 相対速度から最接近時刻を求め、発射から1秒以上たった自分の弾も同じ基準で判定する。
+// 灰色戦車用：弾1発ごとに別々の方向へ逃げるのではなく、
+// 近くにある全弾の未来位置を同じ時間軸で予測し、複数方向の逃走経路をまとめて採点する。
+const GRAY_DODGE_HORIZON = 2.0;       // 一度の判断で先読みする時間
+const GRAY_DODGE_STEP = 0.08;          // 未来位置の計算間隔
+const GRAY_DODGE_DIRECTION_COUNT = 36; // 逃走方向を10度刻みで評価
+const GRAY_DODGE_COMFORT_MARGIN = 38;  // 命中しない場合でも、弾から余裕を取る距離
+
+// 弾の壁反射・障害物反射も含め、指定時間までの軌道を予測する。
+// 実際のupdateBulletsと同様に、反射回数を使い切るとその先は消滅扱いにする。
+function grayPredictDodgeBulletPath(b,horizon,step){
+  const count=Math.ceil(horizon/step);
+  const path=[];
+  let x=b.x,y=b.y,vx=b.vx,vy=b.vy;
+  let bounces=b.bounces||0;
+  const maxBounce=Number.isFinite(b.maxBounce)?b.maxBounce:(b.fastBullet?0:BULLET_MAX_BOUNCE);
+  let alive=true;
+  for(let i=0;i<=count;i++){
+    if(!alive){path.push(null);continue;}
+    path.push({x,y});
+    if(i===count) break;
+    x+=vx*step; y+=vy*step;
+
+    if(maxBounce<=0){
+      if(x<BULLET_R||x>WORLD_W-BULLET_R||y<BULLET_R||y>WORLD_H-BULLET_R){alive=false;continue;}
+    }else{
+      if(x<BULLET_R){x=BULLET_R;vx=-vx;bounces++;}
+      else if(x>WORLD_W-BULLET_R){x=WORLD_W-BULLET_R;vx=-vx;bounces++;}
+      if(y<BULLET_R){y=BULLET_R;vy=-vy;bounces++;}
+      else if(y>WORLD_H-BULLET_R){y=WORLD_H-BULLET_R;vy=-vy;bounces++;}
+      if(bounces>maxBounce){alive=false;continue;}
+    }
+
+    const col=Math.floor(x/TILE),row=Math.floor(y/TILE);
+    if(row>=0&&col>=0&&row<ROWS&&col<COLS&&blocksBullet(walls[row][col])){
+      if(maxBounce>0&&bounces<maxBounce){
+        const cx=col*TILE+TILE/2,cy=row*TILE+TILE/2;
+        if(Math.abs(x-cx)>Math.abs(y-cy)) vx=-vx; else vy=-vy;
+        bounces++;
+        x+=vx*step*2; y+=vy*step*2;
+        if(bounces>maxBounce) alive=false;
+      }else alive=false;
+    }
+  }
+  return path;
+}
+
 function grayFindIncomingBulletDodge(t){
-  let best=null;
-  const tvx=t.vx||0, tvy=t.vy||0;
+  const horizon=GRAY_DODGE_HORIZON,step=GRAY_DODGE_STEP;
+  const count=Math.ceil(horizon/step);
   const rangeSq=GRAY_DODGE_RADIUS*GRAY_DODGE_RADIUS;
   const dangerRadius=t.r+BULLET_R+18;
+  const comfortRadius=dangerRadius+GRAY_DODGE_COMFORT_MARGIN;
+  const tvx=t.vx||0,tvy=t.vy||0;
+
+  // まず、今の速度を保った場合の戦車位置を作る。
+  // 壁で押し戻される動きも含めて「こちらへ接近する弾」だけを抽出する。
+  const baseline=[];
+  const baseTank={x:t.x,y:t.y,r:t.r};
+  for(let i=0;i<=count;i++){
+    baseline.push({x:baseTank.x,y:baseTank.y});
+    if(i===count) break;
+    baseTank.x+=tvx*step;baseTank.y+=tvy*step;
+    resolveWallCollision(baseTank);
+  }
+
+  const threats=[];
   for(const b of bullets){
-    if(b.dead) continue;
-    if(b.owner===t && (b.age||0)<GRAY_SELF_BULLET_DODGE_AGE) continue;
-    const rx=t.x-b.x, ry=t.y-b.y;
-    const distSq=rx*rx+ry*ry;
-    if(distSq>rangeSq || distSq<0.01) continue;
-    const rvx=tvx-b.vx, rvy=tvy-b.vy;
-    const vv=rvx*rvx+rvy*rvy;
-    if(vv<1) continue;
-    const closingDot=rx*rvx+ry*rvy;
-    if(closingDot>=-0.01) continue; // 相対距離が縮まっていない弾は無視
-    const closestT=-closingDot/vv;
-    if(closestT<=0.015 || closestT>2.25) continue;
-    const cx=rx+rvx*closestT, cy=ry+rvy*closestT;
-    const miss=Math.hypot(cx,cy);
-    if(miss>dangerRadius) continue; // こちらへ向かっていても、十分離れて通過する弾は無視
-    const bulletAtX=b.x+b.vx*closestT;
-    const bulletAtY=b.y+b.vy*closestT;
-    const tankAtX=t.x+tvx*closestT;
-    const tankAtY=t.y+tvy*closestT;
-    const away=Math.atan2(tankAtY-bulletAtY,tankAtX-bulletAtX);
-    const urgency=miss+closestT*14;
-    if(!best || urgency<best.urgency){
-      best={angle:away,miss,time:closestT,urgency};
+    if(b.dead||b.defensiveShot) continue; // 防御専用弾は戦車に当たらない
+    if(b.owner===t&&(b.age||0)<GRAY_SELF_BULLET_DODGE_AGE) continue;
+    const dx=b.x-t.x,dy=b.y-t.y;
+    if(dx*dx+dy*dy>rangeSq) continue; // 他の戦車の2倍の距離から警戒
+
+    const path=grayPredictDodgeBulletPath(b,horizon,step);
+    let minD=Infinity,minTime=0;
+    for(let i=1;i<=count;i++){
+      const bp=path[i];
+      if(!bp) break;
+      const tp=baseline[i];
+      const d=Math.hypot(bp.x-tp.x,bp.y-tp.y);
+      if(d<minD){minD=d;minTime=i*step;}
+    }
+    // 現在より接近し、衝突半径付近まで来る弾のみを回避計画へ入れる。
+    const nowD=Math.hypot(dx,dy);
+    if(minD<=dangerRadius+10&&minTime>0.015&&minD<nowD-0.5){
+      threats.push({path,nearest:minD,time:minTime,bullet:b});
+    }else if(nowD<=dangerRadius&&minD<=dangerRadius+10){
+      // 既に至近距離にいる弾は、接近時刻がほぼ0でも緊急対象にする。
+      threats.push({path,nearest:minD,time:Math.max(step,minTime)});
+    }
+  }
+  if(!threats.length) return null;
+
+  // 36方向それぞれについて、戦車の移動・壁との接触・全弾の未来位置を同時に試走する。
+  let best=null,bestScore=Infinity,bestMinDist=null,bestMinTime=null;
+  const turnBlend=1-Math.pow(0.001,step);
+  for(let dir=0;dir<GRAY_DODGE_DIRECTION_COUNT;dir++){
+    const angle=dir*Math.PI*2/GRAY_DODGE_DIRECTION_COUNT;
+    const sim={x:t.x,y:t.y,r:t.r};
+    let simAngle=t.angle;
+    let blockedPenalty=0,travelled=0;
+    const minDist=new Array(threats.length).fill(Infinity);
+    const minTime=new Array(threats.length).fill(horizon);
+
+    for(let i=1;i<=count;i++){
+      simAngle=lerpAngle(simAngle,angle,turnBlend);
+      const ox=sim.x,oy=sim.y;
+      const want=t.speed*step;
+      sim.x+=Math.cos(simAngle)*want;
+      sim.y+=Math.sin(simAngle)*want;
+      const proposedX=sim.x,proposedY=sim.y;
+      resolveWallCollision(sim);
+      const moved=Math.hypot(sim.x-ox,sim.y-oy);
+      travelled+=moved;
+      if(moved<want*0.72||Math.hypot(sim.x-proposedX,sim.y-proposedY)>2){
+        blockedPenalty+=(want-moved+5);
+      }
+
+      // 同じ時刻の戦車位置と全弾位置を比較し、各弾との最接近距離を保存する。
+      for(let j=0;j<threats.length;j++){
+        const bp=threats[j].path[i];
+        if(!bp) continue;
+        const d=Math.hypot(sim.x-bp.x,sim.y-bp.y);
+        if(d<minDist[j]){minDist[j]=d;minTime[j]=i*step;}
+      }
+    }
+
+    let risk=0;
+    for(let j=0;j<threats.length;j++){
+      const d=minDist[j];
+      if(!Number.isFinite(d)) continue;
+      const timeFactor=1.25-0.35*(minTime[j]/horizon); // 早い段階で衝突する弾ほど重く評価
+      if(d<dangerRadius){
+        const penetration=dangerRadius-d;
+        risk+=(2600+penetration*penetration*12)*timeFactor;
+      }else if(d<comfortRadius){
+        const q=(comfortRadius-d)/Math.max(1,GRAY_DODGE_COMFORT_MARGIN);
+        risk+=q*q*150*timeFactor;
+      }
+    }
+    // 壁に押し戻される経路は大きく減点し、実際に動ける逃げ道を優先する。
+    risk+=blockedPenalty*9;
+    risk-=Math.min(travelled,t.speed*horizon)*0.035;
+    // 同程度に安全なら、今の向きから急激に反転しない方向を少し優先する。
+    risk+=angleDiffAbs(t.angle,angle)*1.8;
+
+    if(risk<bestScore){
+      bestScore=risk;
+      best={angle,threatCount:threats.length,risk};
+      bestMinDist=minDist.slice();
+      bestMinTime=minTime.slice();
+    }
+  }
+  if(best){
+    const unavoidableRadius=Math.max(t.r+BULLET_R+18,TILE*0.9);
+    best.unavoidableBullets=[];
+    for(let i=0;i<threats.length;i++){
+      if(bestMinDist && bestMinDist[i]<=unavoidableRadius){
+        best.unavoidableBullets.push(threats[i].bullet);
+      }
     }
   }
   return best;
@@ -3036,15 +3216,45 @@ function updateGrayTank(t,dt){
     t.aiThinkTimer+=GRAY_THINK_INTERVAL;
     // 自分へ接近してくる弾だけを回避対象にする。回避開始距離は他の戦車の2倍。
     // 自分の弾は発射から1秒以上経過したものだけを対象にし、反射して戻る弾による自滅も防ぐ。
-    if(t.dodge && t.dodgeActiveTimer<=0){
+    t.grayUnavoidableBullets=[];
+    if(t.dodge){
+      // 全弾の未来軌道をまとめて評価し、最善の回避経路でも約1ブロック以内に残る弾を記録。
       const threat=grayFindIncomingBulletDodge(t);
       if(threat){
         t.dodgeDirCache=threat.angle;
         t.dodgeActiveTimer=0.5;
         t.dodgeCooldownTimer=GRAY_DODGE_COOLDOWN;
+        t.grayUnavoidableBullets=threat.unavoidableBullets || [];
+      }else if(t.dodgeActiveTimer<=0){
+        t.dodgeDirCache=null;
       }
     }
-    t.grayAimSolution=grayFindShot(t,p);
+
+    // 前の扇状射撃を撃ち終え、通常攻撃に空き枠ができた時点で次の射撃を判断する。
+    // 弾がすべて消えることや、最大弾数まで溜まることは待たない。
+    if(!t.grayVolleyFractions || t.grayVolleyFractions.length===0){
+      t.grayVolleyFractions=[];
+      t.grayVolleyTargetSnapshot=null;
+      const attackCount=grayCountAttackBullets(t);
+      // 迎撃用の1発分を通常攻撃に使わない。
+      const freeAttackSlots=Math.max(0,Math.min(
+        (t.attackBulletLimit||0)-attackCount,
+        (t.maxBullets||0)-t.bulletCount
+      ));
+      if(p && p.alive && p.invuln<=0 && freeAttackSlots>0){
+        // この射撃判断の瞬間の座標・速度を固定し、今回の扇状射撃すべてで共有する。
+        t.grayVolleyTargetSnapshot={
+          x:p.x, y:p.y, vx:p.vx||0, vy:p.vy||0, r:p.r, alive:true, invuln:0
+        };
+        t.grayVolleyFractions=freeAttackSlots===1 ? [0.5] :
+          Array.from({length:freeAttackSlots},(_,i)=>i/(freeAttackSlots-1));
+      }
+    }
+    const leadFraction=t.grayVolleyFractions && t.grayVolleyFractions.length
+      ? t.grayVolleyFractions[0] : null;
+    const volleyTarget=t.grayVolleyTargetSnapshot;
+    t.grayAimSolution=(leadFraction!==null && volleyTarget)
+      ? grayFindShot(t,volleyTarget,leadFraction) : null;
   }
 
   // 移動優先順位：ミサイルの爆風回避 ＞ 通常弾回避 ＞ プレイヤー方向への移動／徘徊。
@@ -3085,27 +3295,31 @@ function updateGrayTank(t,dt){
   const moved=Math.hypot(t.x-prevX,t.y-prevY);
   if(moved<t.speed*dt*0.3) t.stuckTimer+=dt; else t.stuckTimer=0;
 
-  // 5発目は防御専用。4発の通常弾が場にあり、被弾が迫っている場合だけ迎撃する。防御弾は敵弾との相殺のみで戦車には当たらない。
+  // 5発目の枠は迎撃専用。回避経路を選んでも約1ブロック以内に残る弾だけを狙う。
+  // 防御弾は敵弾との相殺のみで、戦車にはダメージを与えない。
   let defense=null;
-  if(grayCountAttackBullets(t)>=4 && t.bulletCount<t.maxBullets && t.defenseCooldownTimer<=0){
-    defense=grayFindDefenseIntercept(t);
+  const hasDefenseShot=bullets.some(b=>!b.dead && b.owner===t && b.defensiveShot);
+  if(!hasDefenseShot && t.bulletCount<t.maxBullets && t.defenseCooldownTimer<=0){
+    defense=grayFindDefenseIntercept(t,t.grayUnavoidableBullets);
   }
   t.grayDefenseAngle=defense?defense.angle:null;
   const aim=defense?defense.angle:(t.grayAimSolution?.angle ?? (p&&p.alive?Math.atan2(p.y-t.y,p.x-t.x):t.turretAngle));
   t.turretAngle=rotateToward(t.turretAngle,aim,GRAY_TURN_SPEED*dt);
 
-  if(defense && grayCountAttackBullets(t)>=4 && t.bulletCount<t.maxBullets && t.defenseCooldownTimer<=0 && angleDiffAbs(t.turretAngle,defense.angle)<0.055){
+  if(defense && !hasDefenseShot && t.bulletCount<t.maxBullets && t.defenseCooldownTimer<=0 && angleDiffAbs(t.turretAngle,defense.angle)<0.055){
     spawnBullet(t,{defensiveShot:true});
     t.defenseCooldownTimer=GRAY_DEFENSE_COOLDOWN;
     t.grayDefenseAngle=null;
     return;
   }
 
-  // 攻撃弾は最大4発。壁の反射とプレイヤーの移動先を計算した軌道だけを採用する。
-  if(t.grayAimSolution && p&&p.alive && p.invuln<=0 && t.fireCooldown<=0 && grayCountAttackBullets(t)<t.attackBulletLimit && t.bulletCount<t.maxBullets && !defense){
+  // 攻撃弾は最大4発。射線が通れば直射、壁に遮られた場合のみ反射経路を使う。
+  // 判断時点で撃てる弾数に応じて、現在位置から未来位置までを均等に分けて扇状に撃つ。
+  if(t.grayAimSolution && t.grayVolleyTargetSnapshot && t.fireCooldown<=0 && grayCountAttackBullets(t)<t.attackBulletLimit && t.bulletCount<t.maxBullets && !defense){
     if(angleDiffAbs(t.turretAngle,t.grayAimSolution.angle)<0.055){
       spawnBullet(t);
-      t.fireCooldown=t.fireInterval??1.0;
+      if(t.grayVolleyFractions && t.grayVolleyFractions.length) t.grayVolleyFractions.shift();
+      t.fireCooldown=PLAYER_FIRE_INTERVAL;
       t.grayAimSolution=null;
     }
   }
@@ -4053,6 +4267,7 @@ function mpOnEvent(code, data){
         const r = mp.rin;
         r.mx = +o[0] || 0; r.my = +o[1] || 0; r.mv = !!o[2]; r.ta = +o[3]; r.seq = (+o[4]) | 0;
         if(Number.isFinite(+o[5]) && mp.p2){ const h=((+o[5]%360)+360)%360; mp.p2.color=`hsl(${h} 65% 78%)`; mp.p2.dark=`hsl(${h} 48% 62%)`; }
+        if(mp.p2 && window.rwSetRemote) rwSetRemote(mp.p2, o[6], o[7]);
       }
       break;
     case EV.FIRE:
@@ -4142,7 +4357,7 @@ function mpBeginGame(role, lv){
   setSpinner(false); updateMultiBtn();
   // 開いている画面をすべて閉じる
   for(const el of [startScreen, stageSelectScreen, continueScreen, pauseScreen, gameOverScreen, stageClearScreen,
-                   howToPlayScreen, designScreen, settingsScreen, editorScreen, libraryScreen, mpOverScreen]) el.classList.add("hidden");
+                   howToPlayScreen, designScreen, settingsScreen, editorScreen, libraryScreen, mpOverScreen, document.getElementById("rewardScreen")]) el.classList.add("hidden");
   document.getElementById("shareDialog").classList.add("hidden");
   document.getElementById("uiConfirm").classList.add("hidden");
   settingsReturnScreen = null;
@@ -4237,7 +4452,7 @@ function mpHostSnapshot(){
   for(const k of bullets) if(!k.dead) b.push([k.bid, r1(k.x), r1(k.y), r1(k.vx), r1(k.vy), k.fastBullet?1:0]);
   const m = [];
   for(const k of missiles) if(!k.dead) m.push([k.mid, r1(k.startX), r1(k.startY), r1(k.targetX), r1(k.targetY), r2(k.angle), r2(k.time), r2(k.flightTime), k.owner ? k.owner.nid : 0]);
-  const o = {t, b, m, a:(mp.rin.seq|0), pc:tanks.filter(k=>k.isPlayer).map(k=>[k.pidx,k.color,k.dark])}; // a＝ホストが最後に受け取った2Pの操作の番号
+  const o = {t, b, m, a:(mp.rin.seq|0), pc:tanks.filter(k=>k.isPlayer).map(k=>[k.pidx,k.color,k.dark,...(window.rwPcExtra?rwPcExtra(k):[])])}; // a＝ホストが最後に受け取った2Pの操作の番号
   if(mp.fxq.length){ o.fx = mp.fxq; mp.fxq = []; }
   mpSend(EV.SNAP, o);
 }
@@ -4261,6 +4476,7 @@ function mpRenderClear(anyDead){
   stageClearScreen.classList.remove("hidden");
 }
 function mpShowClear(){ // ホスト
+  if(window.rwOnClear) rwOnClear(true);
   updateMultiRecord(totalStageProgress+1);
   const anyDead = !(mp.p1.alive && mp.p2.alive);
   mpRenderClear(anyDead);
@@ -4315,6 +4531,7 @@ function mpGuestLoadLevel(o){
   flashStage(formatStageProgress(totalStageProgress));
 }
 function mpGuestClear(o){
+  if(window.rwOnClear) rwOnClear(true);
   updateMultiRecord(totalStageProgress+1);
   state = "stageclear";
   mpRenderClear(!!o.d);
@@ -4390,7 +4607,7 @@ function mpReconcile(hx, hy){
 function mpApplySnap(s){
   mp.lastRecv = performance.now();
   mpUpdateRtt(s.a);
-  if(Array.isArray(s.pc)){ for(const c of s.pc){ const t=tanks.find(k=>k.isPlayer && k.pidx===c[0]); if(t){ if(typeof c[1]==="string")t.color=c[1]; if(typeof c[2]==="string")t.dark=c[2]; } } }
+  if(Array.isArray(s.pc)){ for(const c of s.pc){ const t=tanks.find(k=>k.isPlayer && k.pidx===c[0]); if(t){ if(typeof c[1]==="string")t.color=c[1]; if(typeof c[2]==="string")t.dark=c[2]; if(window.rwSetRemote) rwSetRemote(t, c[3], c[4]); } } }
   const byId = new Map();
   for(const t of tanks) byId.set(t.nid, t);
   const nt = [];
@@ -4517,7 +4734,7 @@ function guestFrame(dt){
     const seq = ++mp.inputSeq;
     mp.sentLog.push({seq, t:performance.now()/1000});
     if(mp.sentLog.length>120) mp.sentLog.shift();
-    mpSend(EV.INPUT, [r2(mv.mx), r2(mv.my), mv.moving?1:0, r2(player ? player.turretAngle : 0), seq, tankHue]);
+    mpSend(EV.INPUT, [r2(mv.mx), r2(mv.my), mv.moving?1:0, r2(player ? player.turretAngle : 0), seq, tankHue, window.rwIdx?rwIdx("aura"):0, window.rwIdx?rwIdx("trail"):0]);
   }
   updateHud();
 }
@@ -4813,12 +5030,14 @@ function render(){
   if(IS_PC || controlScheme!=="B") drawMissileTargetPreview();
 
   // 戦車
+  if(window.rwStepAll){ rwStepAll(); rwDrawLayer(0); }
   for(const t of tanks){
     if(!t.alive) continue;
     if(t.isPlayer && t.invuln>0 && Math.floor(t.blink*10)%2===0) continue; // 無敵中は点滅させる
     drawTank(t);
     if(mp.active && t.isPlayer) drawPlayerTag(t);
   }
+  if(window.rwDrawLayer) rwDrawLayer(1);
 
   // 破片パーティクル
   for(const p of particles){
@@ -5119,6 +5338,7 @@ function getNextLevel(){
 
 function showStageClear(){
   if(mp.active){ mpShowClear(); return; } // マルチは専用の処理（セーブ・残機なし）
+  if(window.rwOnClear) rwOnClear(false);
   // ★ステージを10クリアするごとにライフを1回復する。
   const gotExtraLife = (lapNum === 1 && stageNum % STAGES_PER_EXTRA_LIFE === 0);
   if(gotExtraLife){
@@ -5351,6 +5571,8 @@ if(IS_PC){
   schemeRowEl.classList.add("hidden");      // 通常操作／簡単操作はスマホ用
   keyConfigRow.classList.remove("hidden");
   renderKeyGrid();
+  // pc-modeでゲーム領域が全画面に広がった後、キャンバスもそのサイズに合わせ直す。
+  resize();
 }
 updateZoneLabels();
 bgmToggleBtn.addEventListener("click", ()=>{
@@ -5476,7 +5698,7 @@ function paintDesignPreview(){
   const a=(tankHue-90)*Math.PI/180, r=ring.clientWidth/2-11;
   knob.style.left=(50+Math.cos(a)*r/ring.clientWidth*100)+"%";
   knob.style.top=(50+Math.sin(a)*r/ring.clientHeight*100)+"%";
-  const c=tankDesignColor(),x=cv.getContext("2d");x.clearRect(0,0,cv.width,cv.height);x.save();x.translate(75,65);
+  const c=tankDesignColor(),x=cv.getContext("2d");x.clearRect(0,0,cv.width,cv.height);x.save();x.translate(cv.width/2,cv.height/2);
   x.fillStyle=c.dark;x.fillRect(-42,-27,84,54);x.fillStyle=c.color;x.fillRect(-34,-20,68,40);
   x.fillStyle=c.color;x.beginPath();x.arc(0,0,19,0,Math.PI*2);x.fill();x.strokeStyle=c.dark;x.lineWidth=3;x.stroke();
   x.fillStyle=c.dark;x.fillRect(8,-5,48,10);x.restore();
@@ -5677,6 +5899,177 @@ function showGameOver(){
   hud.classList.add("hidden");
 }
 
+
+// ================================================================
+// 報酬（自機エフェクト）：ステージクリア報酬の保存・受け取り・描画・マルチ同期
+// ================================================================
+(function(){
+const TAU=Math.PI*2, R=(a,b)=>a+Math.random()*(b-a), P=a=>a[Math.random()*a.length|0];
+const KEY="tankRewardsV1";
+const ITEMS=[
+ {id:"bubble", kind:"aura", name:"シャボン玉", cond:"通常モード／マルチプレイ STAGE 20 クリア", at:20, mode:"any"},
+ {id:"sakura", kind:"aura", name:"さくら",     cond:"通常モード／マルチプレイ STAGE 30 クリア", at:30, mode:"any"},
+ {id:"snow",   kind:"aura", name:"雪の結晶",   cond:"通常モード／マルチプレイ STAGE 40 クリア", at:40, mode:"any"},
+ {id:"rainbow",kind:"trail",name:"にじの軌跡", cond:"通常モード STAGE 50 クリア",               at:50, mode:"normal"},
+ {id:"flower", kind:"trail",name:"おはな畑",   cond:"マルチプレイ STAGE 50 クリア",             at:50, mode:"multi"}
+];
+const IDS=["",...ITEMS.map(i=>i.id)];
+const item=id=>ITEMS.find(i=>i.id===id);
+const rw={ach:{},got:{},eq:{aura:"",trail:""}};
+try{ const d=JSON.parse(localStorage.getItem(KEY)||"null");
+  if(d&&typeof d==="object"){ rw.ach=d.ach||{}; rw.got=d.got||{}; Object.assign(rw.eq,d.eq||{}); } }catch(e){}
+const save=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(rw)); }catch(e){} };
+const localEq=kind=>{ const id=rw.eq[kind], it=item(id); return (it&&it.kind===kind&&rw.got[id])?id:""; };
+const fromIdx=(n,kind)=>{ const it=item(IDS[n|0]); return (it&&it.kind===kind)?it.id:""; };
+
+// タイトル画面に出る「最高クリアステージ」を基準に、達成済みの報酬を判定する（通常とマルチ。爽快は対象外）
+function recCleared(){
+  let n=0,m=0;
+  try{ n=(loadModeRecord("MaxStageProgress","normal",1)||1)-1; }catch(e){}
+  try{ m=(Number(localStorage.getItem("tankMultiMaxProgressV1"))||1)-1; }catch(e){}
+  return {normal:n,multi:m};
+}
+function sync(extra){
+  const c=recCleared();
+  if(extra){ c.normal=Math.max(c.normal,extra.normal||0); c.multi=Math.max(c.multi,extra.multi||0); }
+  const news=[];
+  for(const it of ITEMS){
+    if(rw.ach[it.id]) continue;
+    const ok=(it.mode!=="multi"&&c.normal>=it.at)||(it.mode!=="normal"&&c.multi>=it.at);
+    if(ok){ rw.ach[it.id]=1; news.push(it.name); }
+  }
+  if(news.length) save();
+  return news;
+}
+function paintDot(){
+  const d=document.getElementById("rewardDot");
+  if(d) d.classList.toggle("hidden", !ITEMS.some(i=>rw.ach[i.id]&&!rw.got[i.id]));
+}
+function updateDot(){ sync(); paintDot(); }
+window.rwUpdateDot=updateDot;
+
+// ---- クリア直後：記録の更新前でも新しく達成した報酬をお知らせする ----
+window.rwOnClear=function(isMulti){
+  try{
+    const ok=isMulti||(gameMode==="normal"&&!customPlayActive&&!challengeStartNoRecord);
+    if(!ok) return;
+    const news=sync(isMulti?{multi:totalStageProgress}:{normal:totalStageProgress});
+    paintDot();
+    if(!news.length) return;
+    setTimeout(()=>{ const el=document.getElementById("clearStats");
+      if(el) el.insertAdjacentHTML("beforeend",'<br><span style="color:#ff6f91;">報酬が届きました！タイトルの「報酬」から受け取れます</span>'); },80);
+  }catch(e){ console.error(e); }
+};
+
+// ---- 報酬画面 ----
+const rewardScreen=document.getElementById("rewardScreen");
+function renderRewards(){
+  sync();
+  const sec=(title,mode)=>'<div class="rwSec">'+title+'</div>'+ITEMS.filter(i=>i.mode===mode).map(it=>{
+    const a=rw.ach[it.id], g=rw.got[it.id];
+    return '<div class="rwCard'+(a?'':' lock')+'"><div class="rwText"><div class="rwName">'+(a?it.name:'？？？')+'</div><div class="rwCond">条件：ステージ'+it.at+'をクリア</div></div>'
+      +(a?(g?'<div class="rwDone">受け取り済み</div>':'<button class="btn rwGet" data-id="'+it.id+'">受け取る</button>'):'')+'</div>';
+  }).join("");
+  document.getElementById("rewardList").innerHTML=sec("通常モードORマルチプレイ","any")+sec("通常モード","normal")+sec("マルチプレイ","multi");
+}
+document.getElementById("rewardBtnTitle").addEventListener("click",()=>{ renderRewards(); rewardScreen.classList.remove("hidden"); });
+document.getElementById("rewardCloseBtn").addEventListener("click",()=>{ rewardScreen.classList.add("hidden"); updateDot(); });
+document.getElementById("rewardList").addEventListener("click",e=>{
+  const b=e.target.closest(".rwGet"); if(!b) return;
+  rw.got[b.dataset.id]=1; save(); renderRewards(); updateDot();
+});
+
+// ---- デザイン画面のエフェクト選択（同じ系統は1つだけ、纏う系と軌跡系は同時OK）----
+function renderEquip(){
+  const box=document.getElementById("rwEquip");
+  if(!ITEMS.some(i=>rw.got[i.id])){ box.innerHTML='<div class="rwHint">報酬を受け取るとエフェクトを選べます</div>'; return; }
+  const row=(label,kind)=>{
+    const opts=[{id:"",name:"なし"}].concat(ITEMS.filter(i=>i.kind===kind&&rw.got[i.id]));
+    return '<div class="rwRowLabel">'+label+'</div><div class="rwChips">'+opts.map(o=>'<button class="rwChip'+(localEq(kind)===o.id?' on':'')+'" data-kind="'+kind+'" data-id="'+o.id+'">'+o.name+'</button>').join("")+'</div>';
+  };
+  box.innerHTML=row("纏う系エフェクト","aura")+row("軌跡系エフェクト","trail");
+}
+document.getElementById("rwEquip").addEventListener("click",e=>{
+  const b=e.target.closest(".rwChip"); if(!b) return;
+  rw.eq[b.dataset.kind]=b.dataset.id; save(); renderEquip();
+});
+
+// ---- エフェクト本体 ----
+const SHAPE={
+ flower:(c,r)=>{ c.beginPath(); for(let i=0;i<=48;i++){ const g=i/48*TAU,d=r*(.55+.45*Math.abs(Math.cos(2.5*g))); (i?c.lineTo:c.moveTo).call(c,Math.cos(g)*d,Math.sin(g)*d); } c.closePath(); c.fill();
+   c.fillStyle="#ffd24d"; c.beginPath(); c.arc(0,0,r*.25,0,TAU); c.fill(); },
+ bubble:(c,r)=>{ c.lineWidth=1.6; c.beginPath(); c.arc(0,0,r,0,TAU); c.stroke(); c.fillStyle="#fff"; c.beginPath(); c.arc(-r*.35,-r*.35,r*.2,0,TAU); c.fill(); },
+ snow:(c,r)=>{ c.lineWidth=1.6; c.lineCap="round"; for(let i=0;i<6;i++){ c.save(); c.rotate(i*TAU/6); c.beginPath(); c.moveTo(0,0); c.lineTo(0,-r); c.moveTo(0,-r*.55); c.lineTo(r*.3,-r*.8); c.moveTo(0,-r*.55); c.lineTo(-r*.3,-r*.8); c.stroke(); c.restore(); } },
+ dot:(c,r)=>{ c.beginPath(); c.arc(0,0,r,0,TAU); c.fill(); }
+};
+const around=(o,a,b)=>{ const g=R(0,TAU),d=R(a,b); return {x0:o.x+Math.cos(g)*d, y0:o.y+Math.sin(g)*d}; };
+const rear=(o,d)=>({x0:o.x-Math.cos(o.angle||0)*d+R(-4,4), y0:o.y-Math.sin(o.angle||0)*d+R(-4,4)});
+const FX={
+ bubble:{layer:1,rate:2.5,life:1.9,sz:[4,10],shape:"bubble",line:1,col:()=>"#9ad8ff",at:o=>Object.assign(around(o,22,46),{vy:-22,wob:7})},
+ sakura:{layer:1,rate:3,life:2.2,sz:[5,8],shape:"flower",col:()=>P(["#ffb3d4","#ffc9e0"]),at:o=>({x0:o.x+R(-40,40),y0:o.y-46,vy:20,vx:R(-8,8),rv:2,wob:6})},
+ snow:{layer:1,rate:3,life:2.1,sz:[4,8],shape:"snow",line:1,col:()=>"#8fd3ff",at:o=>({x0:o.x+R(-42,42),y0:o.y-46,vy:20,rv:1.5})},
+ rainbow:{layer:0,rate:9,life:.9,sz:[3,6],shape:"dot",move:1,col:()=>"hsl("+((performance.now()/6)%360|0)+",90%,65%)",at:o=>rear(o,20)},
+ flower:{layer:0,rate:3,life:2.3,sz:[4,8],shape:"flower",move:1,col:()=>P(["#ff9ec9","#ffb877","#c9baf5","#ffffff"]),at:o=>rear(o,18)}
+};
+function step(o,a,t,dt,canSpawn,force){
+  const s=o._rw||(o._rw={ps:[],acc:{},lx:o.x,ly:o.y});
+  const sp=Math.hypot(o.x-s.lx,o.y-s.ly)/Math.max(dt,.001); s.lx=o.x; s.ly=o.y;
+  const moving=force||sp>12, now=performance.now()/1000;
+  if(canSpawn) for(const id of [a,t]){
+    const d=FX[id]; if(!d||(d.move&&!moving)) continue;
+    s.acc[id]=(s.acc[id]||0)+d.rate*1.2*dt;
+    while(s.acc[id]>=1){ s.acc[id]--; const p=d.at(o); p.id=id; p.born=now; p.sz=R(d.sz[0],d.sz[1]); p.col=d.col(); p.ph=R(0,TAU); p.rot=(d.shape==="flower"||d.shape==="snow")?R(0,TAU):0; s.ps.push(p); }
+  }
+  s.ps=s.ps.filter(p=>now-p.born<FX[p.id].life);
+}
+function drawPs(c,s,layer){
+  const now=performance.now()/1000;
+  for(const p of s.ps){
+    const d=FX[p.id]; if(d.layer!==layer) continue;
+    const t=now-p.born, age=t/d.life; if(age>=1) continue;
+    let x=p.x0+(p.vx||0)*t; const y=p.y0+(p.vy||0)*t; if(p.wob) x+=Math.sin(t*3+p.ph)*p.wob;
+    const r=p.sz*1.3*Math.pow(Math.sin(Math.PI*age),.6);
+    c.save(); c.translate(x,y); c.rotate(p.rot+(p.rv||0)*t); c.globalAlpha=Math.min(1,(1-age)*3); c.fillStyle=p.col; c.strokeStyle=p.col;
+    SHAPE[d.shape](c,r);
+    if(!d.line){ c.strokeStyle="rgba(122,92,138,.55)"; c.lineWidth=1; c.stroke(); }
+    c.restore();
+  }
+}
+let lastT=0;
+const equipOf=t=>(t===player)?[localEq("aura"),localEq("trail")]:[t.fxA||"",t.fxT||""];
+window.rwStepAll=function(){
+  const now=performance.now()/1000, dt=Math.min(.05,Math.max(0,now-(lastT||now))); lastT=now;
+  for(const t of tanks){ if(!t.isPlayer) continue; const e=equipOf(t); step(t,e[0],e[1],dt,state==="playing"&&t.alive,false); }
+};
+window.rwDrawLayer=function(layer){ for(const t of tanks){ if(t._rw) drawPs(ctx,t._rw,layer); } };
+
+// ---- マルチ同期（相手にも自分のエフェクトが見える）----
+window.rwIdx=kind=>Math.max(0,IDS.indexOf(localEq(kind)));
+window.rwSetRemote=(t,a,b)=>{ if(!t) return; t.fxA=fromIdx(a,"aura"); t.fxT=fromIdx(b,"trail"); };
+window.rwPcExtra=t=>(t===player)?[rwIdx("aura"),rwIdx("trail")]:[Math.max(0,IDS.indexOf(t.fxA||"")),Math.max(0,IDS.indexOf(t.fxT||""))];
+
+// ---- デザイン画面のプレビュー ----
+let pvOn=false,pvLast=0; const pvOwner={x:0,y:0,angle:0};
+function pvTick(){
+  if(designScreen.classList.contains("hidden")){ pvOn=false; return; }
+  requestAnimationFrame(pvTick);
+  const now=performance.now()/1000, dt=Math.min(.05,Math.max(0,now-pvLast)); pvLast=now;
+  const cv=document.getElementById("designPreviewCanvas");
+  try{ paintDesignPreview(); }catch(e){}
+  step(pvOwner,localEq("aura"),localEq("trail"),dt,true,true);
+  const c=cv.getContext("2d"); c.save(); c.translate(cv.width/2,cv.height/2); c.scale(2.2,2.2);
+  drawPs(c,pvOwner._rw,0); drawPs(c,pvOwner._rw,1); c.restore();
+}
+document.getElementById("designBtnTitle").addEventListener("click",()=>{
+  renderEquip(); if(!pvOn){ pvOn=true; pvLast=performance.now()/1000; pvTick(); }
+});
+
+// タイトル画面に戻るたびに赤丸を更新
+const _um=updateModeStats;
+updateModeStats=function(){ _um.apply(this,arguments); updateDot(); };
+updateDot();
+})();
+
 if(!player) buildLevel(0);
 requestAnimationFrame(loop);
 })();
@@ -5691,6 +6084,7 @@ if ("serviceWorker" in navigator) {
       .catch(err => console.warn("Service Worker registration failed:", err));
   });
 }
+
 </script>
 </body>
 </html>
