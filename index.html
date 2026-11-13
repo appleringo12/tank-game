@@ -605,6 +605,7 @@
         <button class="btn" data-tool="#">レンガ</button>
         <button class="btn" data-tool="X">鉄壁</button>
         <button class="btn" data-tool="W">水</button>
+        <button class="btn" data-tool="G" style="background:#bff0c8;border-color:#7fcf94;border-bottom-color:#7fcf94;">ピラミッド</button>
         <button class="btn" data-tool="P">自機スポーン</button>
         <button class="btn" data-tool="mp1" style="background:#8ecbff;border-color:#5fa8e8;">1P</button>
         <button class="btn" data-tool="mp2" style="background:#ffaaaa;border-color:#e87888;border-bottom-color:#e87888;">2P</button>
@@ -998,9 +999,25 @@ LEVELS.forEach(l=>{
   l.map = l.map.map(r=> r.length<COLS ? r+".".repeat(COLS-r.length) : r.slice(0,COLS));
 });
 
-const EMPTY=0, BRICK=1, STEEL=2, WATER=3;
-// ★弾をさえぎるのはレンガと鉄壁だけ。水は弾を素通しする（戦車は水の上を通れない）。
-function blocksBullet(v){ return v===BRICK || v===STEEL; }
+const EMPTY=0, BRICK=1, STEEL=2, WATER=3, PYRAMID=4;
+// ★弾をさえぎるのはレンガ・鉄壁・ピラミッドだけ。水は弾を素通しする（戦車は水の上を通れない）。
+// ピラミッド（マップ上の文字は "G"）：鉄壁と同じ性質（戦車は通れない・通常弾は反射）に加えて、ミサイルもこの先へ進めない。
+function blocksBullet(v){ return v===BRICK || v===STEEL || v===PYRAMID; }
+// ピラミッドブロックの見た目（緑のパステル）。(x,y)=左上、w,h=描くマスの大きさ。ゲーム画面・エディタ・一覧で共用。
+function drawPyramidTile(g,x,y,w,h=w){
+  g.save(); g.translate(x,y); g.scale(w/40,h/40);
+  g.fillStyle="#8fd3a0"; g.fillRect(1,1,38,38);          // ふちどり
+  g.save(); g.beginPath(); g.rect(2,2,36,36); g.clip();
+  const tri=(pts,col)=>{ g.fillStyle=col; g.beginPath(); pts.forEach(([px,py],i)=>g[i?"lineTo":"moveTo"](px,py)); g.closePath(); g.fill(); };
+  tri([[0,0],[40,0],[20,20]],"#f0fff1");   // 上の面（いちばん明るい）
+  tri([[0,0],[0,40],[20,20]],"#d3f5d9");   // 左の面
+  tri([[40,0],[40,40],[20,20]],"#9fdfae"); // 右の面（影）
+  tri([[0,40],[40,40],[20,20]],"#b4ebc0"); // 下の面
+  g.restore();
+  g.fillStyle="#c6f0cf"; g.fillRect(14,14,12,12);        // 頂上の四角
+  g.strokeStyle="#8fd3a0"; g.lineWidth=1.3; g.strokeRect(14,14,12,12);
+  g.restore();
+}
 
 /* ================================================================
    キャンバスの拡大縮小まわり
@@ -1774,6 +1791,7 @@ function buildLevel(idx, customLevel=null){
       if(ch==="#") v=BRICK;
       else if(ch==="X") v=STEEL;
       else if(ch==="W") v=WATER;
+      else if(ch==="G") v=PYRAMID;
       walls[r].push(v);
       bricksHp[r].push(v===BRICK?2:0); // ★レンガの硬さ。2=弾2発で破壊。1にすると1発で壊れるようになる
     }
@@ -2446,6 +2464,22 @@ function getMissileTargetPoint(originX, originY, angle, distance = MISSILE_DISTA
   if(dy>0) edgeCandidates.push((WORLD_H-BULLET_R-originY)/dy);
   if(dy<0) edgeCandidates.push((BULLET_R-originY)/dy);
   for(const d of edgeCandidates) if(d>=0) maxDist=Math.min(maxDist,d);
+  // ★ピラミッドブロック：外周の壁と同じ扱い。ブロックの手前までしか進めず、その手前に着弾する。
+  for(let r=0;r<ROWS;r++){
+    if(!walls[r]) continue;
+    for(let c=0;c<COLS;c++){
+      if(walls[r][c]!==PYRAMID) continue;
+      const x0=c*TILE, x1=x0+TILE, y0=r*TILE, y1=y0+TILE;
+      let tmin=0, tmax=Infinity, miss=false;
+      if(Math.abs(dx)<1e-9){ if(originX<x0||originX>x1) miss=true; }
+      else { let a=(x0-originX)/dx, b=(x1-originX)/dx; if(a>b){const t=a;a=b;b=t;} tmin=Math.max(tmin,a); tmax=Math.min(tmax,b); }
+      if(miss) continue;
+      if(Math.abs(dy)<1e-9){ if(originY<y0||originY>y1) miss=true; }
+      else { let a=(y0-originY)/dy, b=(y1-originY)/dy; if(a>b){const t=a;a=b;b=t;} tmin=Math.max(tmin,a); tmax=Math.min(tmax,b); }
+      if(miss || tmin>tmax || tmin<=0) continue;
+      maxDist=Math.min(maxDist,Math.max(0,tmin-BULLET_R));
+    }
+  }
   return {
     x:clamp(originX+dx*maxDist,BULLET_R,WORLD_W-BULLET_R),
     y:clamp(originY+dy*maxDist,BULLET_R,WORLD_H-BULLET_R)
@@ -3683,6 +3717,7 @@ function drawEditorMap(){
     const ch=editorMap[r][c],x=c*w,y=r*h;
     if(ch==="#"){ectx.fillStyle="#f3b57e";ectx.fillRect(x+1,y+1,w-2,h-2);ectx.strokeStyle="#d99a63";ectx.strokeRect(x+3,y+3,w-6,h-6);}
     else if(ch==="X"){ectx.fillStyle="#b9afe8";ectx.fillRect(x+1,y+1,w-2,h-2);ectx.fillStyle="#eee9ff";ectx.fillRect(x+w*.4,y+h*.4,w*.2,h*.2);}
+    else if(ch==="G"){ drawPyramidTile(ectx,x,y,w,h); }
     else if(ch==="P" || CUSTOM_CHAR_TO_ENEMY[ch]){
       const type=ch==="P"?"player":CUSTOM_CHAR_TO_ENEMY[ch];
       const col=type==="player"?"#8ecbff":ENEMY_TYPES[type].color;
@@ -3714,7 +3749,7 @@ function drawEditorMap(){
   });
 }
 // ---- 配置（なぞり配置・一つ戻る）----
-const EDITOR_DRAG_TOOLS = new Set(["#","X","W","."]); // レンガ・鉄壁・水・消しゴムはドラッグで連続操作可能
+const EDITOR_DRAG_TOOLS = new Set(["#","X","W","G","."]); // レンガ・鉄壁・水・ピラミッド・消しゴムはドラッグで連続操作可能
 const EDITOR_HISTORY_MAX = 100;
 let editorHistory = [];
 let editorStroke = null;
@@ -3865,6 +3900,11 @@ const SHARE_CELL_CHARS = "#XPW1234567";                // 空きマス以外の1
 const SHARE_KINDS = BigInt(SHARE_CELL_CHARS.length);
 const SHARE_CELL_CHARS_LEGACY = "#XPW123456";           // 灰色戦車追加前の共有コードを読むために残す
 const SHARE_KINDS_LEGACY = BigInt(SHARE_CELL_CHARS_LEGACY.length);
+// ★ピラミッド("G")を含むステージは、種類が12個の新形式（先頭が"G"／1P・2P付きは"H"）で表す。
+//   これまでの共有コード（先頭S/M）の読み方はそのまま変えない。
+const SHARE_CELL_CHARS_V3 = SHARE_CELL_CHARS + "G";
+const SHARE_PREFIX_V3 = "G";
+const SHARE_PREFIX_V3_MP = "H";
 const SHARE_CELLS = STAGE_COLS * STAGE_ROWS;           // 117マス
 const SHARE_PREFIX = "S";                              // 形式の目印（名前入りの旧形式は"T"）
 const SHARE_PREFIX_MP = "M";                           // 1P・2Pのリスポーン位置つきのステージ用
@@ -3885,20 +3925,22 @@ function shareCheckChar(body){
   for(let i=0;i<body.length;i++) sum+=SHARE_ALPHABET.indexOf(body[i])*(i+1);
   return SHARE_ALPHABET[sum%32];
 }
-function encodeStageCode(stage, cellChars=SHARE_CELL_CHARS){
-  const kinds=BigInt(cellChars.length);
+function encodeStageCode(stage, cellChars=null){
   const fit=fitCustomLevel(stage);
+  if(!cellChars) cellChars = fit.map.some(row=>row.includes("G")) ? SHARE_CELL_CHARS_V3 : SHARE_CELL_CHARS;
+  const isV3 = cellChars===SHARE_CELL_CHARS_V3;
+  const kinds=BigInt(cellChars.length);
   const items=[];
   fit.map.forEach((row,r)=>{ for(let c=0;c<STAGE_COLS;c++){ const t=cellChars.indexOf(row[c]); if(t>=0) items.push({pos:r*STAGE_COLS+c,t}); } });
   const k=items.length;
   let rank=0n; items.forEach((it,i)=>{ rank+=SHARE_C[it.pos][i+1]; });   // 置いたマスの位置
   let types=0n; for(let i=k-1;i>=0;i--) types=types*kinds+BigInt(items[i].t); // 置いたものの種類
   let n=(rank*(kinds**BigInt(k))+types)*118n+BigInt(k);
-  let prefix=SHARE_PREFIX;
+  let prefix=isV3?SHARE_PREFIX_V3:SHARE_PREFIX;
   if(fit.mp){ // 1P・2Pの位置（無いときは117）を後ろに付ける
     const pos=fit.mp.map(p=>p ? p[1]*STAGE_COLS+p[0] : SHARE_CELLS);
     n=n*13924n+BigInt(pos[0]*118+pos[1]);
-    prefix=SHARE_PREFIX_MP;
+    prefix=isV3?SHARE_PREFIX_V3_MP:SHARE_PREFIX_MP;
   }
   let body="";
   if(n===0n) body="0";
@@ -3910,8 +3952,9 @@ function encodeStageCode(stage, cellChars=SHARE_CELL_CHARS){
 function decodeStageCode(text){
   try{
     let c=String(text||"").toUpperCase().replace(/[\s\-_]/g,"").replace(/O/g,"0").replace(/[IL]/g,"1");
-    if(c.length<3 || (c[0]!==SHARE_PREFIX && c[0]!==SHARE_PREFIX_MP)) return null;
-    const hasMp=c[0]===SHARE_PREFIX_MP;
+    if(c.length<3 || (c[0]!==SHARE_PREFIX && c[0]!==SHARE_PREFIX_MP && c[0]!==SHARE_PREFIX_V3 && c[0]!==SHARE_PREFIX_V3_MP)) return null;
+    const isV3=c[0]===SHARE_PREFIX_V3 || c[0]===SHARE_PREFIX_V3_MP;
+    const hasMp=c[0]===SHARE_PREFIX_MP || c[0]===SHARE_PREFIX_V3_MP;
     for(const ch of c) if(SHARE_ALPHABET.indexOf(ch)<0) return null;
     const body=c.slice(0,-1);
     if(shareCheckChar(body)!==c[c.length-1]) return null;
@@ -3954,6 +3997,7 @@ function decodeStageCode(text){
       if(stage.mp) result.mp=stage.mp;
       return result;
     };
+    if(isV3) return decodeWithCharset(SHARE_CELL_CHARS_V3);
     return decodeWithCharset(SHARE_CELL_CHARS) || decodeWithCharset(SHARE_CELL_CHARS_LEGACY);
   }catch(e){return null;}
 }
@@ -3994,7 +4038,7 @@ function showCustomLibrary(){
     const preview=document.createElement("canvas");preview.width=364;preview.height=252;
     const pc=preview.getContext("2d"),rows=STAGE_ROWS,cols=STAGE_COLS,cw=364/cols,ch=252/rows;
     pc.fillStyle="#fffafc";pc.fillRect(0,0,364,252);
-    fitted.map.forEach((line,r)=>Array.from(line).forEach((v,c)=>{const x=c*cw,y=r*ch;if(v==="#"){pc.fillStyle="#f3b57e";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="X"){pc.fillStyle="#a898e0";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="P"||CUSTOM_CHAR_TO_ENEMY[v]){pc.fillStyle=v==="P"?"#8ecbff":ENEMY_TYPES[CUSTOM_CHAR_TO_ENEMY[v]].color;pc.beginPath();pc.arc(x+cw/2,y+ch/2,Math.min(cw,ch)*.28,0,7);pc.fill();}}));
+    fitted.map.forEach((line,r)=>Array.from(line).forEach((v,c)=>{const x=c*cw,y=r*ch;if(v==="#"){pc.fillStyle="#f3b57e";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="X"){pc.fillStyle="#a898e0";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="G"){drawPyramidTile(pc,x,y,cw,ch);}else if(v==="P"||CUSTOM_CHAR_TO_ENEMY[v]){pc.fillStyle=v==="P"?"#8ecbff":ENEMY_TYPES[CUSTOM_CHAR_TO_ENEMY[v]].color;pc.beginPath();pc.arc(x+cw/2,y+ch/2,Math.min(cw,ch)*.28,0,7);pc.fill();}}));
     const wp=buildWaterPaths((c,r)=>fitted.map[r]?.[c]==="W");
     if(wp){pc.save();pc.scale(cw/TILE,ch/TILE);drawWaterLayer(pc,wp,0);pc.restore();}
     const title=document.createElement("div");title.className="stageCardTitle";title.textContent=stage.name||"名前なし";
@@ -4941,6 +4985,8 @@ function rebuildMapCache(){
           for(const [nx,ny] of nailPositions){
             ctx.beginPath(); ctx.arc(nx,ny,nailR,0,7); ctx.fill();
           }
+        } else if(v===PYRAMID){
+          drawPyramidTile(ctx,x,y,TILE);
         } else {
           ctx.fillStyle = "#d9d1f5";
           ctx.fillRect(x+1,y+1,TILE-2,TILE-2);
