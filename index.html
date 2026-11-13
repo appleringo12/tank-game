@@ -80,7 +80,18 @@
   #app.menu-state #controls{ display:none; }
   /* PC版は下段のタッチ操作UIを表示せず、ゲーム画面をウィンドウ全体に広げる */
   #app.pc-mode #controls{ display:none; }
-  #app.pc-mode #gameArea{ flex:1 1 100%; border-bottom:0; }
+  #app.pc-mode #gameArea{ flex:1 1 100%; border-bottom:0; padding:18px; }
+  /* PC版：ゲーム画面の外側に余白を作る */
+  #app.pc-mode #game{ box-shadow:0 3px 18px rgba(122,92,138,.18); }
+  #fullscreenBtn{
+    position:absolute; top:auto; right:10px; bottom:10px; z-index:100;
+    padding:7px 12px; border-radius:16px; border:2px solid #ff8fc4;
+    background:rgba(255,255,255,.9); color:#7a5c8a;
+    font:700 12px/1.2 inherit; letter-spacing:1px; cursor:pointer;
+    box-shadow:0 2px 7px rgba(122,92,138,.2);
+  }
+  #fullscreenBtn:active{transform:translateY(1px)}
+  #fullscreenBtn.hidden{display:none !important;}
   canvas{ display:block; touch-action:none; background:#ffeef7; border-radius:14px; }
 
   /* ---- 下段：操作エリア ---- */
@@ -130,6 +141,8 @@
   }
   .joy-stick.fire-ready{ background:rgba(178,235,181,0.9); } /* 発射できる強さになったらミントグリーンに */
   .joy-stick.missile-charging{ background:rgba(255,138,178,0.9); } /* ミサイルを発射しようとしている間はコーラルピンクに */
+  /* 右側はドラッグ中も左側と同じラベンダー色を維持 */
+  #app > .joy-stick.fire-ready, #app > .joy-stick.missile-charging{ background:rgba(201,186,245,0.9); }
 
   /* ---- HUD（ゲーム画面の上に重ねる文字類） ---- */
   #hud{
@@ -420,6 +433,7 @@
   <!-- ============ 上段：ゲーム画面 ============ -->
   <div id="gameArea">
     <canvas id="game"></canvas>
+    <button id="fullscreenBtn" type="button">全画面にする</button>
     <!-- Flowerbed Fields [Loop] / CC0 -->
     <audio id="bgm" src="flowerbed_fields_64k.mp3" loop preload="auto"></audio>
 
@@ -586,7 +600,7 @@
           <div class="schemeDesc" id="controlSchemeDesc"></div>
         </div>
         <div class="settingsRow settingsRowVolume hidden" id="keyConfigRow">
-          <span class="settingsLabel">キー設定</span>
+          <span class="settingsLabel">キー・マウス設定</span>
           <div class="keyGrid" id="keyGrid"></div>
           <button class="btn alt keyResetBtn" id="keyResetBtn">初期設定に戻す</button>
         </div>
@@ -1032,7 +1046,10 @@ let scale = 1, dpr = 1;
 function resize(){
   dpr = Math.min(window.devicePixelRatio||1, 2);
   const rect = gameArea.getBoundingClientRect();
-  scale = Math.min(rect.width/WORLD_W, rect.height/WORLD_H);
+  const style = getComputedStyle(gameArea);
+  const availableWidth = rect.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  const availableHeight = rect.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+  scale = Math.min(availableWidth/WORLD_W, availableHeight/WORLD_H);
   canvas.style.width = (WORLD_W*scale)+"px";
   canvas.style.height = (WORLD_H*scale)+"px";
   canvas.width = Math.round(WORLD_W*scale*dpr);
@@ -1040,6 +1057,40 @@ function resize(){
 }
 window.addEventListener("resize", resize);
 window.addEventListener("orientationchange", ()=>setTimeout(resize,150));
+// 全画面表示（対応ブラウザのみ）。Escキーでの解除はブラウザ標準動作に加えて状態表示も更新する。
+const fullscreenBtn = document.getElementById("fullscreenBtn");
+function supportsFullscreen(){
+  return !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+}
+function isFullscreen(){
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+async function toggleFullscreen(){
+  try{
+    if(isFullscreen()){
+      if(document.exitFullscreen) await document.exitFullscreen();
+      else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }else{
+      const target = document.getElementById("app");
+      if(target.requestFullscreen) await target.requestFullscreen();
+      else if(target.webkitRequestFullscreen) target.webkitRequestFullscreen();
+    }
+  }catch(err){ console.warn("Fullscreen request failed:", err); }
+}
+function updateFullscreenButton(){
+  fullscreenBtn.textContent = isFullscreen() ? "全画面を終了" : "全画面にする";
+  resize();
+}
+if(!supportsFullscreen()) fullscreenBtn.classList.add("hidden");
+fullscreenBtn.addEventListener("click", toggleFullscreen);
+document.addEventListener("fullscreenchange", updateFullscreenButton);
+document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
+document.addEventListener("keydown", e=>{
+  if(e.key === "Escape" && isFullscreen()){
+    // ブラウザの標準Esc解除を妨げない。解除後のレイアウトだけ更新する。
+    setTimeout(updateFullscreenButton, 0);
+  }
+});
 // ★スマホでアプリをバックグラウンドにして長時間放置→復帰したとき、
 // canvasのサイズがずれたままになる（＝戦車の描画位置がおかしく見える）ことがあるため、
 // 画面が再び表示されたタイミングで必ずサイズを計算し直す。
@@ -1088,8 +1139,8 @@ const IS_PC = !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
   && !!(window.matchMedia && window.matchMedia("(pointer:fine)").matches);
 
 const KEYBIND_KEY = "tankBattleKeybindsV1";
-const KEYBIND_DEFAULT = { up:"KeyW", down:"KeyS", left:"KeyA", right:"KeyD" };
-const KEYBIND_LABEL = { up:"上へ移動", down:"下へ移動", left:"左へ移動", right:"右へ移動" };
+const KEYBIND_DEFAULT = { up:"KeyW", down:"KeyS", left:"KeyA", right:"KeyD", fire:"Mouse0", missile:"Mouse2" };
+const KEYBIND_LABEL = { up:"上へ移動", down:"下へ移動", left:"左へ移動", right:"右へ移動", fire:"射撃（マウス）", missile:"ミサイル（マウス）" };
 let keybinds = Object.assign({}, KEYBIND_DEFAULT);
 function loadKeybinds(){
   try{
@@ -1102,6 +1153,11 @@ loadKeybinds();
 function keyCodeLabel(code){
   if(!code) return "—";
   let m;
+  if(code==="Mouse0") return "左クリック";
+  if(code==="Mouse1") return "ホイールクリック";
+  if(code==="Mouse2") return "右クリック";
+  if(code==="Mouse3") return "戻るボタン";
+  if(code==="Mouse4") return "進むボタン";
   if((m=/^Key([A-Z])$/.exec(code))) return m[1];
   if((m=/^Digit(\d)$/.exec(code))) return m[1];
   if((m=/^Numpad(.+)$/.exec(code))) return "Num" + m[1].replace("Decimal",".").replace("Add","+").replace("Subtract","-").replace("Multiply","*").replace("Divide","/");
@@ -1158,7 +1214,7 @@ function keyboardMove(){
 const PC_AIM_DEADZONE = 6;          // ポインターが自機の中心からこの距離(px)未満のときは向きを変えない
 const PC_MISSILE_HOLD_TIME = 0.125; // PC版のみ：右クリック長押し0.125秒で長距離ミサイル
 const pcAim = { mx:null, my:null, angle:0, valid:false };
-const pcMouse = { rightDown:false, rightStart:0, rightTriggered:false, pendingT:0 };
+const pcMouse = { rightDown:false, rightStart:0, rightTriggered:false, pendingT:0, missileButton:2 };
 
 // ワールド座標を画面上の座標(clientX/clientY)に変換する（screenToWorldの逆変換）
 function worldToScreen(wx, wy){
@@ -1186,22 +1242,26 @@ function pcUpdateAim(){
 function pcIsUiTarget(t){
   return !!(t && t.closest && t.closest("button,input,textarea,select,.overlay,#uiConfirm,#shareDialog,#uiToast"));
 }
+function mouseButtonNumber(code){
+  const m=/^Mouse([0-4])$/.exec(code||"");
+  return m ? Number(m[1]) : -1;
+}
 window.addEventListener("mousemove", e=>{ pcAim.mx=e.clientX; pcAim.my=e.clientY; }, true);
 window.addEventListener("mousedown", e=>{
   if(!IS_PC) return;
   pcAim.mx=e.clientX; pcAim.my=e.clientY;
   if(state!=="playing" || !player || !player.alive || pcIsUiTarget(e.target)) return;
-  if(e.button===0){
-    // 左クリック＝通常弾（クリックした瞬間の狙う方向へ撃つ）
+  if(e.button===mouseButtonNumber(keybinds.fire)){
+    // 設定したマウスボタン＝通常弾（クリックした瞬間の狙う方向へ撃つ）
     pcUpdateAim();
     if(pcAim.valid) player.turretAngle = pcAim.angle;
     input.fireRequested = true;
-  } else if(e.button===2){
-    pcMouse.rightDown=true; pcMouse.rightStart=performance.now()/1000; pcMouse.rightTriggered=false;
+  } else if(e.button===mouseButtonNumber(keybinds.missile)){
+    pcMouse.missileButton=e.button; pcMouse.rightDown=true; pcMouse.rightStart=performance.now()/1000; pcMouse.rightTriggered=false;
   }
 }, true); // ★キャプチャ段階で受け取る：キャンバスの外（操作エリアや余白）をクリックしても弾・ミサイルを撃てる
 window.addEventListener("mouseup", e=>{
-  if(!IS_PC || e.button!==2 || !pcMouse.rightDown) return;
+  if(!IS_PC || e.button!==pcMouse.missileButton || !pcMouse.rightDown) return;
   pcMouse.rightDown=false;
   if(!pcMouse.rightTriggered && state==="playing" && player && player.alive){
     // 短く押して離した＝短いミサイル。ミサイルが飛行中なら、着弾した瞬間に撃つ先行入力として少しだけ覚えておく
@@ -1607,7 +1667,7 @@ const SETTINGS_KEY = "tankBattleSettingsV1";
 const SFX_LEVEL_MAX = 6; // 効果音レベルの最大値（0〜6の7段階、3が真ん中＝デフォルト）
 let bgmEnabled = true;
 let seLevel = 3; // 0(無音)〜6。3が元々の音量（デフォルト）。
-let controlScheme = "A"; // "A"=従来操作（ドラッグ照準）、"B"=新操作（画面タップで照準）
+let controlScheme = IS_PC ? "A" : "B"; // 初期設定：PCは通常操作、スマホ・タブレットは簡単操作
 function loadSettings(){
   try{
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -5645,6 +5705,23 @@ function cancelKeyCapture(){
 function startKeyCapture(act){
   if(keyCaptureAct === act){ cancelKeyCapture(); return; }
   keyCaptureAct = act;
+  if(act==="fire" || act==="missile"){
+    keyCapture = null;
+    const mouseCapture = e=>{
+      if(pcIsUiTarget(e.target)) return;
+      e.preventDefault(); e.stopPropagation();
+      const code = "Mouse" + e.button;
+      const other = Object.keys(keybinds).find(a=>a!==act && keybinds[a]===code);
+      if(other) keybinds[other] = keybinds[act];
+      keybinds[act] = code;
+      window.removeEventListener("mousedown", mouseCapture, true);
+      keyCapture = null; keyCaptureAct = null;
+      saveKeybinds(); renderKeyGrid();
+    };
+    window.addEventListener("mousedown", mouseCapture, true);
+    renderKeyGrid();
+    return;
+  }
   keyCapture = e=>{
     if(e.code === "Escape"){ cancelKeyCapture(); return; }
     if(e.repeat) return;
