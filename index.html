@@ -321,7 +321,8 @@
   #editorTools .btn{font-size:11px;padding:4px 8px;border-radius:11px;border-width:2px;border-bottom-width:3px}
   #editorTools .selected{outline-width:2px}
   .btn:disabled{opacity:.45;cursor:default}
-  .editorTools .selected{outline:3px solid #8ecbff;opacity:1}
+  .editorTools .selected{outline:3px solid #765c8a;opacity:1}
+  #editorTools .btn.locked{opacity:.55;filter:grayscale(.4)}
   #editorCanvas{width:min(94vw,720px);height:auto;max-height:52vh;aspect-ratio:13/9;background:#fff;border:2px solid #c9baf5;border-radius:10px;touch-action:none}
   .editorSettings{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;color:var(--paper);font-size:13px}
   .editorSettings input,.editorSettings select{font:inherit;padding:6px;border:1px solid #c9baf5;border-radius:8px;background:#fff;color:var(--paper)}
@@ -423,9 +424,9 @@
     <audio id="bgm" src="flowerbed_fields_64k.mp3" loop preload="auto"></audio>
 
     <div id="hud" class="hidden">
-      <div class="grp"><span id="stageLabel">STAGE 1</span></div>
+      <div class="grp"><span id="stageLabel">ステージ 1</span></div>
       <div class="grp"><span id="lives"></span></div>
-      <div class="grp"><span id="maxStageLabel">MAX CLEAR STAGE 0</span></div>
+      <div class="grp"><span id="maxStageLabel">最高クリアステージ 0</span></div>
       <button id="pauseBtn">II</button>
     </div>
     <div id="stageFlash"></div>
@@ -466,7 +467,7 @@
 
     <!-- ステージクリア画面 -->
     <div id="stageClearScreen" class="hidden">
-      <div class="clearTitle" id="clearStageTitle">STAGE 1 CLEAR!</div>
+      <div class="clearTitle" id="clearStageTitle">ステージ 1 CLEAR!</div>
       <div class="clearStats" id="clearStats"></div>
       <div class="nextInfo" id="nextStageInfo"></div>
       <div class="tapHint" id="clearTapHint">画面をタップすると次のステージへ</div>
@@ -970,27 +971,27 @@ const LEVELS = [
   { colored:true, enemies:["cyan","green","red","purple","yellow","purple","green","red","cyan"], map:["............6","...##3.4##...","...###.###.5.","....##.##....",".P....1......","....##.##....","...###.###.5.","...##3.4##...","............6"], mp:[[1,2],[1,6]] },
   { colored:true, enemies:["green","yellow","cyan","yellow","yellow","green"], map:["WW..3........",".WW.......16.","..WW......11.","...WWW.......",".............",".......WWW...",".........WW.3","..........WW.","...P.......WW"], mp:[[1,8],[5,8]] },
   { colored:true, enemies:["yellow","purple","yellow","cyan","yellow","yellow","purple","yellow","cyan","yellow"], map:["..........1..","......5...16.","......X...1..","......X......",".P....X......","......X......","......X...1..","......5...16.","..........1.."], mp:[[1,2],[1,6]] },
-  { colored:true, enemies:["cyan","green","red","yellow","red","red","green","red","cyan"], map:["WWWWWWWWWWWWW","W..........6W","W...........W","W..X.....X34W","W.PX..1..X44W","W..X.....X34W","W...........W","W..........6W","WWWWWWWWWWWWW"], mp:[[2,3],[2,5]] },
-  { enemies:["brown", "yellow", "green", "red", "purple"], map:["............",".1........2.","..#.........",".5##X...##X.","......#.....",".....##X....",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["yellow", "green", "red", "purple", "brown"], map:["............",".X#X......1.","......X.....",".4..#.#...5.","......#.....","......XX....",".2....P.##3.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["green", "red", "purple", "brown", "yellow"], map:["............",".1........2.","..#.X#......",".5..........","......#.....","........#X..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["red", "purple", "brown", "yellow", "green"], map:["............",".X5##....X#.","............",".3..#.....4.","............","...#X..X.##.",".1....P...2.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["purple", "brown", "yellow", "green", "red"], map:["............",".1........2.","..##........",".4.X......5.","......##....","..........X.",".3....P..X#.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["brown", "yellow", "green", "red", "purple"], map:["............",".X....X...1.","......#.....",".4..#.#...5.","............",".......XX...",".2....P.#.3.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["yellow", "green", "red", "purple", "brown"], map:["............",".1........2.","..#.##X.....",".5..........","......#.....","........##X.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["green", "red", "purple", "brown", "yellow"], map:["............",".X45#.....X.","............",".3..X.....#.","............","....#..X..#.",".1....P...2.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["red", "purple", "brown", "yellow", "green"], map:["............",".5........2.","..#.........",".#.X##...X#.","......#.....","......X##...",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["purple", "brown", "yellow", "green", "red"], map:["............",".X5##.....1.",".......#....",".3..#..X..4.",".......#....",".......#....",".2....P..X#.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["brown", "yellow", "green", "red", "purple"], map:["............",".1........2.","..#..#X.....",".5..........",".....X#.....",".........##.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["yellow", "green", "red", "purple", "brown"], map:["............",".X5.X#....#.","............",".3..#.....4.","............",".#..##.X..X.",".1....P...2.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["green", "red", "purple", "brown", "yellow"], map:["............",".1........2.","..#.#.......",".4..#.....5.",".....X#X#...",".#..........",".X....P..X3.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["red", "purple", "brown", "yellow", "green"], map:["............",".X5....#..#.",".......X....",".3..#..#..4.","............",".......X.#..",".1....P..X2.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["purple", "brown", "yellow", "green", "red"], map:["............",".1........2.","..#..X##....",".5..........",".....X#.....",".#.......X#.",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["brown", "yellow", "green", "red", "purple"], map:["............",".#45.#....#.","............",".X..##....3.","............",".#...X.X....",".1....P...2.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["yellow", "green", "red", "purple", "brown"], map:["............",".5........2.","..#.........",".X#.#X#...#.",".....X#.....",".......#X#..",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["green", "red", "purple", "brown", "yellow"], map:["............",".X34X#5...#.","........#...",".1..#...#.2.","........X...",".......X#...",".X....P...#.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["red", "purple", "brown", "yellow", "green"], map:["............",".1........2.","..###.......",".5..........",".....X#.....",".......X#...",".3....P..X4.","............"], mp:[[6,6],[5,6]] },
-  { enemies:["purple", "brown", "yellow", "green", "red"], map:["............",".X#X5...###.","............",".3..#.....4.","............","..X#...X#X..",".1....P...2.","............"], mp:[[6,6],[5,6]] }
+  {colored:true,enemies:["gray"],map:["WWWWWWWWWWWWW","W...........W","W...........W","W...........W","W.P.......7.W","W...........W","W...........W","W...........W","WWWWWWWWWWWWW"],mp:[[2,2],[2,6]]},
+  {colored:true,enemies:["yellow","green","cyan","yellow","green"],map:[".............",".............","......G.1.3..","......G......","..P...G.6....","......G......","......G.1.3..",".............","............."],mp:[[2,2],[2,6]]},
+  {colored:true,enemies:["green","green","brown","green","green"],map:[".............",".3.........3.","..GGGG.GGGG..","..G.......G..","..G.P...2.G..","..G.......G..","..GGGG.GGGG..",".3.........3.","............."],mp:[[4,3],[4,5]]},
+  {colored:true,enemies:["purple","cyan","purple","green","green","red","red"],map:["..G.......G..","P.G.5.6.5.G..","..X.......X..","..G.3.G.3.G..","..G...G...G..","..G.4.G.4.G..","......G......","......G......","......#......"],mp:[[0,1],[12,1]]},
+  {colored:true,enemies:["green","brown","red","cyan","brown","red","green"],map:[".............","......#....3.","......#.2..4.",".........G...",".P.......G.6.",".........G...","......#.2..4.","......#....3.","............."],mp:[[1,2],[1,6]]},
+  {colored:true,enemies:["purple","brown","cyan","purple","brown"],map:[".............","......5..2...","...GGGGGGG...","......G......","....P.G.6....","......G......","...GGGGGGG...","......5..2...","............."],mp:[[4,3],[4,5]]},
+  {colored:true,enemies:["cyan","cyan","cyan"],map:["....6.6.6....",".............","...GGGGGGG...",".............",".............",".............","...GGGGGGG...","......P......","............."],mp:[[4,7],[8,7]]},
+  {colored:true,enemies:["purple","green","red","purple","green","purple"],map:[".............",".............","...G.....G.5.","...G.....G.3.",".P.G..4..G.5.","...G.....G.3.","...G.....G.5.",".............","............."],mp:[[1,2],[1,6]]},
+  {colored:true,enemies:["yellow","yellow","yellow","yellow","yellow","yellow","yellow","yellow","yellow","yellow"],map:[".............",".1....1....1.",".............",".1.........1.","......P......",".1.........1.",".............",".1....1....1.","............."],mp:[[4,4],[8,4]]},
+  {colored:true,enemies:["brown","brown","brown","brown","brown","brown"],map:[".............",".2....2....2.",".............",".............","......P......",".............",".............",".2....2....2.","............."],mp:[[4,4],[8,4]]},
+  {colored:true,enemies:["gray"],map:["WWWWWWWWWWWWW","W...........W","W...........W","W..X.....X..W","WP.X.....X.7W","W..X.....X..W","W...........W","W...........W","WWWWWWWWWWWWW"],mp:[[1,2],[1,6]]},
+  {colored:true,enemies:["purple","cyan","purple","purple","cyan"],map:[".............","..X.......G..","..X....5..G.6","..X.......G..","P.#....5.....","..X.......G..","..X....5..G.6","..X.......G..","............."],mp:[[0,2],[0,6]]},
+  {colored:true,enemies:["purple","brown","brown","cyan","cyan","brown","brown","purple"],map:[".............","......5......",".....2.2.....","....GG.GG....",".P..G6.6G....","....GG.GG....",".....2.2.....","......5......","............."],mp:[[1,4],[11,4]]},
+  {colored:true,enemies:["brown","brown","green","purple","purple","red","red","green","cyan"],map:["......G......",".2..2.G.3.5.5","......G......","..G...G...G..","..G...G...G..","..G...G...G..","..G.......G..","P.G.4.4.3.G.6","..G.......G.."],mp:[[0,7],[1,7]]},
+  {colored:true,enemies:["cyan","cyan","red","red","red","red","red","red"],map:["...6.....6...",".............",".4.GGGGGGG.4.","...G.....G...",".4.G..P..G.4.","...G.....G...",".4.GG...GG.4.",".............","............."],mp:[[4,4],[8,4]]},
+  {colored:true,enemies:["green","green","cyan","green","green","yellow","yellow"],map:[".............",".3..3.6.3..3.",".............",".1.........1.",".............",".GG..GGG..GG.",".GG..GGG..GG.",".............","......P......"],mp:[[5,8],[7,8]]},
+  {colored:true,enemies:["cyan","purple","cyan","brown","purple","red"],map:[".............","......6..5.6.","...GG........","....GG#..2.5.",".....###.....","......#GG....","..P.....GG.4.",".............","............."],mp:[[1,6],[3,6]]},
+  {colored:true,enemies:["cyan","cyan","cyan","cyan"],map:[".............","...6.6.6.6...",".............",".............","..GGGGXGGGG..",".............",".G....P....G.",".............","............."],mp:[[4,6],[8,6]]},
+  {colored:true,enemies:["purple","purple","purple","purple","purple","purple","yellow","yellow","yellow","yellow"],map:[".5.5.....5.5.",".............",".5.GG...GG.5.","1.WWG...GWW.1","WWWWG...GWWWW","WW.1G...G1.WW","...GG...GG...",".............","......P......"],mp:[[4,8],[8,8]]},
+  {colored:true,enemies:["purple","green","green","green","purple","green","green","green","green","cyan"],map:["5.3...3...3.5","....3...3....","..3.GGGGG.3..","..G.......G..","..G...6...G..","..G.......G..","....GGGGG....",".............","......P......"],mp:[[4,8],[8,8]]},
+  {colored:true,enemies:["gray","gray"],map:["WWWWWWWWWWWWW","W...........W","W.........7.W","W...........W","W.P.........W","W...........W","W.........7.W","W...........W","WWWWWWWWWWWWW"],mp:[[2,2],[2,6]]}
 ];
 
 // マップの行数・列数が足りない場合に自動で埋める（12×8で作られた既存ステージは、右と下に空きマスが足されて13×9になる）
@@ -2370,12 +2371,15 @@ function resetPlayerTransientState(){
 }
 
 function onPlayerDeath(){
-  lives--;
+  if(!customPlayActive) lives--; // ★オリジナルステージはライフが減らない
 
   // 倒された瞬間にセーブする（倒された後にタスクキルして残機を復活させる不正の対策）。
   // ・残機が残っている → 現在のステージを「減った残機」で保存。再開してもこのステージからやり直し。
   // ・残機が0 → ゲームオーバー確定なのでセーブを消す（残してしまうと残機1で復活できてしまう）。
-  if(lives <= 0){
+  // ★オリジナルステージ中は、通常モードのセーブを書き換えない。
+  if(customPlayActive){
+    // 何もしない
+  }else if(lives <= 0){
     clearContinueData();
   }else{
     saveContinueData({
@@ -3693,7 +3697,30 @@ function emptyEditorMap(){ editorMap=Array.from({length:editorHeight},()=>Array(
 function editorNormalize(){
   editorMap=Array.from({length:editorHeight},(_,r)=>Array.from({length:editorWidth},(_,c)=>editorMap[r]?.[c]||"."));
 }
+// ★灰色敵は、どれかのモード(通常・爽快・マルチ)で最高クリアステージが30以上になるとステージ作成で使える。
+//   （共有コードなどで読み込んだ灰色入りのステージは、解放前でも遊べる）
+const GRAY_UNLOCK_STAGE = 30;
+function isGrayUnlocked(){
+  let best = 0;
+  try{
+    best = Math.max(
+      (loadModeRecord("MaxStageProgress","normal",1)||1) - 1,
+      (loadModeRecord("MaxStageProgress","rush",1)||1) - 1,
+      (Number(localStorage.getItem("tankMultiMaxProgressV1"))||1) - 1
+    );
+  }catch(e){}
+  return best >= GRAY_UNLOCK_STAGE;
+}
+function updateEditorGrayLock(){
+  const b=document.querySelector('#editorTools [data-tool="gray"]');
+  if(!b) return;
+  const open=isGrayUnlocked();
+  b.textContent = open ? "灰色敵" : "灰色敵🔒";
+  b.classList.toggle("locked",!open);
+  b.title = open ? "" : `どれかのモードでステージ${GRAY_UNLOCK_STAGE}をクリアすると使えます`;
+}
 function openStageEditor(stage=null, returnTo="title"){
+  updateEditorGrayLock();
   editorReturnTo=returnTo; editingStageId=stage?.id??null;
   if(stage){
     editorName.value=stage.name||"オリジナルステージ";
@@ -3850,7 +3877,21 @@ editorCanvas.addEventListener("pointermove",e=>{
 editorCanvas.addEventListener("pointerup",editorFinishStroke);
 editorCanvas.addEventListener("pointercancel",editorFinishStroke);
 editorUndoBtn.onclick=editorUndo;
+// ★ステージ作成のブロック・敵ボタンを、それぞれの色に合わせる（敵の色はゲーム内の戦車の色と同じ）
+(function paintEditorToolButtons(){
+  const col={ "#":["#f3b57e","#d99a63"], "X":["#b9afe8","#9a8fd6"], "W":["#a8d8f8","#6fb4e8"],
+              "G":["#bff0c8","#7fcf94"], "P":["#8ecbff","#5fa8e8"], "mp1":["#8ecbff","#5fa8e8"], "mp2":["#ffaaaa","#e87888"] };
+  for(const [name,def] of Object.entries(ENEMY_TYPES)) col[name]=[def.color,def.dark];
+  document.querySelectorAll("#editorTools [data-tool]").forEach(b=>{
+    const c=col[b.dataset.tool]; if(!c) return;
+    b.style.background=c[0]; b.style.borderColor=c[1]; b.style.color="#5b4470"; b.style.textShadow="none";
+  });
+})();
 document.querySelectorAll("#stageEditorScreen [data-tool]").forEach(b=>b.addEventListener("click",()=>{
+  if(b.dataset.tool==="gray" && !isGrayUnlocked()){
+    uiAlert(`灰色敵は、どれかのモードで最高クリアステージが${GRAY_UNLOCK_STAGE}以上になると使えます。`);
+    return;
+  }
   editorTool=b.dataset.tool;document.querySelectorAll("#stageEditorScreen [data-tool]").forEach(x=>x.classList.toggle("selected",x===b));
 }));
 function editorToLevel(){
@@ -3886,7 +3927,7 @@ function startCustomStage(level){
   customPlayActive=true;gameMode="normal";stageNum=1;lapNum=1;totalStageProgress=1;lives=3;
   setMenuLayout(false);editorScreen.classList.add("hidden");libraryScreen.classList.add("hidden");
   buildLevel(0,level);state="playing";gameStartFireLock=1;hud.classList.remove("hidden");
-  stageLabelEl.textContent="ORIGINAL";maxStageLabelEl.textContent="";playBgm();
+  stageLabelEl.textContent="オリジナル";maxStageLabelEl.textContent="";hudStageCache=-3;hudMaxCache=-3;hudLivesCache=-1;playBgm();
 }
 
 // ================================================================
@@ -4513,9 +4554,9 @@ function mpRenderClear(anyDead){
   for(const type of (next.enemies || [])) counts[type] = (counts[type] || 0) + 1;
   const icons = Object.entries(counts).map(([type,count])=>
     enemyTankIcon(type).replace('COUNT_PLACEHOLDER', String(count))).join("");
-  clearStageTitle.textContent = `STAGE ${stageNum} CLEAR!`;
+  clearStageTitle.textContent = `ステージ ${stageNum} CLEAR!`;
   clearStats.innerHTML = "";
-  nextStageInfo.innerHTML = `次のステージ：<b>STAGE ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${icons || "なし"}</div>`;
+  nextStageInfo.innerHTML = `次のステージ：<b>ステージ ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${icons || "なし"}</div>`;
   clearTapHint.textContent = "まもなく次のステージへ…";
   stageClearScreen.classList.remove("hidden");
 }
@@ -5259,19 +5300,27 @@ function formatStageProgress(progress){
   const n = Math.max(1, Number(progress) || 1);
   const lap = Math.floor((n - 1) / 50) + 1;
   const stage = ((n - 1) % 50) + 1;
-  return lap === 1 ? `STAGE ${stage}` : `${lap}周目 STAGE ${stage}`;
+  return lap === 1 ? `ステージ ${stage}` : `${lap}周目 ステージ ${stage}`;
 }
 // ★ゲームオーバー画面の「クリアステージ」表示用。
 //   totalStageProgress／maxStageProgressは「今何ステージ目に挑戦中か」を表す値なので、
 //   実際にクリアした数はそこから1引いたもの（まだ1つもクリアしていなければ0）になる。
 function formatClearedStage(clearedCount){
   const n = Math.max(0, Number(clearedCount) || 0);
-  if(n === 0) return "STAGE 0";
+  if(n === 0) return "ステージ 0";
   const lap = Math.floor((n - 1) / 50) + 1;
   const stage = ((n - 1) % 50) + 1;
-  return lap === 1 ? `STAGE ${stage}` : `${lap}周目 STAGE ${stage}`;
+  return lap === 1 ? `ステージ ${stage}` : `${lap}周目 ステージ ${stage}`;
 }
 
+// 「最高クリアステージ ○」の表記（HUD・タイトル共通）。周回があるときは「最高クリアステージ 2周目 5」
+function formatMaxClear(clearedCount){
+  const n = Math.max(0, Number(clearedCount) || 0);
+  if(n === 0) return "最高クリアステージ 0";
+  const lap = Math.floor((n - 1) / 50) + 1;
+  const stage = ((n - 1) % 50) + 1;
+  return lap === 1 ? `最高クリアステージ ${stage}` : `最高クリアステージ ${lap}周目 ${stage}`;
+}
 function updateMaxStage(){
   if(challengeStartNoRecord) return;
   if(totalStageProgress > maxStageProgress){
@@ -5289,18 +5338,21 @@ let hudStageCache = -1;
 let hudMaxCache = -1;
 function updateHud(enemiesLeft){
   if(mp.active){ updateHudMp(); return; }
-  const stageChanged = hudStageCache !== totalStageProgress;
-  const maxChanged = hudMaxCache !== maxStageProgress;
+  // ★オリジナルステージ中は専用のキーを使う。これで、オリジナル→通常に戻ったとき表示が必ず更新される
+  const stageKey = customPlayActive ? -3 : totalStageProgress;
+  const maxKey = customPlayActive ? -3 : maxStageProgress;
+  const stageChanged = hudStageCache !== stageKey;
+  const maxChanged = hudMaxCache !== maxKey;
   const livesChanged = hudLivesCache !== lives;
 
   if(stageChanged){
-    stageLabelEl.textContent = formatStageProgress(totalStageProgress);
-    hudStageCache = totalStageProgress;
+    stageLabelEl.textContent = customPlayActive ? "オリジナル" : formatStageProgress(totalStageProgress);
+    hudStageCache = stageKey;
     hudEnemyCache = -1;
   }
   if(maxChanged){
-    maxStageLabelEl.textContent = `MAX CLEAR ${formatClearedStage(maxStageProgress - 1)}`;
-    hudMaxCache = maxStageProgress;
+    maxStageLabelEl.textContent = customPlayActive ? "" : formatMaxClear(maxStageProgress - 1);
+    hudMaxCache = maxKey;
   }
   if(livesChanged){
     livesEl.innerHTML = "";
@@ -5387,7 +5439,7 @@ function showStageClear(){
   if(window.rwOnClear) rwOnClear(false);
   // ★ステージを10クリアするごとにライフを1回復する。
   const gotExtraLife = (lapNum === 1 && stageNum % STAGES_PER_EXTRA_LIFE === 0);
-  if(gotExtraLife){
+  if(gotExtraLife && !customPlayActive){
     lives++;
   }
   const nextNum = getNextStageNumber();
@@ -5395,7 +5447,7 @@ function showStageClear(){
   // ステージクリア成立時だけセーブ。次のステージから再開できる。
   const wasLastStage = (stageNum >= 50);
   updateMaxStage();
-  if(!challengeStartNoRecord) saveContinueData({
+  if(!challengeStartNoRecord && !customPlayActive) saveContinueData({
     stageNum: nextNum,
     lapNum: wasLastStage ? lapNum + 1 : lapNum,
     totalStageProgress: totalStageProgress + 1,
@@ -5413,9 +5465,9 @@ function showStageClear(){
     enemyTankIcon(type).replace('COUNT_PLACEHOLDER', String(count))
   ).join("");
 
-  clearStageTitle.textContent = customPlayActive ? "オリジナルステージ CLEAR!" : `STAGE ${stageNum} CLEAR!`;
+  clearStageTitle.textContent = customPlayActive ? "オリジナルステージ CLEAR!" : `ステージ ${stageNum} CLEAR!`;
   clearStats.innerHTML = `残機：${Math.max(lives,0)}` + (gotExtraLife ? `　　<span style="color:var(--amber);">ライフ+1！</span>` : "");
-  nextStageInfo.innerHTML = customPlayActive ? "ステージクリア！タップしてステージ一覧に戻ります。" : `次のステージ：<b>STAGE ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
+  nextStageInfo.innerHTML = customPlayActive ? "ステージクリア！タップしてステージ一覧に戻ります。" : `次のステージ：<b>ステージ ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
   clearTapHint.textContent = "画面をタップすると次のステージへ";
   stageClearScreen.classList.remove("hidden");
 }
@@ -5669,7 +5721,7 @@ function formatContinueStage(d){
   const n = Math.max(1, Math.floor(d.totalStageProgress));
   const lap = Math.max(1, Math.floor(d.lapNum || Math.ceil(n / 50)));
   const stage = ((n - 1) % 50) + 1;
-  return lap === 1 ? `STAGE ${stage}` : `${lap}周目 STAGE ${stage}`;
+  return lap === 1 ? `ステージ ${stage}` : `${lap}周目 ステージ ${stage}`;
 }
 
 function setMenuLayout(isMenu){
@@ -5777,7 +5829,7 @@ function updateModeStats(){
   const nMax = loadModeRecord("MaxStageProgress", "normal", 1) || 1;
   const rMax = loadModeRecord("MaxStageProgress", "rush", 1) || 1;
   const mMax=Number(localStorage.getItem("tankMultiMaxProgressV1"))||1;
-  modeStats.innerHTML = `通常：MAX ${formatClearedStage(nMax-1)}<br>爽快：MAX ${formatClearedStage(rMax-1)}<br>マルチ：MAX ${formatClearedStage(mMax-1)}`;
+  modeStats.innerHTML = `通常：${formatMaxClear(nMax-1)}<br>爽快：${formatMaxClear(rMax-1)}<br>マルチ：${formatMaxClear(mMax-1)}`;
 }
 function safeStartGame(continueGame=false, selectedMode=null, startAtStage=1, noRecord=false){
   try { startGame(continueGame, selectedMode, startAtStage, noRecord); } catch(e) {
@@ -5823,7 +5875,7 @@ function openStageSelect(mode){
   for(const n of choices){
     const b=document.createElement("button");
     b.className="btn";
-    b.textContent=`STAGE ${n}`;
+    b.textContent=`ステージ ${n}`;
     b.addEventListener("click",()=>{
       stageSelectScreen.classList.add("hidden");
       safeStartGame(false,mode,n,true);
@@ -5891,6 +5943,7 @@ pauseBtn.addEventListener("click", ()=>{
 
 function startGame(continueGame=false, selectedMode=null, startAtStage=1, noRecord=false){
   setMenuLayout(false);
+  customPlayActive = false; hudStageCache = -1; hudMaxCache = -1; hudLivesCache = -1; // オリジナル表示を引きずらない
   // まずゲーム状態を初期化する。音声やセーブの問題で開始処理全体が止まらないようにする。
   state = "playing";
   try { initAudio(); } catch(e) { console.warn("audio init skipped", e); }
@@ -5953,11 +6006,11 @@ function showGameOver(){
 const TAU=Math.PI*2, R=(a,b)=>a+Math.random()*(b-a), P=a=>a[Math.random()*a.length|0];
 const KEY="tankRewardsV1";
 const ITEMS=[
- {id:"bubble", kind:"aura", name:"シャボン玉", cond:"通常モード／マルチプレイ STAGE 20 クリア", at:20, mode:"any"},
- {id:"sakura", kind:"aura", name:"さくら",     cond:"通常モード／マルチプレイ STAGE 30 クリア", at:30, mode:"any"},
- {id:"snow",   kind:"aura", name:"雪の結晶",   cond:"通常モード／マルチプレイ STAGE 40 クリア", at:40, mode:"any"},
- {id:"rainbow",kind:"trail",name:"にじの軌跡", cond:"通常モード STAGE 50 クリア",               at:50, mode:"normal"},
- {id:"flower", kind:"trail",name:"おはな畑",   cond:"マルチプレイ STAGE 50 クリア",             at:50, mode:"multi"}
+ {id:"bubble", kind:"aura", name:"シャボン玉", cond:"通常モード／マルチプレイ ステージ 20 クリア", at:20, mode:"any"},
+ {id:"sakura", kind:"aura", name:"さくら",     cond:"通常モード／マルチプレイ ステージ 30 クリア", at:30, mode:"any"},
+ {id:"snow",   kind:"aura", name:"雪の結晶",   cond:"通常モード／マルチプレイ ステージ 40 クリア", at:40, mode:"any"},
+ {id:"rainbow",kind:"trail",name:"にじの軌跡", cond:"通常モード ステージ 50 クリア",               at:50, mode:"normal"},
+ {id:"flower", kind:"trail",name:"おはな畑",   cond:"マルチプレイ ステージ 50 クリア",             at:50, mode:"multi"}
 ];
 const IDS=["",...ITEMS.map(i=>i.id)];
 const item=id=>ITEMS.find(i=>i.id===id);
