@@ -926,7 +926,7 @@ const SCHEME_B_SHORT_RANGE = MISSILE_DISTANCE * 0.5; // ★タップ位置が自
 // --- マルチプレイ（Photon Realtime）の設定 ---
 // ★Photonダッシュボードで作った「Realtime」アプリの App ID をここに貼り付けてください。
 const PHOTON_APP_ID = "ff468c36-30b0-4963-83f5-e9dea506dfc7";
-const PHOTON_APP_VERSION = "1";   // ★この値が同じ人どうしだけがマッチングします（大きな変更をしたら数字を上げる）
+const PHOTON_APP_VERSION = "2";   // ★戦車タイプの同期方式を更新したため、旧バージョンとは分ける
 const PHOTON_REGION = "jp";       // ★接続するリージョン（日本は "jp"）
 const P_COLORS = [ {color:"#8ecbff", dark:"#5fa8e8"}, {color:"#ffaaaa", dark:"#e87888"} ]; // 1P=青 / 2P=赤
 // マルチプレイの状態（ホスト＝ゲームを計算する側 / ゲスト＝映像を受け取る側）
@@ -938,6 +938,7 @@ const mp = {
   fxq:[], snapTimer:0, inputTimer:0, lastRecv:0, clearTimer:0, overTimer:0,
   bidSeq:0, fireCd:0, prevMyMissiles:0, hudKey:"",
   inputSeq:0, sentLog:[], hist:[], rtt:0.1, pend:{x:0,y:0}, resumeGame:false, // ゲストの先行移動用／マルチ後に通常プレイへ戻る用
+  tankTypes:null, remoteTankType:"A", // 1P・2Pそれぞれが選んだ戦車タイプ
 };
 
 // --- 敵の種類ごとのパラメータ ---
@@ -1966,11 +1967,14 @@ function getMpSpawns(lvl, cellAt){
 
 function makePlayer(x,y,pidx=0){
   lastMoveAngle = -Math.PI/2; // ★ミサイルの発射方向もリセット
+  const playerTankType = mp.active && Array.isArray(mp.tankTypes)
+    ? (mp.tankTypes[pidx] || "A")
+    : activeTankType();
   return {
     isPlayer:true, x, y, vx:0, vy:0, angle:-Math.PI/2, turretAngle:-Math.PI/2,
     r:TANK_R, speed:(gameMode === "rush" ? PLAYER_SPEED*2 : PLAYER_SPEED), hp:1, alive:true,
-    tankType:activeTankType(), // ★隠し戦車：A=通常 / B=高速弾1発のみ / C=高速弾1発＋ミサイル
-    maxBullets:(activeTankType()==="A" ? PLAYER_MAX_BULLETS : 1), // 画面上に同時に出せる自分の弾の最大数
+    tankType:playerTankType, // ★マルチでも1P・2Pそれぞれの選択タイプを使う
+    maxBullets:(playerTankType==="A" ? PLAYER_MAX_BULLETS : 1), // 画面上に同時に出せる自分の弾の最大数
     fireCooldown:0, // 次の射撃までの待ち時間
     fireBuffered:false, // ★発射間隔制限中に押された入力を覚えておく（先行入力）
     invuln:2.0,  // ★復活直後の無敵時間(秒)
@@ -4496,7 +4500,8 @@ function mpGuestHello(c){
   const tick = ()=>{
     if(mp.client!==c || mp.active || !mp.searching) return;
     if(n++ >= 8){ mpRetry(); return; }
-    mpSend(EV.HELLO, {});
+    // ゲストが選んでいる戦車タイプをホストへ伝える。
+    mpSend(EV.HELLO, {tankType:activeTankType()});
     mp.helloTimer = setTimeout(tick, 1000);
   };
   tick();
@@ -4536,8 +4541,11 @@ function mpOnEvent(code, data){
   let o = null;
   try{ o = (typeof data === "string") ? JSON.parse(data) : data; }catch(e){ return; }
   switch(code){
-    case EV.HELLO: // ホスト：ゲストが入ってきた → ゲーム開始
-      if(mp.searching && !mp.active && mp.joined && mp.isHost) mpBeginGame("host");
+    case EV.HELLO: // ホスト：ゲストが入ってきた → 戦車タイプを受け取りゲーム開始
+      if(mp.searching && !mp.active && mp.joined && mp.isHost){
+        mp.remoteTankType = normalizeTankType(o && o.tankType);
+        mpBeginGame("host");
+      }
       break;
     case EV.LEVEL: // ゲスト：ゲーム開始／次のステージ
       if(!mp.active){ if(mp.searching && mp.joined && !mp.isHost) mpBeginGame("guest", o); }
@@ -4638,6 +4646,13 @@ function autoSaveEditorForMulti(){
 function mpBeginGame(role, lv){
   const saved = mpSuspendLocal();
   clearTimeout(mp.joinTimer); clearTimeout(mp.helloTimer);
+  // 1P＝ホスト、2P＝ゲスト。選択情報を共有してから戦車を生成する。
+  if(role === "host"){
+    mp.tankTypes = [activeTankType(), normalizeTankType(mp.remoteTankType)];
+  } else {
+    const receivedTypes = lv && Array.isArray(lv.pt) ? lv.pt : ["A", activeTankType()];
+    mp.tankTypes = [normalizeTankType(receivedTypes[0]), normalizeTankType(receivedTypes[1])];
+  }
   mp.searching = false; mp.active = true; mp.role = role;
   setSpinner(false); updateMultiBtn();
   // 開いている画面をすべて閉じる
@@ -4665,7 +4680,7 @@ function mpBeginGame(role, lv){
   flashStage(formatStageProgress(totalStageProgress));
   playBgm();
   playStageClear();
-  if(role==="host") mpSend(EV.LEVEL, {s:stageNum, l:lapNum, t:totalStageProgress});
+  if(role==="host") mpSend(EV.LEVEL, {s:stageNum, l:lapNum, t:totalStageProgress, pt:mp.tankTypes.slice()});
   uiAlert(saved ? "マッチング成功！途中のデータは保存しました" : "マッチング成功！マルチプレイ開始");
 }
 
@@ -4673,7 +4688,7 @@ function mpEnd(msg){
   const wasActive = mp.active;
   mpStopClient();
   mp.active = false; mp.role = null; mp.searching = false; mp.joined = false;
-  mp.p1 = null; mp.p2 = null; mp.fxq = [];
+  mp.p1 = null; mp.p2 = null; mp.fxq = []; mp.tankTypes = null; mp.remoteTankType = "A";
   setSpinner(false); updateMultiBtn();
   resetAllControlInputs();
   mpOverScreen.classList.add("hidden");
@@ -4737,7 +4752,7 @@ function mpHostSnapshot(){
   for(const k of bullets) if(!k.dead) b.push([k.bid, r1(k.x), r1(k.y), r1(k.vx), r1(k.vy), k.fastBullet?1:0, k.cTrail?1:0]);
   const m = [];
   for(const k of missiles) if(!k.dead) m.push([k.mid, r1(k.startX), r1(k.startY), r1(k.targetX), r1(k.targetY), r2(k.angle), r2(k.time), r2(k.flightTime), k.owner ? k.owner.nid : 0]);
-  const o = {t, b, m, a:(mp.rin.seq|0), pc:tanks.filter(k=>k.isPlayer).map(k=>[k.pidx,k.color,k.dark,...(window.rwPcExtra?rwPcExtra(k):[])])}; // a＝ホストが最後に受け取った2Pの操作の番号
+  const o = {t, b, m, a:(mp.rin.seq|0), pt:mp.tankTypes, pc:tanks.filter(k=>k.isPlayer).map(k=>[k.pidx,k.color,k.dark,...(window.rwPcExtra?rwPcExtra(k):[])])}; // a＝ホストが最後に受け取った2Pの操作の番号
   if(mp.fxq.length){ o.fx = mp.fxq; mp.fxq = []; }
   mpSend(EV.SNAP, o);
 }
@@ -4786,7 +4801,7 @@ function mpHostNextStage(){
   mp.rin.mv = false;
   stageClearScreen.classList.add("hidden");
   flashStage(formatStageProgress(totalStageProgress));
-  mpSend(EV.LEVEL, {s:stageNum, l:lapNum, t:totalStageProgress});
+  mpSend(EV.LEVEL, {s:stageNum, l:lapNum, t:totalStageProgress, pt:mp.tankTypes.slice()});
 }
 function mpShowOverScreen(progress){
   state = "mp_over";
@@ -4806,6 +4821,7 @@ function mpShowOver(){ // ホスト
 // ================================================================
 function mpGuestLoadLevel(o){
   stageNum = o.s; lapNum = o.l; totalStageProgress = o.t;
+  if(Array.isArray(o.pt)) mp.tankTypes = [normalizeTankType(o.pt[0]), normalizeTankType(o.pt[1])];
   buildLevel(stageNum-1);
   mpResetPrediction();
   state = "playing";
@@ -4892,6 +4908,15 @@ function mpReconcile(hx, hy){
 function mpApplySnap(s){
   mp.lastRecv = performance.now();
   mpUpdateRtt(s.a);
+  if(Array.isArray(s.pt)){
+    mp.tankTypes = [normalizeTankType(s.pt[0]), normalizeTankType(s.pt[1])];
+    for(const t of tanks){
+      if(t.isPlayer){
+        t.tankType = mp.tankTypes[t.pidx] || "A";
+        t.maxBullets = t.tankType === "A" ? PLAYER_MAX_BULLETS : 1;
+      }
+    }
+  }
   if(Array.isArray(s.pc)){ for(const c of s.pc){ const t=tanks.find(k=>k.isPlayer && k.pidx===c[0]); if(t){ if(typeof c[1]==="string")t.color=c[1]; if(typeof c[2]==="string")t.dark=c[2]; if(window.rwSetRemote) rwSetRemote(t, c[3], c[4]); } } }
   const byId = new Map();
   for(const t of tanks) byId.set(t.nid, t);
@@ -6018,10 +6043,12 @@ function unlockedTankTypes(){
   if(n>=50) list.push("C");
   return list;
 }
-// 実際に使う戦車（マルチプレイでは常に戦車A。未解放の戦車は選べない）
+// 実際に使う戦車。通常プレイ・マルチプレイとも、解放済みなら選択タイプを使う。
 function activeTankType(){
-  if(mp.active) return "A";
   return unlockedTankTypes().includes(tankType) ? tankType : "A";
+}
+function normalizeTankType(value){
+  return value === "B" || value === "C" ? value : "A";
 }
 try{ const v=localStorage.getItem(TANK_TYPE_KEY); if(v==="A"||v==="B"||v==="C") tankType=v; }catch(e){}
 const TANK_TYPE_INFO={
