@@ -4209,7 +4209,7 @@ function showCustomLibrary(){
     const fitted=fitCustomLevel(stage);
     const preview=makeStagePreview(fitted.map);
     const title=document.createElement("div");title.className="stageCardTitle";title.textContent=stage.name||"名前なし";
-    const meta=document.createElement("div");meta.className="editorHint";meta.textContent=`${cols}×${rows}マス ／ 敵 ${fitted.enemies.length}台`;
+    const meta=document.createElement("div");meta.className="editorHint";meta.textContent=`${STAGE_COLS}×${STAGE_ROWS}マス ／ 敵 ${fitted.enemies.length}台`;
     const actions=document.createElement("div");actions.className="stageCardActions";
     const add=(label,fn,alt=false)=>{const b=document.createElement("button");b.className="btn"+(alt?" alt":"");b.textContent=label;b.onclick=fn;actions.append(b);};
     add("遊ぶ",()=>{ rememberLibraryScroll(); startCustomStage(stage); customPlayFromEditor=false; });
