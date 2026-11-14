@@ -83,6 +83,10 @@
   #app.pc-mode #gameArea{ flex:1 1 100%; border-bottom:0; padding:18px; }
   /* PC版：ゲーム画面の外側に余白を作る */
   #app.pc-mode #game{ box-shadow:0 3px 18px rgba(122,92,138,.18); }
+  /* スマホ版：ゲーム画面の左右にごくわずかな余白を確保する */
+  @media (max-width:900px) and (pointer:coarse){
+    #app:not(.pc-mode) #gameArea{ padding-left:8px; padding-right:8px; }
+  }
   #fullscreenBtn{
     position:absolute; top:auto; right:10px; bottom:10px; z-index:100;
     padding:7px 12px; border-radius:16px; border:2px solid #ff8fc4;
@@ -1578,7 +1582,34 @@ function updateSchemeB(dt){
     schemeB.pendingDistance = missileDistance;
   }
 }
-bindZone(canvas, schemeBStart, schemeBMove, schemeBEnd);
+// 操作Bはゲームキャンバスの外側（画面下部の右側操作エリアなど）を
+// 押しても攻撃できるよう、画面全体でタッチを受け取る。
+// 左側の移動ゾーンだけは移動操作を優先し、攻撃入力として扱わない。
+window.addEventListener("touchstart", e=>{
+  if(IS_PC || controlScheme!=="B" || state!=="playing" || !player || !player.alive) return;
+  const leftRect = leftZoneEl.getBoundingClientRect();
+  for(const t of e.changedTouches){
+    if(t.clientX>=leftRect.left && t.clientX<=leftRect.right && t.clientY>=leftRect.top && t.clientY<=leftRect.bottom) continue;
+    schemeBStart(t.clientX,t.clientY,t.identifier);
+    if(schemeB.active && schemeB.id===t.identifier) e.preventDefault();
+  }
+}, {passive:false, capture:true});
+window.addEventListener("touchmove", e=>{
+  if(IS_PC || controlScheme!=="B" || !schemeB.active) return;
+  for(const t of e.changedTouches){
+    if(t.identifier===schemeB.id){ schemeBMove(t.clientX,t.clientY,t.identifier); e.preventDefault(); }
+  }
+}, {passive:false, capture:true});
+window.addEventListener("touchend", e=>{
+  if(IS_PC || controlScheme!=="B" || !schemeB.active) return;
+  for(const t of e.changedTouches){
+    if(t.identifier===schemeB.id){ schemeBEnd(t.identifier); e.preventDefault(); }
+  }
+}, {passive:false, capture:true});
+window.addEventListener("touchcancel", e=>{
+  if(IS_PC || controlScheme!=="B" || !schemeB.active) return;
+  for(const t of e.changedTouches){ if(t.identifier===schemeB.id) schemeBEnd(t.identifier); }
+}, {passive:true, capture:true});
 
 // 操作方法を切り替えたときに、両方式の入力状態を持ち越さないようにする。
 function resetAllControlInputs(){
@@ -6360,7 +6391,7 @@ const ITEMS=[
  {id:"bubble", kind:"aura", name:"シャボン玉", cond:"通常モード／マルチプレイ ステージ 20 クリア", at:20, mode:"any"},
  {id:"sakura", kind:"aura", name:"さくら",     cond:"通常モード／マルチプレイ ステージ 30 クリア", at:30, mode:"any"},
  {id:"snow",   kind:"aura", name:"雪の結晶",   cond:"通常モード／マルチプレイ ステージ 40 クリア", at:40, mode:"any"},
- {id:"rainbow",kind:"trail",name:"にじの軌跡", cond:"通常モード ステージ 50 クリア",               at:50, mode:"normal"},
+ {id:"rainbow",kind:"trail",name:"虹の軌跡", cond:"通常モード ステージ 50 クリア",               at:50, mode:"normal"},
  {id:"flower", kind:"trail",name:"おはな畑",   cond:"マルチプレイ ステージ 50 クリア",             at:50, mode:"multi"}
 ];
 const IDS=["",...ITEMS.map(i=>i.id)];
@@ -6456,9 +6487,9 @@ const around=(o,a,b)=>{ const g=R(0,TAU),d=R(a,b); return {x0:o.x+Math.cos(g)*d,
 const rear=(o,d)=>({x0:o.x-Math.cos(o.angle||0)*d+R(-4,4), y0:o.y-Math.sin(o.angle||0)*d+R(-4,4)});
 const FX={
  bubble:{layer:1,rate:2.5,life:1.9,sz:[4,10],shape:"bubble",line:1,col:()=>"#9ad8ff",at:o=>Object.assign(around(o,22,46),{vy:-22,wob:7})},
- sakura:{layer:1,rate:3,life:2.2,sz:[5,8],shape:"flower",col:()=>P(["#ffb3d4","#ffc9e0"]),at:o=>({x0:o.x+R(-40,40),y0:o.y-46,vy:20,vx:R(-8,8),rv:2,wob:6})},
+ sakura:{layer:1,rate:3,life:2.2,sz:[5,8],shape:"flower",col:()=>P(["#ffc6df","#ffd6e8"]),at:o=>({x0:o.x+R(-40,40),y0:o.y-46,vy:20,vx:R(-8,8),rv:2,wob:6})},
  snow:{layer:1,rate:3,life:2.1,sz:[4,8],shape:"snow",line:1,col:()=>"#8fd3ff",at:o=>({x0:o.x+R(-42,42),y0:o.y-46,vy:20,rv:1.5})},
- rainbow:{layer:0,rate:9,life:.9,sz:[3,6],shape:"dot",move:1,col:()=>"hsl("+((performance.now()/6)%360|0)+",90%,65%)",at:o=>rear(o,20)},
+ rainbow:{layer:0,rate:9,life:.9,sz:[3,6],shape:"dot",move:1,col:()=>"hsl("+((performance.now()/6)%360|0)+",65%,80%)",at:o=>rear(o,20)},
  flower:{layer:0,rate:3,life:2.3,sz:[4,8],shape:"flower",move:1,col:()=>P(["#ff9ec9","#ffb877","#c9baf5","#ffffff"]),at:o=>rear(o,18)}
 };
 function step(o,a,t,dt,canSpawn,force){
