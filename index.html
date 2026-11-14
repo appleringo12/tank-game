@@ -365,6 +365,9 @@
   .libBackWrap{position:sticky;top:6px;z-index:6;height:0;width:min(96vw,760px);align-self:center;margin-bottom:-10px;pointer-events:none}
   #libraryBackBtn{position:absolute;right:0;top:0;pointer-events:auto;font-size:12px;letter-spacing:0;padding:4px 12px;border-width:2px;border-bottom-width:3px;border-radius:11px;box-shadow:0 2px 8px rgba(122,92,138,.35)}
   #stageLibraryScreen .editorTop{justify-content:center}
+  /* ★横にスクロールできないようにする（はみ出し防止＋横方向のスワイプ無効） */
+  #stageLibraryScreen{overflow-x:hidden;overscroll-behavior-x:none;touch-action:pan-y}
+  #stageLibraryScreen > *{max-width:100%;box-sizing:border-box}
   @media (max-width:700px){
     #stageCards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:min(96vw,760px)}
     .stageCard{padding:6px;border-radius:12px}
@@ -3993,7 +3996,9 @@ function saveEditorStage(){
   libraryTab="custom";showCustomLibrary();uiAlert("ステージを保存しました。");
 }
 function customLevelFromEditor(){const l=editorToLevel();const err=validateCustomLevel(l);if(err){uiAlert(err);return null;}return l;}
+let lastCustomLevel=null; // ステージ一覧から遊んだオリジナルステージ（ゲームオーバー後に同じステージをもう一度遊ぶ用）
 function startCustomStage(level){
+  lastCustomLevel=level; gameOverScreen.classList.add("hidden");
   // ステージ一覧画面の「遊ぶ」は最初のユーザー操作になる場合があるため、
   // ここで音声コンテキストを有効化しておく（初回プレイ時の効果音が無音になるのを防ぐ）。
   try { initAudio(); } catch(e) { console.warn("audio init skipped", e); }
@@ -4146,10 +4151,10 @@ shareCopyBtn.onclick=async()=>{
 document.getElementById("shareCloseBtn").onclick=()=>shareDialog.classList.add("hidden");
 shareDialog.addEventListener("click",e=>{ if(e.target===shareDialog) shareDialog.classList.add("hidden"); });
 // ステージ一覧のプレビュー画像（通常ステージ・オリジナルステージ共通）
-function makeStagePreview(map){
+function makeStagePreview(map,bg){
   const preview=document.createElement("canvas");preview.width=364;preview.height=252;
   const pc=preview.getContext("2d"),rows=STAGE_ROWS,cols=STAGE_COLS,cw=364/cols,ch=252/rows;
-  pc.fillStyle="#fffafc";pc.fillRect(0,0,364,252);
+  pc.fillStyle=bg||"#fffafc";pc.fillRect(0,0,364,252);
   map.forEach((line,r)=>Array.from(line).forEach((v,c)=>{const x=c*cw,y=r*ch;if(v==="#"){pc.fillStyle="#f3b57e";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="X"){pc.fillStyle="#a898e0";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="G"){drawPyramidTile(pc,x,y,cw,ch);}else if(v==="P"||CUSTOM_CHAR_TO_ENEMY[v]){pc.fillStyle=v==="P"?"#8ecbff":ENEMY_TYPES[CUSTOM_CHAR_TO_ENEMY[v]].color;pc.beginPath();pc.arc(x+cw/2,y+ch/2,Math.min(cw,ch)*.28,0,7);pc.fill();}}));
   const wp=buildWaterPaths((c,r)=>map[r]?.[c]==="W");
   if(wp){pc.save();pc.scale(cw/TILE,ch/TILE);drawWaterLayer(pc,wp,0);pc.restore();}
@@ -4189,7 +4194,7 @@ function renderNormalStages(){
     const b=document.createElement("button");b.className="btn";b.textContent="遊ぶ";
     b.onclick=()=>{rememberLibraryScroll();libraryScreen.classList.add("hidden");safeStartGame(false,"normal",n,true);libraryPlayActive=true;};
     actions.append(b);
-    card.append(makeStagePreview(lv.map),title,meta,actions);stageCards.append(card);
+    card.append(makeStagePreview(lv.map,stageBackgroundColorFor(n)),title,meta,actions);stageCards.append(card);
   }
 }
 function showCustomLibrary(){
@@ -5068,9 +5073,10 @@ function respawnPlayer(){
 /* ================================================================
    描画
    ================================================================ */
-function getStageBackgroundColor(){
+function getStageBackgroundColor(){ return stageBackgroundColorFor(stageNum); }
+function stageBackgroundColorFor(num){
   // ステージ番号は1〜50を周回するため、2周目以降も同じ10ステージ区分を適用する。
-  const stage = ((stageNum - 1) % 50) + 1;
+  const stage = ((num - 1) % 50) + 1;
   if(stage <= 10) return "#fffafc";       // 1〜10：白
   if(stage <= 20) return "#ffebf3";       // 11〜20：ピンク
   if(stage <= 30) return "#dff3bd";       // 21〜30：黄緑
@@ -5768,33 +5774,52 @@ function renderKeyGrid(){
     const btn = document.createElement("button");
     const listening = keyCaptureAct === act;
     btn.className = "btn keyBtn" + (listening ? " listening" : "");
-    btn.textContent = listening ? "キーを押す…" : keyCodeLabel(keybinds[act]);
+    btn.textContent = listening ? ((act==="fire"||act==="missile") ? "クリック…" : "キーを押す…") : keyCodeLabel(keybinds[act]);
     btn.addEventListener("click", ()=>startKeyCapture(act));
     item.appendChild(lab); item.appendChild(btn);
     keyGrid.appendChild(item);
   }
 }
+// ★マウスボタンの割り当て待ち。設定画面は .overlay なので、UI上のクリックを除外していると永遠に割り当てできなかった。
+let mouseCaptureFn = null, mouseCaptureEsc = null;
+function stopMouseCapture(){
+  if(mouseCaptureFn){ window.removeEventListener("mousedown", mouseCaptureFn, true); mouseCaptureFn = null; }
+  if(mouseCaptureEsc){ window.removeEventListener("keydown", mouseCaptureEsc, true); mouseCaptureEsc = null; }
+}
 function cancelKeyCapture(){
+  stopMouseCapture();
   keyCapture = null; keyCaptureAct = null;
   renderKeyGrid();
 }
 function startKeyCapture(act){
   if(keyCaptureAct === act){ cancelKeyCapture(); return; }
   keyCaptureAct = act;
+  stopMouseCapture();
   if(act==="fire" || act==="missile"){
+    stopMouseCapture();
     keyCapture = null;
-    const mouseCapture = e=>{
-      if(pcIsUiTarget(e.target)) return;
+    mouseCaptureFn = e=>{
       e.preventDefault(); e.stopPropagation();
       const code = "Mouse" + e.button;
       const other = Object.keys(keybinds).find(a=>a!==act && keybinds[a]===code);
       if(other) keybinds[other] = keybinds[act];
       keybinds[act] = code;
-      window.removeEventListener("mousedown", mouseCapture, true);
+      stopMouseCapture();
       keyCapture = null; keyCaptureAct = null;
+      // 割り当てに使ったクリックが、そのままボタンの「クリック」や右クリックメニューとして働かないようにする
+      const blockClick = ev=>{ ev.preventDefault(); ev.stopPropagation(); };
+      window.addEventListener("click", blockClick, true);
+      window.addEventListener("contextmenu", blockClick, true);
+      const release = ()=>{
+        window.removeEventListener("mouseup", release, true);
+        setTimeout(()=>{ window.removeEventListener("click", blockClick, true); window.removeEventListener("contextmenu", blockClick, true); }, 80);
+      };
+      window.addEventListener("mouseup", release, true);
       saveKeybinds(); renderKeyGrid();
     };
-    window.addEventListener("mousedown", mouseCapture, true);
+    mouseCaptureEsc = e=>{ if(e.code === "Escape"){ e.preventDefault(); e.stopPropagation(); cancelKeyCapture(); } };
+    window.addEventListener("mousedown", mouseCaptureFn, true);
+    window.addEventListener("keydown", mouseCaptureEsc, true);
     renderKeyGrid();
     return;
   }
@@ -6079,7 +6104,12 @@ document.getElementById("resumeBtn").addEventListener("click", ()=>{
   pauseScreen.classList.add("hidden"); state="playing"; playBgm();
 });
 document.getElementById("restartFromPauseBtn").onclick = ()=>showTitleScreen();
-document.getElementById("retryBtn").onclick = ()=>safeStartGame(false, gameMode);
+document.getElementById("retryBtn").onclick = ()=>{
+  // ★ステージ一覧から遊んでいたときは、同じステージを復活してもう一度遊ぶ（通常モードの1からにならない）
+  if(customPlayActive && lastCustomLevel){ startCustomStage(lastCustomLevel); return; }
+  if(libraryPlayActive){ const n = stageNum; safeStartGame(false, "normal", n, true); libraryPlayActive = true; return; }
+  safeStartGame(false, gameMode);
+};
 document.getElementById("gameOverTitleBtn").onclick = ()=>showTitleScreen();
 
 pauseBtn.addEventListener("click", ()=>{
@@ -6161,6 +6191,7 @@ function showGameOver(){
   document.getElementById("finalStage").textContent = formatClearedStage(totalStageProgress - 1);
   document.getElementById("finalMaxStage").textContent = formatClearedStage(maxStageProgress - 1);
   document.getElementById("finalMode").textContent = getModeLabel();
+  document.getElementById("retryBtn").textContent = (customPlayActive || libraryPlayActive) ? "復活してもう一度" : "同じモードでもう一度";
   gameOverScreen.classList.remove("hidden");
   stageClearScreen.classList.add("hidden");
   hud.classList.add("hidden");
