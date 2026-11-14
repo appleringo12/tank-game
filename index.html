@@ -356,6 +356,16 @@
   #uiConfirm .row{display:flex;gap:10px;justify-content:center}
   .codeImport{align-items:stretch}
   .codeImport input{flex:1 1 220px;min-width:0;font:inherit;font-size:14px;padding:10px 12px;border:2px solid #c9baf5;border-radius:14px;background:#fff;color:var(--paper);letter-spacing:1px}
+  #shareGameScreen{overflow-y:auto;justify-content:safe center}
+  #shareGameScreen .shareMsgBox{width:min(88vw,400px);box-sizing:border-box;font-family:inherit;font-weight:700;font-size:13px;line-height:1.6;padding:10px;border:2px solid #c9baf5;border-radius:12px;background:#fff;color:var(--paper);resize:none;letter-spacing:0}
+  #shareGameScreen .shareGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:min(88vw,400px)}
+  #shareGameScreen .shareGrid .btn{display:block;box-sizing:border-box;text-decoration:none;text-align:center;font-size:clamp(14px,4vw,17px);letter-spacing:1px;padding:10px 6px;border-radius:20px;min-width:0}
+  #shareGameScreen .shareGrid .wide{grid-column:1 / -1}
+  #shareGameScreen .btn.sx{background:#444;border-color:#222;border-bottom-color:#222}
+  #shareGameScreen .btn.sline{background:#3ec35a;border-color:#2a9a43;border-bottom-color:#2a9a43}
+  #shareGameScreen .btn.sfb{background:#4a7be0;border-color:#3359b0;border-bottom-color:#3359b0}
+  #shareGameScreen .btn.sbsky{background:#3b9cf5;border-color:#2677c4;border-bottom-color:#2677c4}
+  #startScreen .shareTitleBtn{ position:relative; }
   #shareDialog{position:absolute;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;background:rgba(122,92,138,.45)}
   #shareDialog.hidden{display:none}
   #shareDialog .box{background:#fff9fd;border:3px solid #e9c9e5;border-radius:18px;padding:18px 20px;width:min(88vw,420px);color:var(--paper);text-align:center}
@@ -480,6 +490,7 @@
         <button class="btn modeBtn info" id="rewardBtnTitle">報酬<span class="redDot hidden" id="rewardDot"></span></button>
         <button class="btn modeBtn info" id="settingsBtnTitle">設定</button>
       </div>
+      <button class="btn modeBtn info shareTitleBtn" id="shareGameBtnTitle" style="min-height:44px;font-size:clamp(14px,4vw,18px);">共有</button>
     </div>
 
     <!-- 長押しで開く途中ステージ選択 -->
@@ -532,6 +543,22 @@
     </div>
 
     <!-- ゲーム説明画面 -->
+    <!-- 共有画面 -->
+    <div id="shareGameScreen" class="overlay hidden">
+      <h1 class="title" style="font-size:clamp(22px,6vw,32px);">共有</h1>
+      <div class="subtitle" style="font-size:13px;">友だちにこのゲームを教えよう！</div>
+      <textarea id="shareGameMsg" class="shareMsgBox" readonly rows="11" spellcheck="false"></textarea>
+      <div class="shareGrid">
+        <button class="btn wide" id="shareGameCopyBtn" type="button">メッセージをコピー</button>
+        <button class="btn wide hidden" id="shareGameNativeBtn" type="button">アプリを選んで共有</button>
+        <a class="btn sx" id="shareToX" target="_blank" rel="noopener noreferrer">X</a>
+        <a class="btn sline" id="shareToLine" target="_blank" rel="noopener noreferrer">LINE</a>
+        <a class="btn sfb" id="shareToFb" target="_blank" rel="noopener noreferrer">Facebook</a>
+        <a class="btn sbsky" id="shareToBsky" target="_blank" rel="noopener noreferrer">Bluesky</a>
+      </div>
+      <button class="btn alt" id="shareGameCloseBtn" type="button" style="margin-top:4px;">閉じる</button>
+    </div>
+
     <div id="howToPlayScreen" class="overlay hidden">
       <h1 class="title" style="font-size:clamp(20px,5.5vw,28px);">ゲーム説明</h1>
       <div class="subtitle">
@@ -1480,6 +1507,7 @@ window.addEventListener("touchstart", e=>{
   const leftRect = leftZoneEl.getBoundingClientRect();
   for(const t of e.changedTouches){
     if(t.identifier === rightJoy.id) continue;
+    if(pcIsUiTarget(t.target)) continue;
     if(t.clientX>=leftRect.left && t.clientX<=leftRect.right && t.clientY>=leftRect.top && t.clientY<=leftRect.bottom) continue;
     // 2本目の指を、通常弾／ミサイル用の発射指として受け取る。
     if(rightJoy.fireFingerId===null){
@@ -1589,6 +1617,8 @@ window.addEventListener("touchstart", e=>{
   if(IS_PC || controlScheme!=="B" || state!=="playing" || !player || !player.alive) return;
   const leftRect = leftZoneEl.getBoundingClientRect();
   for(const t of e.changedTouches){
+    // 一時停止ボタンなどのUI部品へのタッチは攻撃入力にしない（preventDefaultでclickが潰れるのを防ぐ）
+    if(pcIsUiTarget(t.target)) continue;
     if(t.clientX>=leftRect.left && t.clientX<=leftRect.right && t.clientY>=leftRect.top && t.clientY<=leftRect.bottom) continue;
     schemeBStart(t.clientX,t.clientY,t.identifier);
     if(schemeB.active && schemeB.id===t.identifier) e.preventDefault();
@@ -4688,7 +4718,7 @@ function mpBeginGame(role, lv){
   setSpinner(false); updateMultiBtn();
   // 開いている画面をすべて閉じる
   for(const el of [startScreen, stageSelectScreen, continueScreen, pauseScreen, gameOverScreen, stageClearScreen,
-                   howToPlayScreen, designScreen, settingsScreen, editorScreen, libraryScreen, mpOverScreen, document.getElementById("rewardScreen")]) el.classList.add("hidden");
+                   howToPlayScreen, designScreen, settingsScreen, editorScreen, libraryScreen, mpOverScreen, document.getElementById("rewardScreen"), document.getElementById("shareGameScreen")]) el.classList.add("hidden");
   document.getElementById("shareDialog").classList.add("hidden");
   document.getElementById("uiConfirm").classList.add("hidden");
   settingsReturnScreen = null;
@@ -5806,6 +5836,40 @@ howToPlayBtn.addEventListener("click", ()=>{
   howToPlayScreen.scrollTop = 0; // 常に一番上から表示する
 });
 howToPlayCloseBtn.addEventListener("click", ()=>{ howToPlayScreen.classList.add("hidden"); });
+
+// ---- ゲームの共有（SNS／メッセージのコピー）----
+const SHARE_GAME_URL = "https://appleringo12.github.io/tank-game/";
+const SHARE_GAME_TEXT = "戦車ゲームで遊んでみませんか？\n\n戦車を操作して敵を倒し、ステージを攻略する2D戦車ゲームです！\n\n・マルチプレイ対応！\n・PC・スマホどちらでも遊べる！\n・インストール不要！ブラウザからすぐに遊べます\n\n▼ ここからプレイ！\n" + SHARE_GAME_URL;
+const shareGameScreen = document.getElementById("shareGameScreen");
+const shareGameMsg = document.getElementById("shareGameMsg");
+const shareGameCopyBtn = document.getElementById("shareGameCopyBtn");
+const shareGameNativeBtn = document.getElementById("shareGameNativeBtn");
+let shareGameCopyTimer = null;
+(function setupShareGame(){
+  const t = encodeURIComponent(SHARE_GAME_TEXT), u = encodeURIComponent(SHARE_GAME_URL);
+  document.getElementById("shareToX").href = "https://twitter.com/intent/tweet?text=" + t;
+  document.getElementById("shareToLine").href = "https://line.me/R/share?text=" + t;
+  document.getElementById("shareToFb").href = "https://www.facebook.com/sharer/sharer.php?u=" + u;
+  document.getElementById("shareToBsky").href = "https://bsky.app/intent/compose?text=" + t;
+  shareGameMsg.value = SHARE_GAME_TEXT;
+  if(typeof navigator.share === "function") shareGameNativeBtn.classList.remove("hidden");
+})();
+document.getElementById("shareGameBtnTitle").addEventListener("click", ()=>{
+  shareGameCopyBtn.textContent = "メッセージをコピー";
+  shareGameScreen.classList.remove("hidden");
+  shareGameScreen.scrollTop = 0;
+});
+document.getElementById("shareGameCloseBtn").addEventListener("click", ()=>{ shareGameScreen.classList.add("hidden"); });
+shareGameCopyBtn.addEventListener("click", async ()=>{
+  const ok = await copyTextToClipboard(SHARE_GAME_TEXT, shareGameMsg);
+  clearTimeout(shareGameCopyTimer);
+  shareGameCopyBtn.textContent = ok ? "コピーしました！" : "長押しでコピーしてください";
+  if(!ok){ shareGameMsg.focus(); shareGameMsg.select(); }
+  shareGameCopyTimer = setTimeout(()=>{ shareGameCopyBtn.textContent = "メッセージをコピー"; }, 2200);
+});
+shareGameNativeBtn.addEventListener("click", async ()=>{
+  try{ await navigator.share({ text: SHARE_GAME_TEXT }); }catch(e){ /* キャンセルは無視 */ }
+});
 
 const designScreen=document.getElementById("designScreen");
 document.getElementById("designBtnTitle").addEventListener("click",()=>{designScreen.classList.remove("hidden");paintDesignPreview();renderTankType();});
