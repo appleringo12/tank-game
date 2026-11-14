@@ -1,6 +1,6 @@
 // ぷち戦車 Service Worker
 // v1.20: HTMLの更新を反映するため、画面遷移はネットワーク優先にする。
-const CACHE_NAME = "puchi-tank-v1.49";
+const CACHE_NAME = "puchi-tank-v1.50";
 const ASSETS = [
   "./",
   "./index.html",
