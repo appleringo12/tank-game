@@ -361,6 +361,19 @@
   #shareDialog .row{display:flex;gap:10px;justify-content:center}
   #shareDialog .row .btn{padding:10px 24px}
   .stageCardActions .btn{font-size:12px;letter-spacing:0;padding:7px 10px;border-width:2px;border-bottom-width:4px;border-radius:12px}
+  /* ★ステージ一覧画面：「戻る」は小さめで、スクロールしても画面上部についてくる */
+  .libBackWrap{position:sticky;top:6px;z-index:6;height:0;width:min(96vw,760px);align-self:center;margin-bottom:-10px;pointer-events:none}
+  #libraryBackBtn{position:absolute;right:0;top:0;pointer-events:auto;font-size:12px;letter-spacing:0;padding:4px 12px;border-width:2px;border-bottom-width:3px;border-radius:11px;box-shadow:0 2px 8px rgba(122,92,138,.35)}
+  #stageLibraryScreen .editorTop{justify-content:center}
+  @media (max-width:700px){
+    #stageCards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:min(96vw,760px)}
+    .stageCard{padding:6px;border-radius:12px}
+    .stageCardTitle{font-size:13px;margin:3px 0 4px}
+    #stageCards .editorHint{font-size:10px;text-align:left;line-height:1.4}
+    .stageCardActions{gap:4px}
+    .stageCardActions .btn{font-size:11px;padding:5px 7px;border-radius:10px}
+  }
+  #libraryToggleBtn{font-size:13px;letter-spacing:0;padding:8px 16px;border-width:2px;border-bottom-width:4px;border-radius:14px}
 
 
   /* ---- マルチプレイ ---- */
@@ -453,7 +466,7 @@
       <button class="btn modeBtn" id="rushModeBtn">爽快モード</button>
       <button class="btn modeBtn multi" id="multiBtn">マルチプレイ</button>
       <button class="btn modeBtn alt" id="stageCreateOpenBtn">ステージ作成</button>
-      <button class="btn modeBtn alt" id="stageLibraryOpenBtn">ステージを見る</button>
+      <button class="btn modeBtn alt" id="stageLibraryOpenBtn">ステージ一覧</button>
       <div class="modeBtnRow">
         <button class="btn modeBtn info" id="howToPlayBtn">ゲーム説明</button>
         <button class="btn modeBtn info" id="designBtnTitle">デザイン</button>
@@ -491,6 +504,7 @@
     <div id="pauseScreen" class="overlay hidden">
       <h1 class="title" style="font-size:clamp(22px,6vw,32px);">一時停止</h1>
       <button class="btn pauseMenuBtn" id="resumeBtn">再開する</button>
+      <button class="btn alt pauseMenuBtn hidden" id="backToLibraryBtn">ステージ一覧に戻る</button>
       <button class="btn alt pauseMenuBtn" id="restartFromPauseBtn">タイトルに戻る</button>
       <button class="btn alt pauseMenuBtn" id="settingsBtnPause">設定</button>
     </div>
@@ -642,10 +656,12 @@
     </div>
     <!-- オリジナルステージ一覧 -->
     <div id="stageLibraryScreen" class="overlay hidden">
-      <div class="editorTop"><h2 class="editorTitle">オリジナルステージ</h2><button class="btn alt" id="libraryBackBtn">戻る</button></div>
-      <div class="editorHint">作成したステージを選んで遊ぶ・編集・複製・共有・削除できます。データはこのブラウザに保存されます。<br>「共有」で発行したコードを下の欄に入力すると、同じステージを読み込めます。</div>
+      <div class="libBackWrap"><button class="btn alt" id="libraryBackBtn">戻る</button></div>
+      <div class="editorTop"><h2 class="editorTitle" id="libraryTitle">通常ステージ</h2></div>
+      <button class="btn info" id="libraryToggleBtn">オリジナルステージを見る</button>
+      <div class="editorHint" id="libraryHint"></div>
       <div id="stageCards"></div>
-      <div class="editorTools codeImport">
+      <div class="editorTools codeImport" id="libraryImport">
         <input id="importCodeInput" placeholder="共有コードを入力" autocomplete="off" autocapitalize="characters" spellcheck="false">
         <button class="btn info" id="importStageBtn">ステージを読み込む</button>
       </div>
@@ -655,7 +671,7 @@
   <div id="uiToast" class="hidden"></div>
   <div id="shareDialog" class="hidden"><div class="box">
     <div class="msg" id="shareDialogTitle">共有コード</div>
-    <div class="shareHint">このコードを相手に送り、「ステージを見る」のコード入力欄に入力してもらうと、同じステージを遊べます。（ステージ名はコードに含まれません）</div>
+    <div class="shareHint">このコードを相手に送り、「ステージ一覧」のコード入力欄に入力してもらうと、同じステージを遊べます。（ステージ名はコードに含まれません）</div>
     <textarea id="shareCodeBox" readonly rows="3" spellcheck="false"></textarea>
     <div class="row"><button class="btn alt" id="shareCloseBtn">閉じる</button><button class="btn" id="shareCopyBtn">コピー</button></div>
   </div></div>
@@ -3974,14 +3990,15 @@ function saveEditorStage(){
   if(editingStageId){const i=all.findIndex(x=>x.id===editingStageId);if(i>=0)all[i]={...all[i],...level,updatedAt:Date.now()};else all.push({...level,id:"s"+Date.now(),createdAt:Date.now()});}
   else {level.id="s"+Date.now();level.createdAt=Date.now();all.push(level);}
   writeCustomStages(all);
-  showCustomLibrary();uiAlert("ステージを保存しました。");
+  libraryTab="custom";showCustomLibrary();uiAlert("ステージを保存しました。");
 }
 function customLevelFromEditor(){const l=editorToLevel();const err=validateCustomLevel(l);if(err){uiAlert(err);return null;}return l;}
 function startCustomStage(level){
-  // ステージを見る画面の「遊ぶ」は最初のユーザー操作になる場合があるため、
+  // ステージ一覧画面の「遊ぶ」は最初のユーザー操作になる場合があるため、
   // ここで音声コンテキストを有効化しておく（初回プレイ時の効果音が無音になるのを防ぐ）。
   try { initAudio(); } catch(e) { console.warn("audio init skipped", e); }
   challengeStartNoRecord = false;
+  libraryTab="custom"; // 終了後はオリジナルステージ一覧へ戻る
   const err=validateCustomLevel(level);if(err){uiAlert(err);return;}
   level=fitCustomLevel(level); // 固定サイズ(13×9)に合わせてから遊ぶ
   customPlayActive=true;gameMode="normal";stageNum=1;lapNum=1;totalStageProgress=1;lives=3;
@@ -4128,25 +4145,69 @@ shareCopyBtn.onclick=async()=>{
 };
 document.getElementById("shareCloseBtn").onclick=()=>shareDialog.classList.add("hidden");
 shareDialog.addEventListener("click",e=>{ if(e.target===shareDialog) shareDialog.classList.add("hidden"); });
+// ステージ一覧のプレビュー画像（通常ステージ・オリジナルステージ共通）
+function makeStagePreview(map){
+  const preview=document.createElement("canvas");preview.width=364;preview.height=252;
+  const pc=preview.getContext("2d"),rows=STAGE_ROWS,cols=STAGE_COLS,cw=364/cols,ch=252/rows;
+  pc.fillStyle="#fffafc";pc.fillRect(0,0,364,252);
+  map.forEach((line,r)=>Array.from(line).forEach((v,c)=>{const x=c*cw,y=r*ch;if(v==="#"){pc.fillStyle="#f3b57e";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="X"){pc.fillStyle="#a898e0";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="G"){drawPyramidTile(pc,x,y,cw,ch);}else if(v==="P"||CUSTOM_CHAR_TO_ENEMY[v]){pc.fillStyle=v==="P"?"#8ecbff":ENEMY_TYPES[CUSTOM_CHAR_TO_ENEMY[v]].color;pc.beginPath();pc.arc(x+cw/2,y+ch/2,Math.min(cw,ch)*.28,0,7);pc.fill();}}));
+  const wp=buildWaterPaths((c,r)=>map[r]?.[c]==="W");
+  if(wp){pc.save();pc.scale(cw/TILE,ch/TILE);drawWaterLayer(pc,wp,0);pc.restore();}
+  return preview;
+}
+// ★ステージ一覧：「通常ステージ」と「オリジナルステージ」を切り替えて表示する（最初は通常ステージ）
+let libraryTab="normal";
+let libraryScrollPos=0; // 一覧から遊び始めたときのスクロール位置（戻ったときに復元する）
+function rememberLibraryScroll(){ libraryScrollPos=libraryScreen.scrollTop; }
+function restoreLibraryScroll(){ const y=libraryScrollPos; libraryScreen.scrollTop=y; requestAnimationFrame(()=>{ libraryScreen.scrollTop=y; }); }
+let libraryPlayActive=false; // 「ステージ一覧」から通常ステージを遊んでいる間 true
+// 通常ステージは、通常モード・マルチプレイのどちらかの最高クリアステージ＋1まで遊べる（最大50で止める）
+function normalPlayableCount(){
+  let n=1,m=1;
+  try{n=loadModeRecord("MaxStageProgress","normal",1)||1;}catch(e){}
+  try{m=Number(localStorage.getItem("tankMultiMaxProgressV1"))||1;}catch(e){}
+  const maxCleared=Math.max(n,m)-1; // 最高クリアステージ
+  return Math.max(1,Math.min(50,LEVELS.length,maxCleared+1));
+}
+function updateLibraryChrome(){
+  const normal=libraryTab==="normal";
+  document.getElementById("libraryTitle").textContent=normal?"通常ステージ":"オリジナルステージ";
+  document.getElementById("libraryToggleBtn").textContent=normal?"オリジナルステージを見る":"通常ステージを見る";
+  document.getElementById("libraryHint").innerHTML=normal
+    ?"通常モード・マルチプレイの最高クリアステージの次のステージまで遊べます。<br>ここから遊んだ記録は最高クリアステージには反映されません。"
+    :"作成したステージを選んで遊ぶ・編集・複製・共有・削除できます。データはこのブラウザに保存されます。<br>「共有」で発行したコードを下の欄に入力すると、同じステージを読み込めます。";
+  document.getElementById("libraryImport").classList.toggle("hidden",normal);
+}
+function renderNormalStages(){
+  const count=normalPlayableCount();
+  for(let n=1;n<=count;n++){
+    const lv=LEVELS[n-1];if(!lv)break;
+    const card=document.createElement("div");card.className="stageCard";
+    const title=document.createElement("div");title.className="stageCardTitle";title.textContent=`ステージ ${n}`;
+    const meta=document.createElement("div");meta.className="editorHint";meta.textContent=`${STAGE_COLS}×${STAGE_ROWS}マス ／ 敵 ${(lv.enemies||[]).length}台`;
+    const actions=document.createElement("div");actions.className="stageCardActions";
+    const b=document.createElement("button");b.className="btn";b.textContent="遊ぶ";
+    b.onclick=()=>{rememberLibraryScroll();libraryScreen.classList.add("hidden");safeStartGame(false,"normal",n,true);libraryPlayActive=true;};
+    actions.append(b);
+    card.append(makeStagePreview(lv.map),title,meta,actions);stageCards.append(card);
+  }
+}
 function showCustomLibrary(){
   customPlayActive=false;setMenuLayout(true);stopBgm();state="start";
   editorScreen.classList.add("hidden");startScreen.classList.add("hidden");libraryScreen.classList.remove("hidden");
-  const all=readCustomStages();stageCards.innerHTML="";
+  updateLibraryChrome();stageCards.innerHTML="";
+  if(libraryTab==="normal"){renderNormalStages();return;}
+  const all=readCustomStages();
   if(!all.length){stageCards.innerHTML='<div class="editorHint">まだステージがありません。「ステージ作成」から作ってみましょう。</div>';return;}
   for(const stage of all){
     const card=document.createElement("div");card.className="stageCard";
     const fitted=fitCustomLevel(stage);
-    const preview=document.createElement("canvas");preview.width=364;preview.height=252;
-    const pc=preview.getContext("2d"),rows=STAGE_ROWS,cols=STAGE_COLS,cw=364/cols,ch=252/rows;
-    pc.fillStyle="#fffafc";pc.fillRect(0,0,364,252);
-    fitted.map.forEach((line,r)=>Array.from(line).forEach((v,c)=>{const x=c*cw,y=r*ch;if(v==="#"){pc.fillStyle="#f3b57e";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="X"){pc.fillStyle="#a898e0";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="G"){drawPyramidTile(pc,x,y,cw,ch);}else if(v==="P"||CUSTOM_CHAR_TO_ENEMY[v]){pc.fillStyle=v==="P"?"#8ecbff":ENEMY_TYPES[CUSTOM_CHAR_TO_ENEMY[v]].color;pc.beginPath();pc.arc(x+cw/2,y+ch/2,Math.min(cw,ch)*.28,0,7);pc.fill();}}));
-    const wp=buildWaterPaths((c,r)=>fitted.map[r]?.[c]==="W");
-    if(wp){pc.save();pc.scale(cw/TILE,ch/TILE);drawWaterLayer(pc,wp,0);pc.restore();}
+    const preview=makeStagePreview(fitted.map);
     const title=document.createElement("div");title.className="stageCardTitle";title.textContent=stage.name||"名前なし";
     const meta=document.createElement("div");meta.className="editorHint";meta.textContent=`${cols}×${rows}マス ／ 敵 ${fitted.enemies.length}台`;
     const actions=document.createElement("div");actions.className="stageCardActions";
     const add=(label,fn,alt=false)=>{const b=document.createElement("button");b.className="btn"+(alt?" alt":"");b.textContent=label;b.onclick=fn;actions.append(b);};
-    add("遊ぶ",()=>{ startCustomStage(stage); customPlayFromEditor=false; });
+    add("遊ぶ",()=>{ rememberLibraryScroll(); startCustomStage(stage); customPlayFromEditor=false; });
     add("編集",()=>openStageEditor(stage,"library"),true);
     add("複製",()=>{const copy={...stage,id:"s"+Date.now(),name:(stage.name||"ステージ")+" コピー",createdAt:Date.now()};writeCustomStages([...readCustomStages(),copy]);showCustomLibrary();});
     add("共有",()=>openShareDialog(stage),true);
@@ -4155,7 +4216,8 @@ function showCustomLibrary(){
   }
 }
 document.getElementById("stageCreateOpenBtn").onclick=()=>openStageEditor(null,"title");
-document.getElementById("stageLibraryOpenBtn").onclick=showCustomLibrary;
+document.getElementById("stageLibraryOpenBtn").onclick=()=>{libraryTab="normal";showCustomLibrary();libraryScreen.scrollTop=0;};
+document.getElementById("libraryToggleBtn").onclick=()=>{libraryTab=libraryTab==="normal"?"custom":"normal";showCustomLibrary();libraryScreen.scrollTop=0;};
 document.getElementById("editorBackBtn").onclick=()=>editorReturnTo==="library"?showCustomLibrary():showTitleScreen();
 document.getElementById("libraryBackBtn").onclick=showTitleScreen;
 document.getElementById("editorClearBtn").onclick=()=>uiConfirm("配置をすべて消去しますか？",()=>{
@@ -5515,6 +5577,8 @@ function showStageClear(){
     mode: gameMode,
     savedAt: Date.now()
   });
+  // ★「ステージ一覧」から遊んでいて、次が未解放（または50の次）なら、ステージ一覧へ戻る
+  const backToLib = libraryPlayActive && !customPlayActive && (stageNum >= 50 || nextNum > normalPlayableCount());
   const next = getNextLevel();
   const counts = {};
   for(const type of (next.enemies || [])){
@@ -5527,8 +5591,8 @@ function showStageClear(){
 
   clearStageTitle.textContent = customPlayActive ? "オリジナルステージ CLEAR!" : `ステージ ${stageNum} CLEAR!`;
   clearStats.innerHTML = `残機：${Math.max(lives,0)}` + (gotExtraLife ? `　　<span style="color:var(--amber);">ライフ+1！</span>` : "");
-  nextStageInfo.innerHTML = customPlayActive ? "ステージクリア！タップしてステージ一覧に戻ります。" : `次のステージ：<b>ステージ ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
-  clearTapHint.textContent = "画面をタップすると次のステージへ";
+  nextStageInfo.innerHTML = (customPlayActive || backToLib) ? "ステージクリア！タップしてステージ一覧に戻ります。" : `次のステージ：<b>ステージ ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
+  clearTapHint.textContent = backToLib ? "画面をタップするとステージ一覧へ" : "画面をタップすると次のステージへ";
   stageClearScreen.classList.remove("hidden");
 }
 
@@ -5541,6 +5605,18 @@ function startNextStage(){
     stageClearScreen.classList.add("hidden");
     hud.classList.add("hidden");
     showCustomLibrary();
+    if(!customPlayFromEditor) restoreLibraryScroll();
+    return;
+  }
+  if(libraryPlayActive && (stageNum >= 50 || getNextStageNumber() > normalPlayableCount())){
+    // 未解放のステージには進まず、ステージ一覧画面へ戻る
+    libraryPlayActive = false; challengeStartNoRecord = false;
+    state = "start";
+    stageClearScreen.classList.add("hidden");
+    hud.classList.add("hidden");
+    libraryTab = "normal";
+    showCustomLibrary();
+    restoreLibraryScroll();
     return;
   }
   const nextNum = getNextStageNumber();
@@ -5884,6 +5960,7 @@ function updateMultiRecord(progress){
 
 function showTitleScreen(keepSave=false){
   customPlayActive = false;
+  libraryPlayActive = false;
   challengeStartNoRecord = false;
   stageSelectScreen?.classList.add("hidden");
   buildLevel(0); // 通常マップ寸法へ戻し、タイトル画面の描画も安全にする
@@ -6015,10 +6092,24 @@ pauseBtn.addEventListener("click", ()=>{
     state="paused";
     stopBgm();
     pauseScreen.classList.remove("hidden");
+    // 「ステージ一覧」から遊んでいるときだけ、一覧へ戻るボタンを出す
+    document.getElementById("backToLibraryBtn").classList.toggle("hidden", !(libraryPlayActive || (customPlayActive && !customPlayFromEditor)));
   }
 });
+document.getElementById("backToLibraryBtn").onclick = ()=>{
+  const wasCustom = customPlayActive;
+  pauseScreen.classList.add("hidden");
+  stageClearScreen.classList.add("hidden");
+  gameOverScreen.classList.add("hidden");
+  hud.classList.add("hidden");
+  libraryPlayActive = false; challengeStartNoRecord = false;
+  libraryTab = wasCustom ? "custom" : "normal";
+  showCustomLibrary();
+  restoreLibraryScroll();
+};
 
 function startGame(continueGame=false, selectedMode=null, startAtStage=1, noRecord=false){
+  libraryPlayActive = false;
   setMenuLayout(false);
   customPlayActive = false; hudStageCache = -1; hudMaxCache = -1; hudLivesCache = -1; // オリジナル表示を引きずらない
   // まずゲーム状態を初期化する。音声やセーブの問題で開始処理全体が止まらないようにする。
