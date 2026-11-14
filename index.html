@@ -364,7 +364,7 @@
   #shareGameScreen .btn.sx{background:#444;border-color:#222;border-bottom-color:#222}
   #shareGameScreen .btn.sline{background:#3ec35a;border-color:#2a9a43;border-bottom-color:#2a9a43}
   #shareGameScreen .btn.sfb{background:#4a7be0;border-color:#3359b0;border-bottom-color:#3359b0}
-  #shareGameScreen .btn.sbsky{background:#3b9cf5;border-color:#2677c4;border-bottom-color:#2677c4}
+  #shareGameScreen .btn.sdiscord{background:#5865f2;border-color:#4752c4;border-bottom-color:#4752c4}
   #startScreen .shareTitleBtn{ position:relative; }
   #shareDialog{position:absolute;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;background:rgba(122,92,138,.45)}
   #shareDialog.hidden{display:none}
@@ -547,14 +547,14 @@
     <div id="shareGameScreen" class="overlay hidden">
       <h1 class="title" style="font-size:clamp(22px,6vw,32px);">共有</h1>
       <div class="subtitle" style="font-size:13px;">友だちにこのゲームを教えよう！</div>
-      <textarea id="shareGameMsg" class="shareMsgBox" readonly rows="11" spellcheck="false"></textarea>
+      <textarea id="shareGameMsg" class="shareMsgBox" readonly rows="8" spellcheck="false"></textarea>
       <div class="shareGrid">
         <button class="btn wide" id="shareGameCopyBtn" type="button">メッセージをコピー</button>
         <button class="btn wide hidden" id="shareGameNativeBtn" type="button">アプリを選んで共有</button>
         <a class="btn sx" id="shareToX" target="_blank" rel="noopener noreferrer">X</a>
         <a class="btn sline" id="shareToLine" target="_blank" rel="noopener noreferrer">LINE</a>
         <a class="btn sfb" id="shareToFb" target="_blank" rel="noopener noreferrer">Facebook</a>
-        <a class="btn sbsky" id="shareToBsky" target="_blank" rel="noopener noreferrer">Bluesky</a>
+        <a class="btn sdiscord" id="shareToDiscord" href="https://discord.com/channels/@me" target="_blank" rel="noopener noreferrer">Discord</a>
       </div>
       <button class="btn alt" id="shareGameCloseBtn" type="button" style="margin-top:4px;">閉じる</button>
     </div>
@@ -3020,20 +3020,23 @@ function updateEnemy(t, dt){
    ・射撃を判断した瞬間のプレイヤー座標・速度と、その時点で撃てる弾数から扇状射撃を組み立てる。
    ・弾がすべて消えるまで待たず、通常攻撃の空き枠ができた時点で次の射撃を判断する。
    ・射線が通るときは直接狙い、壁・鉄壁に遮られるときだけ反射も使う。
-   ・プレイヤーのミサイル発射を検知した瞬間に着弾地点を読み、爆風圏外へ移動する。
+   ・プレイヤーのミサイル発射を検知した瞬間に着弾地点を読み、通常弾と同時に評価して、爆風圏外かつ弾の少ない方向へ移動する。
    ・通常弾も他の回避型戦車と同じように避ける。
    ・迎撃弾は回避経路を選んでも自分の周囲約1ブロック以内に残る危険弾だけを狙う。
    ================================================================ */
 const GRAY_THINK_INTERVAL = 0.25;       // 重い射撃予測の更新間隔
 const GRAY_SHOT_STEP = 1/30;            // 弾道シミュレーションの時間刻み
 const GRAY_SHOT_MAX_TIME = 7.5;         // 先読みする弾道の最大時間
-const GRAY_SHOT_ANGLE_STEP = 5;         // 全方向の初回探索幅（度）
-const GRAY_SHOT_REFINE_STEP = 0.35;     // 惜しい角度を細かく調べる幅（度）
-const GRAY_SHOT_NEAR_MISS = 38;         // この距離以内に近づく角度を再探索
+const GRAY_SHOT_ANGLE_STEP = 3;         // 全方向の初回探索幅（度）
+const GRAY_SHOT_REFINE_COUNT = 8;       // 惜しい角度（極小点）を何か所まで絞り込むか
+const GRAY_SHOT_REFINE_ITER = 7;        // 絞り込みの繰り返し回数（毎回探索幅を半分にする）
+const GRAY_SHOT_NEAR_MISS = 170;        // この距離以内まで近づく角度の極小点を絞り込み対象にする
 const GRAY_TURN_SPEED = 6.2;            // 砲塔の旋回速度（ラジアン/秒）
 const GRAY_DODGE_RADIUS = ENEMY_DODGE_RADIUS * 2; // 他の戦車の2倍遠い距離から回避を開始
 const GRAY_DODGE_COOLDOWN = 0.0;         // 通常弾の回避クールタイムも0秒
-const GRAY_SELF_BULLET_DODGE_AGE = 1.0; // 自分の弾も発射から1秒以上経過したら回避対象にする
+const GRAY_DODGE_INTERVAL = 0.1;         // 回避経路を選び直す間隔（ミサイル発射時は即座に判断）
+const GRAY_DODGE_HOLD = 0.3;             // 脅威が消えてからも回避方向を保つ時間
+const GRAY_SELF_BULLET_DODGE_AGE = 0.5; // 自分の弾も発射から0.5秒以上経過したら回避対象にする
 const GRAY_DEFENSE_COOLDOWN = 0.0;     // 5発目の防御弾のクールタイム（無効）
 const GRAY_DEFENSE_THREAT_TIME = 1.25;  // この時間以内に被弾しそうなら迎撃を試みる
 
@@ -3104,6 +3107,15 @@ function graySimulateShot(t, angle, target, targetPath, othersGrid, out, maxBoun
     }
     if(blockedByTank) break;
 
+    // ★自分に跳ね返ってくる弾道は選ばない（以前は壁際で撃った弾が戻ってきて自滅することがあった）。
+    //   自分は動くので、時間が経つほど余裕を大きく取る。
+    {
+      const sx=x-t.x, sy=y-t.y;
+      // 発射直後は砲口の位置が自分に近いので、実際の当たり判定ぎりぎりだけ見る（壁に密着して撃つと即座に戻ってくる弾も除く）。
+      const selfR=i>8 ? t.r+BULLET_R+10+Math.min(24,i*GRAY_SHOT_STEP*12) : t.r+BULLET_R+1;
+      if(sx*sx+sy*sy<selfR*selfR) break;
+    }
+
     const targetPos=targetPath[i];
     const dx=x-targetPos.x, dy=y-targetPos.y, d2=dx*dx+dy*dy;
     if(d2<minD2) minD2=d2;
@@ -3119,36 +3131,81 @@ function grayFindShot(t,p,leadFraction=1){
   if(!p || !p.alive || p.invuln>0) return null;
   const targetPath=grayBuildTargetPath(p,leadFraction);
   // 味方戦車などに先に当たる軌道を除外するため、他の戦車を空間分割しておく。
-  // 敵を大量配置したオリジナルステージでも、全戦車を毎ステップ走査しない。
-  const othersGrid=buildSpatialGrid(tanks,TILE,o=>o.alive && o!==p && o!==t);
+  // ★狙う相手は「判断時点の予測位置のコピー」なので、本物のプレイヤー戦車を遮蔽物扱いすると、
+  //   止まっているプレイヤー（予測位置＝本物の位置）へ向かう弾が全部「先に当たる」と判定され、撃てなくなっていた。
+  //   プレイヤー戦車はそもそも当てたい相手なので、遮蔽物から除外する。
+  const othersGrid=buildSpatialGrid(tanks,TILE,o=>o.alive && !o.isPlayer && o!==t);
   const res={hit:false,time:0,miss:0,bounces:0};
-  // レンガ・鉄壁が射線上にないときは反射回数0に固定。
-  // 水は弾が通るため、障害物として扱わない（hasLineOfSightと同じ判定）。
+  // レンガ・鉄壁が射線上にないときは反射回数0に固定。水は弾が通るため障害物にしない。
   const canShootDirectly=hasLineOfSight(t.x,t.y,p.x,p.y);
   const maxBounce=canShootDirectly ? 0 : (ENEMY_TYPES.gray.maxBounce ?? (ENEMY_TYPES.gray.fastBullet?0:BULLET_MAX_BOUNCE));
   let best=null;
-  const near=[];
-  const consider=a=>{
+  const tryAngle=a=>{
     graySimulateShot(t,a,p,targetPath,othersGrid,res,maxBounce);
-    if(res.hit){
-      if(!best || res.time<best.time) best={angle:a,time:res.time,bounces:res.bounces};
-    }else if(res.miss<GRAY_SHOT_NEAR_MISS){near.push(a);}
+    if(res.hit && (!best || res.time<best.time)) best={angle:a,time:res.time,bounces:res.bounces};
+    return res.hit ? 0 : res.miss;
   };
-  for(let deg=0;deg<360;deg+=GRAY_SHOT_ANGLE_STEP) consider(deg*Math.PI/180);
-  if(!best){
-    const coarse=near.slice();
-    const seen=new Set();
-    for(const a0 of coarse){
-      for(let k=-5;k<=5;k++){
-        if(!k) continue;
-        const a=a0+k*GRAY_SHOT_REFINE_STEP*Math.PI/180;
-        const key=Math.round((((a%(Math.PI*2))+Math.PI*2)%(Math.PI*2))*100000);
-        if(seen.has(key)) continue;
-        seen.add(key);consider(a);
+  // ① 全方向を粗く探索
+  const stepRad=GRAY_SHOT_ANGLE_STEP*Math.PI/180;
+  const N=Math.round(360/GRAY_SHOT_ANGLE_STEP);
+  const missArr=new Array(N);
+  for(let i=0;i<N;i++) missArr[i]=tryAngle(i*stepRad);
+  if(best) return best;
+  // ② 当たらなかった場合：「一番近づいた距離」が極小になる角度を集め、探索幅を半分ずつ縮めて絞り込む。
+  //    （止まっているプレイヤーは当たり判定が小さい一点なので、固定幅の探索では見逃しやすかった）
+  const minima=[];
+  for(let i=0;i<N;i++){
+    const m=missArr[i];
+    if(m>=GRAY_SHOT_NEAR_MISS) continue;
+    if(m<=missArr[(i+N-1)%N] && m<=missArr[(i+1)%N]) minima.push({a:i*stepRad,m});
+  }
+  minima.sort((x,y)=>x.m-y.m);
+  for(const c of minima.slice(0,GRAY_SHOT_REFINE_COUNT)){
+    let center=c.a, bestM=c.m, w=stepRad/2;
+    for(let it=0;it<GRAY_SHOT_REFINE_ITER;it++){
+      let nc=center, nm=bestM;
+      for(const off of [-w,w,-w/2,w/2]){
+        const m=tryAngle(center+off);
+        if(best) return best;
+        if(m<nm){nm=m;nc=center+off;}
       }
+      center=nc; bestM=nm; w/=2;
     }
   }
   return best;
+}
+
+// 発射直前の安全確認：今の位置・砲塔の向きで撃った弾が、壁で跳ね返って自分に当たらないかを確かめる。
+// （弾道を探してから撃つまでの間に自分も動くため、探索時の確認だけでは自滅を防ぎきれなかった）
+function grayShotReturnsToSelf(t){
+  const type=ENEMY_TYPES.gray;
+  const maxBounce=type.maxBounce ?? (type.fastBullet?0:BULLET_MAX_BOUNCE);
+  const ang=t.turretAngle, speed=type.bulletSpeed, step=GRAY_SHOT_STEP;
+  let x=t.x+Math.cos(ang)*(t.r+6), y=t.y+Math.sin(ang)*(t.r+6);
+  let vx=Math.cos(ang)*speed, vy=Math.sin(ang)*speed, bounces=0;
+  const hitR=t.r+BULLET_R+4, hitR2=hitR*hitR;
+  const steps=Math.ceil(3.0/step);
+  for(let i=1;i<=steps;i++){
+    x+=vx*step; y+=vy*step;
+    if(x<BULLET_R){x=BULLET_R;vx=-vx;bounces++;}
+    else if(x>WORLD_W-BULLET_R){x=WORLD_W-BULLET_R;vx=-vx;bounces++;}
+    if(y<BULLET_R){y=BULLET_R;vy=-vy;bounces++;}
+    else if(y>WORLD_H-BULLET_R){y=WORLD_H-BULLET_R;vy=-vy;bounces++;}
+    if(bounces>maxBounce) return false;
+    const col=Math.floor(x/TILE), row=Math.floor(y/TILE);
+    if(row>=0&&col>=0&&row<ROWS&&col<COLS&&blocksBullet(walls[row][col])){
+      if(bounces<maxBounce){
+        const cx=col*TILE+TILE/2, cy=row*TILE+TILE/2;
+        if(Math.abs(x-cx)>Math.abs(y-cy)) vx=-vx; else vy=-vy;
+        bounces++;
+        x+=vx*step*2; y+=vy*step*2;
+      }else return false;
+    }
+    const dx=x-t.x, dy=y-t.y;
+    // 発射直後（砲口付近）は除き、跳ね返ったあとで自分の近くに戻ってくる弾だけを危険とみなす。
+    if(bounces>0 && dx*dx+dy*dy<hitR2+ (i*step*14)*(i*step*14)) return true;
+  }
+  return false;
 }
 
 // プレイヤーの弾が灰色戦車へ接近しているかを予測し、相殺できる迎撃角度を探す。
@@ -3243,6 +3300,27 @@ function grayPredictDodgeBulletPath(b,horizon,step){
   return path;
 }
 
+// プレイヤーのミサイルのうち、今の移動を続けると爆風に入るもの（または既に爆風圏内にいるもの）を集める。
+function grayCollectMissileThreats(t,baseline,step,count){
+  const list=[];
+  const danger=MISSILE_BLAST_RADIUS+t.r+12;
+  for(const m of missiles){
+    if(m.dead || !m.owner || !m.owner.isPlayer) continue;
+    const c=Math.floor(m.targetX/TILE), r=Math.floor(m.targetY/TILE);
+    if(r>=0&&c>=0&&r<ROWS&&c<COLS&&walls[r][c]===WATER) continue; // 水上着弾は爆発しない
+    const remaining=Math.max(0,m.flightTime-m.time);
+    const idx=Math.min(count,Math.max(1,Math.ceil(remaining/step)));
+    const nowD=Math.hypot(t.x-m.targetX,t.y-m.targetY);
+    const bp=baseline[idx];
+    const baseD=Math.hypot(bp.x-m.targetX,bp.y-m.targetY);
+    if(Math.min(nowD,baseD)>danger+25) continue; // 今のままで安全なら回避対象にしない
+    list.push({x:m.targetX,y:m.targetY,remaining,idx,danger});
+  }
+  return list;
+}
+
+// 通常弾とミサイルの爆風を「同じ時間軸」でまとめて評価し、両方を同時に避けられる経路を1本選ぶ。
+// （以前はミサイル回避中に通常弾を無視していたため、ミサイルを避けた先で弾に当たっていた）
 function grayFindIncomingBulletDodge(t){
   const horizon=GRAY_DODGE_HORIZON,step=GRAY_DODGE_STEP;
   const count=Math.ceil(horizon/step);
@@ -3251,8 +3329,7 @@ function grayFindIncomingBulletDodge(t){
   const comfortRadius=dangerRadius+GRAY_DODGE_COMFORT_MARGIN;
   const tvx=t.vx||0,tvy=t.vy||0;
 
-  // まず、今の速度を保った場合の戦車位置を作る。
-  // 壁で押し戻される動きも含めて「こちらへ接近する弾」だけを抽出する。
+  // まず、今の速度を保った場合の戦車位置を作る（壁で押し戻される動きも含む）。
   const baseline=[];
   const baseTank={x:t.x,y:t.y,r:t.r};
   for(let i=0;i<=count;i++){
@@ -3278,19 +3355,19 @@ function grayFindIncomingBulletDodge(t){
       const d=Math.hypot(bp.x-tp.x,bp.y-tp.y);
       if(d<minD){minD=d;minTime=i*step;}
     }
-    // 現在より接近し、衝突半径付近まで来る弾のみを回避計画へ入れる。
     const nowD=Math.hypot(dx,dy);
     if(minD<=dangerRadius+10&&minTime>0.015&&minD<nowD-0.5){
       threats.push({path,nearest:minD,time:minTime,bullet:b});
     }else if(nowD<=dangerRadius&&minD<=dangerRadius+10){
-      // 既に至近距離にいる弾は、接近時刻がほぼ0でも緊急対象にする。
-      threats.push({path,nearest:minD,time:Math.max(step,minTime)});
+      threats.push({path,nearest:minD,time:Math.max(step,minTime),bullet:b});
     }
   }
-  if(!threats.length) return null;
+  const missileThreats=grayCollectMissileThreats(t,baseline,step,count);
+  if(!threats.length && !missileThreats.length) return null;
+  const missileRemaining=missileThreats.length ? Math.max(...missileThreats.map(m=>m.remaining)) : undefined;
 
-  // 36方向それぞれについて、戦車の移動・壁との接触・全弾の未来位置を同時に試走する。
-  let best=null,bestScore=Infinity,bestMinDist=null,bestMinTime=null;
+  // 36方向それぞれについて、戦車の移動・壁との接触・全弾の未来位置・ミサイル着弾時の位置を同時に試走する。
+  let best=null,bestScore=Infinity,bestMinDist=null;
   const turnBlend=1-Math.pow(0.001,step);
   for(let dir=0;dir<GRAY_DODGE_DIRECTION_COUNT;dir++){
     const angle=dir*Math.PI*2/GRAY_DODGE_DIRECTION_COUNT;
@@ -3299,6 +3376,7 @@ function grayFindIncomingBulletDodge(t){
     let blockedPenalty=0,travelled=0;
     const minDist=new Array(threats.length).fill(Infinity);
     const minTime=new Array(threats.length).fill(horizon);
+    const missileDist=new Array(missileThreats.length).fill(Infinity);
 
     for(let i=1;i<=count;i++){
       simAngle=lerpAngle(simAngle,angle,turnBlend);
@@ -3313,13 +3391,17 @@ function grayFindIncomingBulletDodge(t){
       if(moved<want*0.72||Math.hypot(sim.x-proposedX,sim.y-proposedY)>2){
         blockedPenalty+=(want-moved+5);
       }
-
-      // 同じ時刻の戦車位置と全弾位置を比較し、各弾との最接近距離を保存する。
       for(let j=0;j<threats.length;j++){
         const bp=threats[j].path[i];
         if(!bp) continue;
         const d=Math.hypot(sim.x-bp.x,sim.y-bp.y);
         if(d<minDist[j]){minDist[j]=d;minTime[j]=i*step;}
+      }
+      // ミサイルは着弾の瞬間に爆風圏内にいるかどうかだけが問題になる。
+      for(let j=0;j<missileThreats.length;j++){
+        if(i===missileThreats[j].idx){
+          missileDist[j]=Math.hypot(sim.x-missileThreats[j].x,sim.y-missileThreats[j].y);
+        }
       }
     }
 
@@ -3327,7 +3409,7 @@ function grayFindIncomingBulletDodge(t){
     for(let j=0;j<threats.length;j++){
       const d=minDist[j];
       if(!Number.isFinite(d)) continue;
-      const timeFactor=1.25-0.35*(minTime[j]/horizon); // 早い段階で衝突する弾ほど重く評価
+      const timeFactor=1.25-0.35*(minTime[j]/horizon);
       if(d<dangerRadius){
         const penetration=dangerRadius-d;
         risk+=(2600+penetration*penetration*12)*timeFactor;
@@ -3336,17 +3418,24 @@ function grayFindIncomingBulletDodge(t){
         risk+=q*q*150*timeFactor;
       }
     }
-    // 壁に押し戻される経路は大きく減点し、実際に動ける逃げ道を優先する。
+    for(let j=0;j<missileThreats.length;j++){
+      const d=missileDist[j], dz=missileThreats[j].danger;
+      if(!Number.isFinite(d)) continue;
+      if(d<dz){
+        risk+=3200+(dz-d)*(dz-d)*14;
+      }else if(d<dz+30){
+        const q=(dz+30-d)/30;
+        risk+=q*q*200;
+      }
+    }
     risk+=blockedPenalty*9;
     risk-=Math.min(travelled,t.speed*horizon)*0.035;
-    // 同程度に安全なら、今の向きから急激に反転しない方向を少し優先する。
     risk+=angleDiffAbs(t.angle,angle)*1.8;
 
     if(risk<bestScore){
       bestScore=risk;
-      best={angle,threatCount:threats.length,risk};
+      best={angle,threatCount:threats.length+missileThreats.length,risk,missileRemaining};
       bestMinDist=minDist.slice();
-      bestMinTime=minTime.slice();
     }
   }
   if(best){
@@ -3398,51 +3487,40 @@ function grayChooseWallEscapeSide(t,baseAngle){
   return bestAngle;
 }
 
-// ミサイルの着弾予告から爆風圏を計算し、壁に阻まれない最善の逃げ道を選ぶ。
-function grayFindMissileEscape(t){
-  let best=null;
-  const danger=MISSILE_BLAST_RADIUS+t.r+12;
-  for(const m of missiles){
-    if(m.dead || !m.owner || !m.owner.isPlayer) continue;
-    const c=Math.floor(m.targetX/TILE), r=Math.floor(m.targetY/TILE);
-    if(r>=0&&c>=0&&r<ROWS&&c<COLS&&walls[r][c]===WATER) continue; // 水上着弾は爆発しない
-    const remaining=Math.max(0,m.flightTime-m.time);
-    const dx=t.x-m.targetX, dy=t.y-m.targetY;
-    const distance=Math.hypot(dx,dy);
-    // 今の進行方向を保った場合の着弾時位置を予測し、爆風圏へ入るミサイルだけ避ける。
-    const expected={x:t.x,y:t.y,r:t.r};
-    const expectedSteps=Math.max(1,Math.min(28,Math.ceil(remaining/0.07)));
-    const expectedDt=remaining/expectedSteps;
-    const expectedDir=Number.isFinite(t.wanderDir)?t.wanderDir:t.angle;
-    for(let j=0;j<expectedSteps;j++){
-      expected.x+=Math.cos(expectedDir)*t.speed*expectedDt;
-      expected.y+=Math.sin(expectedDir)*t.speed*expectedDt;
-      resolveWallCollision(expected);
+// 灰色戦車の戦術移動：ただプレイヤーへ近づく／ランダムに徘徊するのをやめ、
+// 16方向へ約0.9秒動いたあとの位置を採点して、いちばん有利な方向へ動く。
+//   ・プレイヤーへ直射できる（射線が通る）位置を高く評価
+//   ・近すぎ／遠すぎない距離（約4〜8マス）を保つ
+//   ・行き止まりなど動けない方向は避ける
+// 移動速度などの性能は変えず、判断だけを賢くしている。
+const GRAY_TACTIC_HORIZON = 0.9;      // 先読みする移動時間（秒）
+const GRAY_TACTIC_DIRS = 16;          // 評価する方向数
+const GRAY_TACTIC_INTERVAL = 0.3;     // 移動方向を選び直す間隔（秒）
+function grayChooseTacticalDir(t,p){
+  const steps=6, dtS=GRAY_TACTIC_HORIZON/steps;
+  const ideal0=TILE*4, ideal1=TILE*8;
+  let best=null,bestScore=-Infinity;
+  for(let k=0;k<GRAY_TACTIC_DIRS;k++){
+    const a=k*Math.PI*2/GRAY_TACTIC_DIRS;
+    const sim={x:t.x,y:t.y,r:t.r};
+    let blocked=0;
+    for(let i=0;i<steps;i++){
+      const ox=sim.x,oy=sim.y,want=t.speed*dtS;
+      sim.x+=Math.cos(a)*want; sim.y+=Math.sin(a)*want;
+      resolveWallCollision(sim);
+      const moved=Math.hypot(sim.x-ox,sim.y-oy);
+      if(moved<want*0.8) blocked+=want-moved;
     }
-    const expectedDistance=Math.hypot(expected.x-m.targetX,expected.y-m.targetY);
-    if(distance>danger && expectedDistance>danger) continue;
-
-    let bestAngle=0,bestScore=-1e9;
-    const steps=Math.max(1,Math.min(28,Math.ceil(remaining/0.07)));
-    const stepDt=remaining/steps;
-    for(let k=0;k<16;k++){
-      const a=k*Math.PI/8;
-      const sim={x:t.x,y:t.y,r:t.r};
-      let travelled=0;
-      for(let j=0;j<steps;j++){
-        const ox=sim.x,oy=sim.y;
-        sim.x+=Math.cos(a)*t.speed*stepDt;
-        sim.y+=Math.sin(a)*t.speed*stepDt;
-        resolveWallCollision(sim);
-        travelled+=Math.hypot(sim.x-ox,sim.y-oy);
-      }
-      const endDistance=Math.hypot(sim.x-m.targetX,sim.y-m.targetY);
-      const progress=endDistance-distance;
-      const score=endDistance+travelled*0.12+progress*0.25;
-      if(score>bestScore){bestScore=score;bestAngle=a;}
-    }
-    const risk=danger+t.speed*remaining-distance;
-    if(!best || risk>best.risk) best={angle:bestAngle,risk,remaining};
+    const d=Math.hypot(sim.x-p.x,sim.y-p.y);
+    const los=hasLineOfSight(sim.x,sim.y,p.x,p.y);
+    let score=0;
+    if(los) score+=70;
+    else score-=d*0.04;               // 射線が通らないときは、まず近づいて回り込む
+    if(d<ideal0) score-=(ideal0-d)*0.5;
+    else if(d>ideal1) score-=(d-ideal1)*0.25;
+    score-=blocked*1.5;
+    score-=angleDiffAbs(t.angle,a)*5;    // 方向転換を繰り返して震えない
+    if(score>bestScore){bestScore=score;best=a;}
   }
   return best;
 }
@@ -3456,40 +3534,40 @@ function updateGrayTank(t,dt){
   t.grayWallEscapeTimer=Math.max(0,(t.grayWallEscapeTimer||0)-dt);
   if(t.dodgeActiveTimer<=0) t.dodgeDirCache=null;
 
-  // ミサイルは発射されたフレームの直後から毎フレーム確認する。
-  const missileEscape=grayFindMissileEscape(t);
-  if(missileEscape){
-    t.missileDodgeDir=missileEscape.angle;
-    t.missileDodgeTimer=Math.max(0.08,missileEscape.remaining+0.08);
-  }else{
-    t.missileDodgeTimer=Math.max(0,(t.missileDodgeTimer||0)-dt);
-    if(t.missileDodgeTimer<=0) t.missileDodgeDir=null;
+  // 回避：ミサイルの爆風と通常弾を同時に評価して、両方を避けられる方向を選ぶ。
+  // 評価は0.1秒ごと。新しいミサイルが発射された瞬間はすぐに判断する。
+  t.grayDodgeTimer=(t.grayDodgeTimer||0)-dt;
+  const missileSig=missiles.filter(m=>!m.dead && m.owner && m.owner.isPlayer).map(m=>m.mid).join(",");
+  const missileChanged=missileSig!==t.grayMissileSig;
+  t.grayMissileSig=missileSig;
+  if(t.dodge && (t.grayDodgeTimer<=0 || missileChanged)){
+    t.grayDodgeTimer=GRAY_DODGE_INTERVAL;
+    const threat=grayFindIncomingBulletDodge(t);
+    if(threat){
+      t.dodgeDirCache=threat.angle;
+      t.dodgeActiveTimer=threat.missileRemaining!==undefined
+        ? Math.max(GRAY_DODGE_HOLD,threat.missileRemaining+0.1) : GRAY_DODGE_HOLD;
+      t.dodgeCooldownTimer=GRAY_DODGE_COOLDOWN;
+      t.grayUnavoidableBullets=threat.unavoidableBullets || [];
+    }else{
+      t.grayUnavoidableBullets=[];
+      if(t.dodgeActiveTimer<=0) t.dodgeDirCache=null;
+    }
   }
+
+  // 射撃判断の保存時間を数える（古い予測のまま撃ち続けないため）。
+  t.grayVolleyAge=(t.grayVolleyAge||0)+dt;
 
   t.aiThinkTimer-=dt;
   if(t.aiThinkTimer<=0){
     t.aiThinkTimer+=GRAY_THINK_INTERVAL;
-    // 自分へ接近してくる弾だけを回避対象にする。回避開始距離は他の戦車の2倍。
-    // 自分の弾は発射から1秒以上経過したものだけを対象にし、反射して戻る弾による自滅も防ぐ。
-    t.grayUnavoidableBullets=[];
-    if(t.dodge){
-      // 全弾の未来軌道をまとめて評価し、最善の回避経路でも約1ブロック以内に残る弾を記録。
-      const threat=grayFindIncomingBulletDodge(t);
-      if(threat){
-        t.dodgeDirCache=threat.angle;
-        t.dodgeActiveTimer=0.5;
-        t.dodgeCooldownTimer=GRAY_DODGE_COOLDOWN;
-        t.grayUnavoidableBullets=threat.unavoidableBullets || [];
-      }else if(t.dodgeActiveTimer<=0){
-        t.dodgeDirCache=null;
-      }
-    }
 
     // 前の扇状射撃を撃ち終え、通常攻撃に空き枠ができた時点で次の射撃を判断する。
     // 弾がすべて消えることや、最大弾数まで溜まることは待たない。
     if(!t.grayVolleyFractions || t.grayVolleyFractions.length===0){
       t.grayVolleyFractions=[];
       t.grayVolleyTargetSnapshot=null;
+      t.grayVolleyAge=0;
       const attackCount=grayCountAttackBullets(t);
       // 迎撃用の1発分を通常攻撃に使わない。
       const freeAttackSlots=Math.max(0,Math.min(
@@ -3510,18 +3588,26 @@ function updateGrayTank(t,dt){
     const volleyTarget=t.grayVolleyTargetSnapshot;
     t.grayAimSolution=(leadFraction!==null && volleyTarget)
       ? grayFindShot(t,volleyTarget,leadFraction) : null;
+    // 当たる弾道が見つからない／予測が古くなったときは、射撃判断を捨てて次回に撮り直す。
+    // （以前は古い予測を持ったまま、いつまでも撃てなくなることがあった）
+    if(leadFraction!==null && (!t.grayAimSolution || t.grayVolleyAge>1.6)){
+      t.grayVolleyFractions=[];
+      t.grayVolleyTargetSnapshot=null;
+    }
   }
 
-  // 移動優先順位：ミサイルの爆風回避 ＞ 通常弾回避 ＞ プレイヤー方向への移動／徘徊。
+  // 移動優先順位：ミサイル・通常弾の同時回避 ＞ 戦術移動（射線の確保・距離の維持）。
   t.wanderTimer-=dt;
   if(t.wanderTimer<=0 || t.stuckTimer>0.4){
-    t.wanderDir=(p&&p.alive)?Math.atan2(p.y-t.y,p.x-t.x)+rand(-0.35,0.35):Math.random()*Math.PI*2;
-    t.wanderTimer=rand(0.8,1.6);
+    if(p&&p.alive){
+      const dirT=grayChooseTacticalDir(t,p);
+      t.wanderDir=(dirT!==null)?dirT:Math.atan2(p.y-t.y,p.x-t.x);
+    }else t.wanderDir=Math.random()*Math.PI*2;
+    t.wanderTimer=GRAY_TACTIC_INTERVAL;
     t.stuckTimer=0;
   }
   let moveDir=t.wanderDir;
   if(t.dodgeActiveTimer>0 && t.dodgeDirCache!==null) moveDir=t.dodgeDirCache;
-  if(t.missileDodgeDir!==null) moveDir=t.missileDodgeDir;
   const prevX=t.x,prevY=t.y;
   t.angle=lerpAngle(t.angle,moveDir,1-Math.pow(0.001,dt));
   const plannedX=t.x+Math.cos(t.angle)*t.speed*dt;
@@ -3531,7 +3617,7 @@ function updateGrayTank(t,dt){
   resolveWallCollision(t);
   const wallPush=Math.hypot(t.x-plannedX,t.y-plannedY);
   const movedBeforeSideStep=Math.hypot(t.x-prevX,t.y-prevY);
-  const isDodgingBullets=t.dodgeActiveTimer>0 && t.dodgeDirCache!==null && !(t.missileDodgeTimer>0);
+  const isDodgingBullets=t.dodgeActiveTimer>0 && t.dodgeDirCache!==null;
   if(isDodgingBullets && t.grayWallEscapeTimer<=0 &&
      (wallPush>1.5 || movedBeforeSideStep<t.speed*dt*0.62)){
     const side=grayChooseWallEscapeSide(t,t.angle);
@@ -3572,10 +3658,15 @@ function updateGrayTank(t,dt){
   // 判断時点で撃てる弾数に応じて、現在位置から未来位置までを均等に分けて扇状に撃つ。
   if(t.grayAimSolution && t.grayVolleyTargetSnapshot && t.fireCooldown<=0 && grayCountAttackBullets(t)<t.attackBulletLimit && t.bulletCount<t.maxBullets && !defense){
     if(angleDiffAbs(t.turretAngle,t.grayAimSolution.angle)<0.055){
-      spawnBullet(t);
-      if(t.grayVolleyFractions && t.grayVolleyFractions.length) t.grayVolleyFractions.shift();
-      t.fireCooldown=PLAYER_FIRE_INTERVAL;
-      t.grayAimSolution=null;
+      if(grayShotReturnsToSelf(t)){
+        // 自分に戻ってくる弾は撃たない。次の判断で別の弾道を探し直す。
+        t.grayAimSolution=null;
+      }else{
+        spawnBullet(t);
+        if(t.grayVolleyFractions && t.grayVolleyFractions.length) t.grayVolleyFractions.shift();
+        t.fireCooldown=PLAYER_FIRE_INTERVAL;
+        t.grayAimSolution=null;
+      }
     }
   }
 }
@@ -5839,7 +5930,7 @@ howToPlayCloseBtn.addEventListener("click", ()=>{ howToPlayScreen.classList.add(
 
 // ---- ゲームの共有（SNS／メッセージのコピー）----
 const SHARE_GAME_URL = "https://appleringo12.github.io/tank-game/";
-const SHARE_GAME_TEXT = "戦車ゲームで遊んでみませんか？\n\n戦車を操作して敵を倒し、ステージを攻略する2D戦車ゲームです！\n\n・マルチプレイ対応！\n・PC・スマホどちらでも遊べる！\n・インストール不要！ブラウザからすぐに遊べます\n\n▼ ここからプレイ！\n" + SHARE_GAME_URL;
+const SHARE_GAME_TEXT = "敵を倒してステージ攻略するゲームです！\n\n・マルチプレイ対応！\n・PC・スマホどちらでも遊べる！\n・インストール不要！ブラウザからすぐに遊べます！\n\n▼ ここからプレイ！\n" + SHARE_GAME_URL;
 const shareGameScreen = document.getElementById("shareGameScreen");
 const shareGameMsg = document.getElementById("shareGameMsg");
 const shareGameCopyBtn = document.getElementById("shareGameCopyBtn");
@@ -5850,7 +5941,14 @@ let shareGameCopyTimer = null;
   document.getElementById("shareToX").href = "https://twitter.com/intent/tweet?text=" + t;
   document.getElementById("shareToLine").href = "https://line.me/R/share?text=" + t;
   document.getElementById("shareToFb").href = "https://www.facebook.com/sharer/sharer.php?u=" + u;
-  document.getElementById("shareToBsky").href = "https://bsky.app/intent/compose?text=" + t;
+  // Discordには投稿用のURLがないため、紹介文をコピーしてからDiscordを開く（貼り付けて送信してもらう）
+  document.getElementById("shareToDiscord").addEventListener("click", async ()=>{
+    const ok = await copyTextToClipboard(SHARE_GAME_TEXT, shareGameMsg);
+    clearTimeout(shareGameCopyTimer);
+    shareGameCopyBtn.textContent = ok ? "コピーしました！Discordに貼り付けてね" : "長押しでコピーしてください";
+    if(!ok){ shareGameMsg.focus(); shareGameMsg.select(); }
+    shareGameCopyTimer = setTimeout(()=>{ shareGameCopyBtn.textContent = "メッセージをコピー"; }, 3000);
+  });
   shareGameMsg.value = SHARE_GAME_TEXT;
   if(typeof navigator.share === "function") shareGameNativeBtn.classList.remove("hidden");
 })();
