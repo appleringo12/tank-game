@@ -574,6 +574,7 @@
         <div class="designPreview"><canvas id="designPreviewCanvas" width="280" height="180"></canvas><div>戦車プレビュー</div></div>
       </div>
       <div id="rwEquip"></div>
+      <div id="tankTypeBox"></div>
       <button class="btn alt" id="designCloseBtn">閉じる</button>
     </div>
 
@@ -1968,7 +1969,8 @@ function makePlayer(x,y,pidx=0){
   return {
     isPlayer:true, x, y, vx:0, vy:0, angle:-Math.PI/2, turretAngle:-Math.PI/2,
     r:TANK_R, speed:(gameMode === "rush" ? PLAYER_SPEED*2 : PLAYER_SPEED), hp:1, alive:true,
-    maxBullets:PLAYER_MAX_BULLETS, // 画面上に同時に出せる自分の弾の最大数
+    tankType:activeTankType(), // ★隠し戦車：A=通常 / B=高速弾1発のみ / C=高速弾1発＋ミサイル
+    maxBullets:(activeTankType()==="A" ? PLAYER_MAX_BULLETS : 1), // 画面上に同時に出せる自分の弾の最大数
     fireCooldown:0, // 次の射撃までの待ち時間
     fireBuffered:false, // ★発射間隔制限中に押された入力を覚えておく（先行入力）
     invuln:2.0,  // ★復活直後の無敵時間(秒)
@@ -2211,27 +2213,93 @@ function hasLineOfSight(x0,y0,x1,y1){
 /* ================================================================
    弾
    ================================================================ */
+// ★水色戦車の弾の軌跡：弾が通った経路（反射の折れ曲がりも含む）を一定の長さだけ覚えておく。
+const CY_TRAIL_LEN = 110;          // 軌跡の長さ(px)
+const CY_TRAIL_FADE = 0.3;         // 弾が消えたあと軌跡が薄れる時間(秒)
+let cyanTrailFade = [];            // 消えた弾の軌跡（薄れていく途中）
+function cTrailPush(b){
+  const a=b.cTrail; if(!a) return;
+  const last=a[a.length-1];
+  if(last && Math.abs(last.x-b.x)<0.01 && Math.abs(last.y-b.y)<0.01) return;
+  a.push({x:b.x,y:b.y});
+  let len=0;
+  for(let i=a.length-1;i>0;i--){
+    const seg=Math.hypot(a[i].x-a[i-1].x,a[i].y-a[i-1].y);
+    if(len+seg>CY_TRAIL_LEN){
+      const k=(CY_TRAIL_LEN-len)/(seg||1);
+      a[i-1]={x:a[i].x+(a[i-1].x-a[i].x)*k, y:a[i].y+(a[i-1].y-a[i].y)*k};
+      a.splice(0,i-1);
+      return;
+    }
+    len+=seg;
+  }
+}
+// ブロックで跳ね返る直前に呼ぶ：ブロックの表面（折れ曲がる位置）まで戻した点を軌跡に足す
+function cTrailCorner(b,dt,col,row){
+  if(!b.cTrail) return;
+  let x=b.x, y=b.y;
+  for(let k=0;k<16;k++){
+    if(Math.floor(x/TILE)!==col || Math.floor(y/TILE)!==row) break;
+    x-=b.vx*dt/16*1.0; y-=b.vy*dt/16*1.0;
+  }
+  const a=b.cTrail;
+  a.push({x,y});
+  cTrailPush({cTrail:a,x,y});
+}
+function drawCyanTrail(pts,alphaMul){
+  if(pts.length<2) return;
+  ctx.save();
+  ctx.lineCap="round"; ctx.lineJoin="round";
+  let d=0;
+  for(let i=pts.length-1;i>0;i--){
+    const a=pts[i], c=pts[i-1];
+    const seg=Math.hypot(a.x-c.x,a.y-c.y);
+    const f=Math.max(0,1-(d+seg*0.5)/CY_TRAIL_LEN); // 先頭ほど濃く太く
+    d+=seg;
+    if(seg<0.01) continue;
+    ctx.globalAlpha=alphaMul*0.5*f;
+    ctx.strokeStyle="#7fe4f2"; ctx.lineWidth=1.5+4.5*f;
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(c.x,c.y); ctx.stroke();
+    ctx.globalAlpha=alphaMul*0.75*f;
+    ctx.strokeStyle="#ffffff"; ctx.lineWidth=0.8+1.4*f;
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(c.x,c.y); ctx.stroke();
+  }
+  ctx.restore();
+}
 function spawnBullet(owner, options = {}){
   const enemyType = !owner.isPlayer ? ENEMY_TYPES[owner.type] : null;
-  const fastBullet = !!enemyType?.fastBullet;
+  // ★戦車B/C（自機）は高速弾（跳ね返りなし）を撃つ
+  const fastPlayer = !!(owner.isPlayer && owner.tankType && owner.tankType!=="A");
+  const fastBullet = !!enemyType?.fastBullet || fastPlayer;
   // ★爽快モードでは自機の弾速のみ2倍にする（敵の弾速は変えない）
-  const speed = enemyType?.bulletSpeed ?? (owner.isPlayer && gameMode === "rush" ? BULLET_SPEED*2 : BULLET_SPEED);
+  const speed = enemyType?.bulletSpeed
+    ?? (fastPlayer ? ENEMY_TYPES.green.bulletSpeed*(gameMode === "rush" ? 2 : 1)
+      : (owner.isPlayer && gameMode === "rush" ? BULLET_SPEED*2 : BULLET_SPEED));
   // ★弾ごとの「壁で反射できる回数」。高速弾は0（反射せず消える）、通常弾は BULLET_MAX_BOUNCE、
   //   水色の弾は高速のまま2回まで反射できる。
   const maxBounce = enemyType?.maxBounce ?? (fastBullet ? 0 : BULLET_MAX_BOUNCE);
+  const sx = owner.x + Math.cos(owner.turretAngle)*(owner.r+6);
+  const sy = owner.y + Math.sin(owner.turretAngle)*(owner.r+6);
   bullets.push({
-    x: owner.x + Math.cos(owner.turretAngle)*(owner.r+6),
-    y: owner.y + Math.sin(owner.turretAngle)*(owner.r+6),
+    x: sx,
+    y: sy,
     vx: Math.cos(owner.turretAngle)*speed,
     vy: Math.sin(owner.turretAngle)*speed,
     owner, bounces:0, dead:false, trail:[], fastBullet, age:0, bid:++mp.bidSeq,
     maxBounce, reflectSfx: enemyType?.reflectSfx || null, tint: enemyType?.bulletColor || null,
+    pcol: fastPlayer ? owner.dark : null, // 自機の高速弾は戦車の色で描く
+    cTrail: enemyType?.reflectSfx==="cyan" ? [{x:sx,y:sy}] : null, // ★水色の弾の軌跡（反射をなぞる）
     defensiveShot: !!options.defensiveShot, // 灰色戦車の5発目：敵弾との相殺専用
   });
   owner.bulletCount = (owner.bulletCount || 0) + 1;
   playShot(fastBullet);
 }
 function updateBullets(dt){
+  // 消えた水色弾の軌跡を薄れさせる
+  for(let i=cyanTrailFade.length-1;i>=0;i--){
+    cyanTrailFade[i].t+=dt;
+    if(cyanTrailFade[i].t>=CY_TRAIL_FADE) cyanTrailFade.splice(i,1);
+  }
   // 生存戦車を空間分割し、弾の近くにいる戦車だけ当たり判定する。
   const tankGrid = buildSpatialGrid(tanks, TILE, t=>t.alive);
 
@@ -2269,7 +2337,7 @@ function updateBullets(dt){
       } else if(b.y>WORLD_H-BULLET_R){
         b.y=WORLD_H-BULLET_R; b.vy*=-1; b.bounces++; reflected=true;
       }
-      if(reflected) playBulletReflectSoundFor(b);
+      if(reflected){ cTrailPush(b); playBulletReflectSoundFor(b); }
     }
 
     // タイル（障害物）との当たり判定。
@@ -2283,6 +2351,7 @@ function updateBullets(dt){
           b.dead=true;
           continue;
         } else if(b.bounces < b.maxBounce){
+          cTrailCorner(b,dt,col,row);
           const cxTile=col*TILE+TILE/2, cyTile=row*TILE+TILE/2;
           if(Math.abs(b.x-cxTile) > Math.abs(b.y-cyTile)) b.vx*=-1;
           else b.vy*=-1;
@@ -2305,6 +2374,7 @@ function updateBullets(dt){
           continue;
         }
         if(b.bounces < b.maxBounce){
+          cTrailCorner(b,dt,col,row);
           const cxTile=col*TILE+TILE/2, cyTile=row*TILE+TILE/2;
           if(Math.abs(b.x-cxTile) > Math.abs(b.y-cyTile)) b.vx*=-1;
           else b.vy*=-1;
@@ -2321,6 +2391,7 @@ function updateBullets(dt){
       }
     }
 
+    if(b.cTrail) cTrailPush(b);
     if(b.maxBounce>0 && b.bounces > b.maxBounce){
       b.dead=true;
       continue;
@@ -2376,6 +2447,7 @@ function updateBullets(dt){
     const b=bullets[i];
     if(!b.dead) continue;
     if(b.owner) b.owner.bulletCount=Math.max(0,(b.owner.bulletCount||1)-1);
+    if(b.cTrail && b.cTrail.length>0) cyanTrailFade.push({pts:b.cTrail.concat([{x:b.x,y:b.y}]), t:0});
     bullets.splice(i,1);
   }
 }
@@ -2585,6 +2657,7 @@ function myMissileCount(){
 function fireMissile(angle = rightJoy.missileAngle, distance = MISSILE_DISTANCE, who = null){
   const me = who || player;
   if(!me || !me.alive) return false;
+  if(me.isPlayer && me.tankType==="B") return false; // ★戦車Bはミサイルなし
   // ★マルチのゲスト：計算はホストがするので、発射の要求だけ送る
   if(!who && mp.active && mp.role==="guest"){
     if(myMissileCount() >= MISSILE_MAX_ACTIVE) return false;
@@ -4661,7 +4734,7 @@ function mpHostSnapshot(){
   const t = [];
   for(const k of tanks) t.push([k.nid, r1(k.x), r1(k.y), r2(k.angle), r2(k.turretAngle), (k.alive?1:0)|(k.invuln>0?2:0)]);
   const b = [];
-  for(const k of bullets) if(!k.dead) b.push([k.bid, r1(k.x), r1(k.y), r1(k.vx), r1(k.vy), k.fastBullet?1:0]);
+  for(const k of bullets) if(!k.dead) b.push([k.bid, r1(k.x), r1(k.y), r1(k.vx), r1(k.vy), k.fastBullet?1:0, k.cTrail?1:0]);
   const m = [];
   for(const k of missiles) if(!k.dead) m.push([k.mid, r1(k.startX), r1(k.startY), r1(k.targetX), r1(k.targetY), r2(k.angle), r2(k.time), r2(k.flightTime), k.owner ? k.owner.nid : 0]);
   const o = {t, b, m, a:(mp.rin.seq|0), pc:tanks.filter(k=>k.isPlayer).map(k=>[k.pidx,k.color,k.dark,...(window.rwPcExtra?rwPcExtra(k):[])])}; // a＝ホストが最後に受け取った2Pの操作の番号
@@ -4847,8 +4920,12 @@ function mpApplySnap(s){
   const nb = [];
   for(const a of s.b){
     let b = bm.get(a[0]);
-    if(!b) b = {bid:a[0], x:a[1], y:a[2], vx:a[3], vy:a[4], fastBullet:!!a[5], trail:[], dead:false, owner:null, age:0, bounces:0};
-    else { b.x = a[1]; b.y = a[2]; b.vx = a[3]; b.vy = a[4]; }
+    if(!b) b = {bid:a[0], x:a[1], y:a[2], vx:a[3], vy:a[4], fastBullet:!!a[5], trail:[], dead:false, owner:null, age:0, bounces:0, cTrail:a[6]?[{x:a[1],y:a[2]}]:null};
+    else {
+      // 向きが変わった＝反射した：その位置を軌跡の折れ曲がり点にする
+      if(b.cTrail && (Math.sign(b.vx)!==Math.sign(a[3]) || Math.sign(b.vy)!==Math.sign(a[4]))){ b.x = a[1]; b.y = a[2]; cTrailPush(b); }
+      b.x = a[1]; b.y = a[2]; b.vx = a[3]; b.vy = a[4];
+    }
     nb.push(b);
   }
   bullets = nb;
@@ -4923,6 +5000,7 @@ function guestFrame(dt){
     b.x += b.vx*dt; b.y += b.vy*dt;
     b.trail.push({x:b.x, y:b.y});
     if(b.trail.length>5) b.trail.shift();
+    if(b.cTrail) cTrailPush(b);
   }
   for(const m of missiles){
     m.time = Math.min(m.flightTime, m.time + dt);
@@ -5212,17 +5290,22 @@ function render(){
     ctx.globalAlpha=1;
   }
 
+  // 水色戦車の弾の軌跡（弾が消えたあと薄れていくぶんも含む）
+  for(const f of cyanTrailFade) drawCyanTrail(f.pts, 1-f.t/CY_TRAIL_FADE);
+  for(const b of bullets){ if(b.cTrail) drawCyanTrail(b.cTrail.concat([{x:b.x,y:b.y}]), 1); }
+  ctx.globalAlpha=1;
+
   // 弾：通常弾と高速弾でデザインを分ける
   for(const b of bullets){
     if(b.fastBullet){
       ctx.save();
       ctx.translate(b.x,b.y);
       ctx.rotate(Math.atan2(b.vy,b.vx));
-      ctx.globalAlpha=0.28; ctx.fillStyle="#70d98a";
+      ctx.globalAlpha=0.28; ctx.fillStyle=b.pcol||"#70d98a";
       ctx.fillRect(-14,-2,20,4);
       ctx.globalAlpha=1; ctx.fillStyle="#ffffff";
       ctx.beginPath(); ctx.moveTo(9,0); ctx.lineTo(-5,-4); ctx.lineTo(-2,0); ctx.lineTo(-5,4); ctx.closePath(); ctx.fill();
-      ctx.fillStyle="#48c96a"; ctx.fillRect(-5,-2,10,4);
+      ctx.fillStyle=b.pcol||"#48c96a"; ctx.fillRect(-5,-2,10,4);
       ctx.restore();
     } else {
       for(let i=0;i<b.trail.length;i++){
@@ -5283,8 +5366,9 @@ function getAimPreviewSegments(t){
   let y=t.y + Math.sin(t.turretAngle)*(t.r+6);
   let angle=t.turretAngle;
   const maxDist=Math.hypot(WORLD_W,WORLD_H)*2;
+  const maxPreviewBounce=(t.tankType && t.tankType!=="A") ? 0 : 1; // 戦車B/Cの高速弾は跳ね返らない
 
-  for(let bounce=0; bounce<=1; bounce++){
+  for(let bounce=0; bounce<=maxPreviewBounce; bounce++){
     const dx=Math.cos(angle), dy=Math.sin(angle);
     let hitDist=maxDist, hitX=x+dx*maxDist, hitY=y+dy*maxDist, hitNormal=null;
     const step=2;
@@ -5307,7 +5391,7 @@ function getAimPreviewSegments(t){
       }
     }
     segments.push({x1:x,y1:y,x2:hitX,y2:hitY});
-    if(!hitNormal || bounce===1) break;
+    if(!hitNormal || bounce===maxPreviewBounce) break;
     const vx=Math.cos(angle), vy=Math.sin(angle);
     let rvx=vx, rvy=vy;
     if(hitNormal.x) rvx=-rvx;
@@ -5339,7 +5423,7 @@ function drawAimPreview(t){
 
 // ミサイルの着弾予測地点。砲台の弾道予測線と同じ色の、四角い照準器で表示する
 function drawMissileTargetPreview(){
-  if(!player || !player.alive) return;
+  if(!player || !player.alive || player.tankType==="B") return;
   const tp = getMissileTargetPoint(player.x, player.y, player.turretAngle);
   ctx.save();
   ctx.translate(tp.x, tp.y);
@@ -5668,7 +5752,7 @@ howToPlayBtn.addEventListener("click", ()=>{
 howToPlayCloseBtn.addEventListener("click", ()=>{ howToPlayScreen.classList.add("hidden"); });
 
 const designScreen=document.getElementById("designScreen");
-document.getElementById("designBtnTitle").addEventListener("click",()=>{designScreen.classList.remove("hidden");paintDesignPreview();});
+document.getElementById("designBtnTitle").addEventListener("click",()=>{designScreen.classList.remove("hidden");paintDesignPreview();renderTankType();});
 document.getElementById("designCloseBtn").addEventListener("click",()=>{designScreen.classList.add("hidden");});
 const hueRing=document.getElementById("hueRing");
 function setHueFromPointer(e){
@@ -5921,6 +6005,47 @@ function showContinueScreen(){
 
 const TANK_DESIGN_KEY="tankDesignHueV1";
 let tankHue=205;
+
+// ---- 隠し戦車：通常モードの最高クリアステージ 30 で戦車B、50 で戦車C がデザインで選べる ----
+const TANK_TYPE_KEY="tankBodyTypeV1";
+let tankType="A";
+function normalClearedStages(){
+  try{ return Math.max(0,(loadModeRecord("MaxStageProgress","normal",1)||1)-1); }catch(e){ return 0; }
+}
+function unlockedTankTypes(){
+  const n=normalClearedStages(), list=["A"];
+  if(n>=30) list.push("B");
+  if(n>=50) list.push("C");
+  return list;
+}
+// 実際に使う戦車（マルチプレイでは常に戦車A。未解放の戦車は選べない）
+function activeTankType(){
+  if(mp.active) return "A";
+  return unlockedTankTypes().includes(tankType) ? tankType : "A";
+}
+try{ const v=localStorage.getItem(TANK_TYPE_KEY); if(v==="A"||v==="B"||v==="C") tankType=v; }catch(e){}
+const TANK_TYPE_INFO={
+  A:"",
+  B:"高速弾を1発だけ撃てる（跳ね返りなし）。ミサイルは撃てない。",
+  C:"戦車Bの性能に加えて、ミサイルも撃てる。"
+};
+function renderTankType(){
+  const box=document.getElementById("tankTypeBox"); if(!box) return;
+  const list=unlockedTankTypes();
+  if(list.length<2){ box.innerHTML=""; return; } // 30クリア前は今まで通りの表示
+  const cur=activeTankType();
+  box.innerHTML='<div class="rwRowLabel">戦車</div><div class="rwChips">'
+    +list.map(id=>'<button class="rwChip'+(cur===id?' on':'')+'" data-tank="'+id+'">戦車'+id+'</button>').join("")
+    +'</div>'+(TANK_TYPE_INFO[cur]?'<div class="rwHint">'+TANK_TYPE_INFO[cur]+'</div>':'');
+}
+document.getElementById("tankTypeBox").addEventListener("click",e=>{
+  const b=e.target.closest("[data-tank]"); if(!b) return;
+  const id=b.dataset.tank;
+  if(!unlockedTankTypes().includes(id)) return;
+  tankType=id;
+  try{ localStorage.setItem(TANK_TYPE_KEY,id); }catch(err){}
+  renderTankType();
+});
 function tankDesignColor(){
   const raw=Number(tankHue);
   const h=((Number.isFinite(raw)?raw:205)%360+360)%360;
