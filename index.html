@@ -1565,8 +1565,12 @@ const schemeB = {
   active:false, id:null, startTime:0, wx:0, wy:0, angle:0, holdTriggered:false,
   pendingAngle:null, pendingDistance:0,
 };
+// ステージクリア画面のタップで次のステージが始まった直後に、同じタップの touchstart が
+// 攻撃入力として届いてしまうのを防ぐ（この時刻までに始まったタッチは攻撃として扱わない）。
+let schemeBIgnoreUntil = 0;
 function schemeBStart(x,y,id){
   if(controlScheme!=="B" || state!=="playing" || !player || !player.alive) return;
+  if(performance.now() < schemeBIgnoreUntil) return;
   if(schemeB.active) return; // 同時に扱うのは1本指だけ
   const w = screenToWorld(x,y);
   schemeB.active = true;
@@ -3851,7 +3855,10 @@ function updatePlayer(dt){
   //   すぐには撃てないだけで入力自体は覚えておき、次に撃てる状態になった
   //   瞬間に自動的に発射する。ただし画面上の弾が上限（5発）に達している
   //   ときは、先行入力として記憶しない（＝5発目を撃った後は自動発射しない）。
-  if((input.fireRequested || (!IS_PC && keys[" "])) && countBullets(player) < player.maxBullets){
+  if(gameStartFireLock>0){
+    // 開始直後の射撃禁止中は、先行入力も溜めない（解除された瞬間に勝手に撃たないように）
+    player.fireBuffered = false;
+  } else if((input.fireRequested || (!IS_PC && keys[" "])) && countBullets(player) < player.maxBullets){
     player.fireBuffered = true;
   }
   input.fireRequested = false;
@@ -5896,6 +5903,8 @@ function startNextStage(){
   state = "playing";
   stageClearDelay = 0;
   gameStartFireLock = 1.0; // 次のステージ開始から1秒間は射撃不可
+  schemeBIgnoreUntil = performance.now() + 400; // クリア画面をタップした指を攻撃として扱わない
+  input.fireRequested = false;
   stageClearScreen.classList.add("hidden");
 }
 
