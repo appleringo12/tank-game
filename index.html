@@ -952,7 +952,7 @@ const MISSILE_MAX_ACTIVE = 1;        // ★同時に存在できるミサイル�
 
 // --- 操作B（画面タップ操作）のパラメータ ---
 const SCHEME_B_HOLD_TIME = 0.2;              // ★この時間未満で指を離す＝通常弾、これ以上＝ミサイル発射
-const SCHEME_B_SHORT_RANGE = MISSILE_DISTANCE * 0.5; // ★タップ位置が自機からこの距離以内なら短距離ミサイル
+const SCHEME_B_SHORT_RANGE = TILE * 3.5; // ★タップ位置が自機からこの距離（約3ブロック目まで）以内なら短距離ミサイル
 
 // --- マルチプレイ（Photon Realtime）の設定 ---
 // ★Photonダッシュボードで作った「Realtime」アプリの App ID をここに貼り付けてください。
@@ -4528,7 +4528,7 @@ function mpq(k,a,b,c){
 }
 
 // ================================================================
-// Ping表示（PC・スマホ共通、左下）。PhotonのサーバーとのPingを1秒ごとに測って表示する
+// Ping表示（PC・スマホ共通、左下）。PhotonのサーバーとのPingを3秒ごとに測って表示する
 //   マッチング中＝マスターサーバー／対戦中＝ゲームサーバーとのPing
 //   ～99ms＝緑、100～199ms＝黄色、200ms以上＝赤
 // ================================================================
@@ -4542,16 +4542,23 @@ function mpPingPeer(){
   }catch(e){}
   return null;
 }
+const MP_PING_INTERVAL = 3000; // ★Pingを測る間隔(ミリ秒)。3秒に1回
+let mpPingLastMeasure = 0;     // 最後に測った時刻
+let mpPingMs = null;           // 最後に測ったPing値（測らない間はこの値を表示し続ける）
 function mpPingTick(){
-  if(!(mp.searching || mp.active)){ mpPingEl.classList.add("hidden"); return; }
+  if(!(mp.searching || mp.active)){ mpPingEl.classList.add("hidden"); mpPingMs = null; mpPingLastMeasure = 0; return; }
   const p = mpPingPeer();
-  let ms = null;
-  if(p){
+  const now = performance.now();
+  if(!p){
+    mpPingMs = null;
+  }else if(now - mpPingLastMeasure >= MP_PING_INTERVAL){
+    mpPingLastMeasure = now;
     try{
-      if(p._pingSent) ms = Math.round(p.getRtt()); // 前回送ったPingの返事から求めた値
-      p.ping(); p._pingSent = true;                // 次の測定を送る
+      if(p._pingSent) mpPingMs = Math.round(p.getRtt()); // 前回送ったPingの返事から求めた値
+      p.ping(); p._pingSent = true;                      // 次の測定を送る
     }catch(e){}
   }
+  const ms = mpPingMs;
   mpPingEl.classList.remove("hidden", "good", "mid", "bad");
   if(ms === null){ mpPingEl.textContent = "Ping --"; return; }
   mpPingEl.textContent = "Ping " + ms + "ms";
