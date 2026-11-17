@@ -455,6 +455,12 @@
   .rwChip{ font-family:inherit; font-weight:700; font-size:14px; padding:6px 12px; border-radius:14px; border:2px solid #c9baf5; background:#fff; color:#7a5c8a; cursor:pointer; }
   .rwChip.on{ background:#c9baf5; color:#fff; }
   .rwHint{ font-size:12px; color:#8a6f97; }
+  /* ---- 弾数表示（ゲーム画面の下・右端） ---- */
+  #ammoBox{ position:absolute; z-index:8; display:none; align-items:center; gap:4px; padding:4px 9px; background:rgba(255,255,255,.93); border:3px solid #4cc96a; border-radius:12px; pointer-events:none; box-shadow:0 2px 6px rgba(210,150,230,.3); }
+  #ammoBox.show{ display:flex; }
+  #ammoBox.warn{ border-color:#f2c230; }
+  #ammoBox.empty{ border-color:#ff5a5a; }
+  #ammoBox svg{ display:block; }
 </style>
 </head>
 <body>
@@ -648,6 +654,15 @@
           </div>
           <div class="schemeDesc" id="controlSchemeDesc"></div>
         </div>
+        <div class="settingsRow settingsRowVolume" id="orientRow">
+          <span class="settingsLabel">画面の向き</span>
+          <div class="schemeToggle">
+            <button class="btn schemeBtn" id="orientAutoBtn">回転する</button>
+            <button class="btn schemeBtn" id="orientPortraitBtn">縦固定</button>
+            <button class="btn schemeBtn" id="orientLandscapeBtn">横固定</button>
+          </div>
+          <div class="schemeDesc" id="orientDesc"></div>
+        </div>
         <div class="settingsRow settingsRowVolume hidden" id="keyConfigRow">
           <span class="settingsLabel">キー・マウス設定</span>
           <div class="keyGrid" id="keyGrid"></div>
@@ -711,6 +726,8 @@
     <div class="row"><button class="btn alt" id="shareCloseBtn">閉じる</button><button class="btn" id="shareCopyBtn">コピー</button></div>
   </div></div>
   <div id="uiConfirm" class="hidden"><div class="box"><div class="msg" id="uiConfirmMsg"></div><div class="row"><button class="btn alt" id="uiConfirmNo">やめる</button><button class="btn" id="uiConfirmYes">はい</button></div></div></div>
+
+  <div id="ammoBox" aria-label="残り弾数"></div>
 
   <!-- ============ 下段：操作エリア ============ -->
   <div id="controls">
@@ -1109,6 +1126,7 @@ function resize(){
   canvas.style.height = (WORLD_H*scale)+"px";
   canvas.width = Math.round(WORLD_W*scale*dpr);
   canvas.height = Math.round(WORLD_H*scale*dpr);
+  ammoDirty = true; // 弾数表示の位置を計算し直す
 }
 window.addEventListener("resize", resize);
 window.addEventListener("orientationchange", ()=>setTimeout(resize,150));
@@ -1757,6 +1775,7 @@ const SFX_LEVEL_MAX = 6; // 効果音レベルの最大値（0〜6の7段階、3
 let bgmEnabled = true;
 let seLevel = 3; // 0(無音)〜6。3が元々の音量（デフォルト）。
 let controlScheme = IS_PC ? "A" : "B"; // 初期設定：PCは通常操作、スマホ・タブレットは簡単操作
+let screenOrient = "auto"; // 画面の向き：auto(回転する) / portrait(縦固定) / landscape(横固定)
 function loadSettings(){
   try{
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -1765,10 +1784,11 @@ function loadSettings(){
     if(typeof d.bgmEnabled === "boolean") bgmEnabled = d.bgmEnabled;
     if(Number.isFinite(d.seLevel)) seLevel = Math.max(0, Math.min(SFX_LEVEL_MAX, Math.floor(d.seLevel)));
     if(d.controlScheme === "A" || d.controlScheme === "B") controlScheme = d.controlScheme;
+    if(d.screenOrient === "auto" || d.screenOrient === "portrait" || d.screenOrient === "landscape") screenOrient = d.screenOrient;
   }catch(e){}
 }
 function saveSettings(){
-  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bgmEnabled, seLevel, controlScheme })); }catch(e){}
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bgmEnabled, seLevel, controlScheme, screenOrient })); }catch(e){}
 }
 loadSettings();
 
@@ -4974,7 +4994,7 @@ function mpHostSnapshot(){
   const t = [];
   for(const k of tanks) t.push([k.nid, r1(k.x), r1(k.y), r2(k.angle), r2(k.turretAngle), (k.alive?1:0)|(k.invuln>0?2:0)]);
   const b = [];
-  for(const k of bullets) if(!k.dead) b.push([k.bid, r1(k.x), r1(k.y), r1(k.vx), r1(k.vy), k.fastBullet?1:0, k.cTrail?1:0]);
+  for(const k of bullets) if(!k.dead) b.push([k.bid, r1(k.x), r1(k.y), r1(k.vx), r1(k.vy), k.fastBullet?1:0, k.cTrail?1:0, (k.owner && k.owner.isPlayer) ? (k.owner.pidx|0) : -1]);
   const m = [];
   for(const k of missiles) if(!k.dead) m.push([k.mid, r1(k.startX), r1(k.startY), r1(k.targetX), r1(k.targetY), r2(k.angle), r2(k.time), r2(k.flightTime), k.owner ? k.owner.nid : 0]);
   const o = {t, b, m, a:(mp.rin.seq|0), pt:mp.tankTypes, pc:tanks.filter(k=>k.isPlayer).map(k=>[k.pidx,k.color,k.dark,...(window.rwPcExtra?rwPcExtra(k):[])])}; // a＝ホストが最後に受け取った2Pの操作の番号
@@ -5176,6 +5196,7 @@ function mpApplySnap(s){
       if(b.cTrail && (Math.sign(b.vx)!==Math.sign(a[3]) || Math.sign(b.vy)!==Math.sign(a[4]))){ b.x = a[1]; b.y = a[2]; cTrailPush(b); }
       b.x = a[1]; b.y = a[2]; b.vx = a[3]; b.vy = a[4];
     }
+    b.opidx = a[7]; // 撃った自機の番号（弾数表示用）
     nb.push(b);
   }
   bullets = nb;
@@ -5312,6 +5333,7 @@ function loop(ts){
   lastTime = ts;
   dt = Math.max(0, Math.min(dt, 0.05)); // 端末が重いときに一気に進みすぎない上限と、タイムスタンプ逆転時の下限(0)
   if(state==="playing") mpTagAge += dt;
+  updateAmmo(); // 弾数表示
 
   // ★マルチのゲストは計算をせず、ホストから届いた状態を表示するだけ
   if(mp.active && mp.role==="guest"){ guestFrame(dt); render(); return; }
@@ -6128,6 +6150,63 @@ function setControlScheme(v){
 }
 controlSchemeABtn.addEventListener("click", ()=>setControlScheme("A"));
 controlSchemeBBtn.addEventListener("click", ()=>setControlScheme("B"));
+
+// ---- 画面の向き（スマホ・タブレット） ----
+const ORIENT_DESC = {
+  auto: "端末の向きに合わせて画面が回転します。",
+  portrait: "画面を縦向きに固定します。",
+  landscape: "画面を横向きに固定します。",
+};
+function orientApi(){ return (screen.orientation && typeof screen.orientation.lock === "function") ? screen.orientation : null; }
+function updateOrientUI(){
+  const btns = { auto:"orientAutoBtn", portrait:"orientPortraitBtn", landscape:"orientLandscapeBtn" };
+  for(const k in btns){ const el = document.getElementById(btns[k]); if(el) el.classList.toggle("active", screenOrient===k); }
+  const d = document.getElementById("orientDesc");
+  if(d){
+    let t = ORIENT_DESC[screenOrient] || "";
+    if(screenOrient!=="auto" && !orientApi()) t += "（このブラウザでは固定できません。iPhoneは本体の画面縦向きロックをお使いください）";
+    d.textContent = t;
+  }
+}
+// 向きの固定を試みる。多くのブラウザは「全画面中」か「ホーム画面に追加したアプリ」でのみ固定できる。
+async function applyOrientation(showMsg){
+  const o = orientApi();
+  try{
+    if(screenOrient==="auto"){ if(o && typeof o.unlock==="function") o.unlock(); return true; }
+    if(!o){ if(showMsg) uiAlert("このブラウザは向きの固定に対応していません"); return false; }
+    const type = screenOrient==="portrait" ? "portrait" : "landscape";
+    try{
+      await o.lock(type);
+      return true;
+    }catch(e1){
+      // 全画面にしないと固定できないブラウザ向け（設定ボタンを押した直後のみ）
+      if(showMsg && !isFullscreen() && supportsFullscreen()){
+        await toggleFullscreen();
+        await o.lock(type);
+        return true;
+      }
+      throw e1;
+    }
+  }catch(e){
+    if(showMsg) uiAlert("この端末・ブラウザでは向きを固定できませんでした");
+    return false;
+  }
+}
+function setScreenOrient(v){
+  if(v!=="auto" && v!=="portrait" && v!=="landscape") return;
+  screenOrient = v;
+  saveSettings();
+  updateOrientUI();
+  applyOrientation(true);
+}
+document.getElementById("orientAutoBtn").addEventListener("click", ()=>setScreenOrient("auto"));
+document.getElementById("orientPortraitBtn").addEventListener("click", ()=>setScreenOrient("portrait"));
+document.getElementById("orientLandscapeBtn").addEventListener("click", ()=>setScreenOrient("landscape"));
+if(IS_PC) document.getElementById("orientRow").classList.add("hidden"); // PCでは使わない
+document.addEventListener("fullscreenchange", ()=>{ if(screenOrient!=="auto" && isFullscreen()) applyOrientation(false); });
+document.addEventListener("webkitfullscreenchange", ()=>{ if(screenOrient!=="auto" && isFullscreen()) applyOrientation(false); });
+updateOrientUI();
+if(screenOrient!=="auto") setTimeout(()=>applyOrientation(false), 300);
 function updateSeVolumeUI(){
   seVolumeHandle.style.left = (seLevel/SFX_LEVEL_MAX*100) + "%";
   seVolumeSlider.querySelectorAll(".volumeSliderTick").forEach((el,i)=>{
@@ -6141,6 +6220,7 @@ function openSettings(returnScreen){
   setMenuLayout(true); // 設定を開いている間は、タイトル画面のときと同じく下の操作UIを隠す
   updateBgmToggleUI();
   updateControlSchemeUI();
+  updateOrientUI();
   updateSeVolumeUI();
   settingsScreen.classList.remove("hidden");
 }
@@ -6299,8 +6379,76 @@ function formatContinueStage(d){
   return lap === 1 ? `ステージ ${stage}` : `${lap}周目 ステージ ${stage}`;
 }
 
+
+/* ================================================================
+   弾数表示：ゲーム画面の下・右端に、撃てる弾のアイコンを並べる。
+   撃った弾は灰色になり、残り1発で黄色、0発で赤の枠になる。
+   （戦車Bとマルチ以外のCは1発だけなので、緑→赤）
+   ================================================================ */
+var ammoEl = null, ammoKey = "", ammoDirty = true; // varにして、読み込み順に関係なく使えるようにする
+function ammoBulletSvg(isFast, on, dark){
+  if(!isFast){
+    // 戦車Aの通常弾（ゲーム中の弾と同じ配色）
+    return `<svg viewBox="0 0 20 20" width="20" height="20"><circle cx="10" cy="10" r="7" fill="${on?"#fff0b3":"#d9d9d9"}" stroke="${on?"#c9baf5":"#9a9a9a"}" stroke-width="2.4"/></svg>`;
+  }
+  // 戦車B/Cの高速弾（自機の色）
+  const col = on ? dark : "#a8a8a8";
+  return `<svg viewBox="-15 -6 30 12" width="34" height="14"><rect x="-14" y="-2" width="20" height="4" fill="${col}" opacity=".28"/><polygon points="9,0 -5,-4 -2,0 -5,4" fill="${on?"#ffffff":"#e8e8e8"}" stroke="${col}" stroke-width=".8"/><rect x="-5" y="-2" width="10" height="4" fill="${col}"/></svg>`;
+}
+function positionAmmo(){
+  const c = canvas.getBoundingClientRect();
+  // PC・スマホ共通：ゲーム画面の少し下、ゲーム画面の右端に揃えて表示する
+  const h = ammoEl.offsetHeight || 34;
+  const w = ammoEl.offsetWidth || 80;
+  const top = Math.min(c.bottom + 8, window.innerHeight - h - 4);
+  const left = Math.max(4, Math.min(c.right - w, window.innerWidth - w - 4));
+  ammoEl.style.top = Math.max(4, top) + "px";
+  ammoEl.style.bottom = "auto";
+  ammoEl.style.left = left + "px";
+  ammoEl.style.right = "auto";
+  ammoEl.style.transform = "none";
+}
+function updateAmmo(){
+  try{
+    if(!ammoEl) ammoEl = document.getElementById("ammoBox");
+    if(!ammoEl) return;
+    const appEl = document.getElementById("app"), hudEl = document.getElementById("hud");
+    const visible = !!(player && player.maxBullets && hudEl && !hudEl.classList.contains("hidden")
+      && !appEl.classList.contains("menu-state") && state!=="paused");
+    if(!visible){
+      if(ammoKey !== "off"){ ammoKey = "off"; ammoEl.classList.remove("show"); }
+      return;
+    }
+    const max = player.maxBullets|0;
+    let used;
+    if(mp.active && mp.role==="guest"){
+      // ゲストの弾はホストから届くので、撃った自機の番号で数える
+      used = 0;
+      for(const b of bullets) if(!b.dead && b.opidx === player.pidx) used++;
+    }else{
+      used = countBullets(player);
+    }
+    used = Math.max(0, Math.min(max, used));
+    const isFast = !!(player.tankType && player.tankType !== "A");
+    const key = max + "|" + used + "|" + (isFast?1:0) + "|" + (player.dark||"");
+    if(key !== ammoKey){
+      ammoKey = key;
+      const remain = max - used;
+      let html = "";
+      for(let i=0;i<max;i++) html += ammoBulletSvg(isFast, i < remain, player.dark || "#7a9cff");
+      ammoEl.innerHTML = html;
+      ammoEl.classList.toggle("empty", remain <= 0);
+      ammoEl.classList.toggle("warn", remain === 1 && max > 1);
+      ammoEl.classList.add("show");
+      ammoDirty = true;
+    }
+    if(ammoDirty){ ammoDirty = false; positionAmmo(); }
+  }catch(e){ /* 表示のエラーでゲーム本体を止めない */ }
+}
+
 function setMenuLayout(isMenu){
   app.classList.toggle("menu-state", !!isMenu);
+  ammoDirty = true;
 }
 
 function showContinueScreen(){
@@ -6542,6 +6690,7 @@ continueBtn.onclick = ()=>safeStartGame(true);
 newGameBtn.onclick = ()=>showTitleScreen();
 document.getElementById("resumeBtn").addEventListener("click", ()=>{
   pauseScreen.classList.add("hidden"); state="playing"; playBgm();
+  setMenuLayout(false); resize(); // 操作UIを戻して、ゲーム画面の大きさも合わせ直す
 });
 document.getElementById("restartFromPauseBtn").onclick = ()=>showTitleScreen();
 document.getElementById("retryBtn").onclick = ()=>{
@@ -6561,6 +6710,8 @@ pauseBtn.addEventListener("click", ()=>{
   if(state==="playing"){
     state="paused";
     stopBgm();
+    resetAllControlInputs();
+    setMenuLayout(true); // 一時停止中は下の操作UIを隠す
     pauseScreen.classList.remove("hidden");
     // 「ステージ一覧」から遊んでいるときだけ、一覧へ戻るボタンを出す
     document.getElementById("backToLibraryBtn").classList.toggle("hidden", !(libraryPlayActive || (customPlayActive && !customPlayFromEditor)));
@@ -6580,6 +6731,7 @@ document.getElementById("backToLibraryBtn").onclick = ()=>{
 
 function startGame(continueGame=false, selectedMode=null, startAtStage=1, noRecord=false){
   libraryPlayActive = false;
+  try{ if(screenOrient!=="auto") applyOrientation(false); }catch(e){}
   setMenuLayout(false);
   customPlayActive = false; hudStageCache = -1; hudMaxCache = -1; hudLivesCache = -1; // オリジナル表示を引きずらない
   // まずゲーム状態を初期化する。音声やセーブの問題で開始処理全体が止まらないようにする。
