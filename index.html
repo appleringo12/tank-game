@@ -933,6 +933,9 @@ const BULLET_R = 4;         // 弾の半径（当たり判定）
 const BULLET_SPEED = 80;
 const BULLET_MAX_BOUNCE = 1;// 弾が壁で跳ね返れる回数（0にすると跳ね返らない）
 const ENEMY_FIRE_INTERVAL = 2.4; // ★通常の敵戦車の最低発射間隔（秒）
+const PLAYER_BULLET_BIG_HIT_DIST = TILE;  // ★自分が撃った弾が、発射からこの距離(1ブロック)進むまで、敵の弾に対する当たり判定を大きくする
+const PLAYER_BULLET_BIG_HIT_SCALE = 5;    // ★その間の当たり判定の倍率（見た目はそのまま。戦車Bの高速弾・爽快モードも共通）
+const MISSILE_START_LOCK_TIME = 3;        // ★スマホ版：ステージ開始からこの秒数は、右側の長押しミサイルを出さない
 const BULLET_SELF_SAFE_TIME = 1.5; // ★自機の弾が発射から何秒間は自分に当たらないか（壁際での自滅防止）
 const ENEMY_DODGE_RADIUS = 55; // ★この距離まで自分以外の弾が近づくと、敵は弾と逆方向へ少し逃げる
 
@@ -2363,6 +2366,11 @@ function spawnBullet(owner, options = {}){
   owner.bulletCount = (owner.bulletCount || 0) + 1;
   playShot(fastBullet);
 }
+// 弾の当たり判定半径（弾 vs 弾の判定専用）。自分が撃った弾は、1ブロック進むまでの間だけ5倍（見た目の大きさは変えない）。
+function bulletHitR(b){
+  if(b.owner && b.owner===player && (b.dist||0) < PLAYER_BULLET_BIG_HIT_DIST) return BULLET_R*PLAYER_BULLET_BIG_HIT_SCALE;
+  return BULLET_R;
+}
 function updateBullets(dt){
   // 消えた水色弾の軌跡を薄れさせる
   for(let i=cyanTrailFade.length-1;i>=0;i--){
@@ -2380,6 +2388,7 @@ function updateBullets(dt){
 
     b.x += b.vx*dt;
     b.y += b.vy*dt;
+    b.dist = (b.dist||0) + Math.hypot(b.vx,b.vy)*dt; // 発射からの飛行距離
 
     // 反射できない弾（緑・紫の高速弾）は、外周の壁に当たったら消える。
     if(b.maxBounce<=0){
@@ -2501,7 +2510,13 @@ function updateBullets(dt){
       const j=candidate.index, b=candidate.item;
       if(j<=i || b.dead) continue;
       const dx=a.x-b.x, dy=a.y-b.y;
-      const rr=BULLET_R*2;
+      // 拡大するのは「自分の弾 vs 敵の弾」のときだけ。自分の弾同士・味方の弾との判定は通常の大きさ。
+      const aMine = a.owner===player, bMine = b.owner===player;
+      const aEnemy = !!(a.owner && !a.owner.isPlayer), bEnemy = !!(b.owner && !b.owner.isPlayer);
+      let ra = BULLET_R, rb = BULLET_R;
+      if(aMine && bEnemy) ra = bulletHitR(a);
+      else if(bMine && aEnemy) rb = bulletHitR(b);
+      const rr = ra + rb;
       if(dx*dx+dy*dy <= rr*rr){
         const ix=(a.x+b.x)*0.5, iy=(a.y+b.y)*0.5;
         spawnHitFx(ix,iy);
@@ -3881,6 +3896,14 @@ function updateMissileGestures(dt){
   // 右ボタンを押し始めた瞬間から長押し時間を計測する。
   // 長押し成立時にミサイルが撃てなくても、発射入力と角度を先行入力として保持し、
   // ミサイルが撃てるようになった瞬間に最速で自動発射する。
+  // ★スマホ版：ステージ開始から3秒間は、右側を押しっぱなしにしてもミサイルを出さない（照準合わせ中の誤作動防止）。
+  //   この間に押し始めた指は「使用済み」にして、3秒を過ぎても指を離すまでは発射しない。
+  //   照準中の2本目の指による長押しミサイル（fireFinger）は、開始直後でもそのまま撃てる。
+  if(!IS_PC && rightJoy.active && rightJoy.missileHoldActive && !rightJoy.missileHoldConsumed && mpTagAge < MISSILE_START_LOCK_TIME){
+    rightJoy.missileHoldConsumed = true;
+    rightJoy.holdTime = 0;
+    if(rightJoy.chargingVisual){ rightJoy.chargingVisual=false; rightStick.classList.remove("missile-charging"); }
+  }
   if(rightJoy.active && rightJoy.missileHoldActive && !rightJoy.missileArmed && !rightJoy.missileHoldConsumed && !rightJoy.dragged){
     rightJoy.holdTime += dt;
     const isShortMissileHold = rightJoy.missileTapState === "secondHold";
