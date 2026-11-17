@@ -2371,6 +2371,46 @@ function bulletHitR(b){
   if(b.owner && b.owner===player && (b.dist||0) < PLAYER_BULLET_BIG_HIT_DIST) return BULLET_R*PLAYER_BULLET_BIG_HIT_SCALE;
   return BULLET_R;
 }
+// ★ブロックでの弾の反射。弾が「入ってきた面」で反射方向を決める（ブロック中心からの距離比べはやめた）。
+//   横に並んだブロックの継ぎ目に当たっても、1回の反射で正しく跳ね返る。
+function tileReflectFlip(px,py,x,y,vx,vy,col,row){
+  // 返り値 {fx,fy,ok}：どの成分を反転するか。ok=falseは直前位置が使えない場合（従来方式）。
+  const solid=(c,r)=>r>=0&&c>=0&&r<ROWS&&c<COLS&&blocksBullet(walls[r][c]);
+  const pc=Math.floor(px/TILE), pr=Math.floor(py/TILE);
+  if((pc===col&&pr===row) || solid(pc,pr)){
+    const cx=col*TILE+TILE/2, cy=row*TILE+TILE/2;
+    const f=Math.abs(x-cx)>Math.abs(y-cy);
+    return {fx:f,fy:!f,ok:false};
+  }
+  let fx=false, fy=false;
+  if(pc!==col && pr===row) fx=true;
+  else if(pr!==row && pc===col) fy=true;
+  else {
+    const sx=solid(col,pr), sy=solid(pc,row);
+    if(sx&&!sy) fx=true;
+    else if(sy&&!sx) fy=true;
+    else if(sx&&sy){ fx=true; fy=true; }
+    else {
+      const bx=vx>0?col*TILE:(col+1)*TILE, by=vy>0?row*TILE:(row+1)*TILE;
+      const tx=Math.abs((x-bx)/(vx||1e-9)), ty=Math.abs((y-by)/(vy||1e-9));
+      if(tx<ty) fx=true; else fy=true;
+    }
+  }
+  return {fx,fy,ok:true};
+}
+function reflectBulletOnTile(b,dt,col,row){
+  const prev=b.trail.length ? b.trail[b.trail.length-1] : null;
+  if(!prev){
+    const f=tileReflectFlip(b.x,b.y,b.x,b.y,b.vx,b.vy,col,row);
+    if(f.fx) b.vx*=-1; if(f.fy) b.vy*=-1;
+    b.x+=b.vx*dt*2; b.y+=b.vy*dt*2; return;
+  }
+  const f=tileReflectFlip(prev.x,prev.y,b.x,b.y,b.vx,b.vy,col,row);
+  if(f.fx) b.vx*=-1;
+  if(f.fy) b.vy*=-1;
+  if(f.ok){ b.x=prev.x+b.vx*dt; b.y=prev.y+b.vy*dt; }
+  else { b.x+=b.vx*dt*2; b.y+=b.vy*dt*2; }
+}
 function updateBullets(dt){
   // 消えた水色弾の軌跡を薄れさせる
   for(let i=cyanTrailFade.length-1;i>=0;i--){
@@ -2430,12 +2470,8 @@ function updateBullets(dt){
           continue;
         } else if(b.bounces < b.maxBounce){
           cTrailCorner(b,dt,col,row);
-          const cxTile=col*TILE+TILE/2, cyTile=row*TILE+TILE/2;
-          if(Math.abs(b.x-cxTile) > Math.abs(b.y-cyTile)) b.vx*=-1;
-          else b.vy*=-1;
+          reflectBulletOnTile(b,dt,col,row);
           b.bounces++;
-          b.x += b.vx*dt*2;
-          b.y += b.vy*dt*2;
           playBulletReflectSoundFor(b);
         } else {
           if(b.fastBullet) spawnFastBulletImpactFx(b.x,b.y); else spawnHitFx(b.x,b.y);
@@ -2453,12 +2489,8 @@ function updateBullets(dt){
         }
         if(b.bounces < b.maxBounce){
           cTrailCorner(b,dt,col,row);
-          const cxTile=col*TILE+TILE/2, cyTile=row*TILE+TILE/2;
-          if(Math.abs(b.x-cxTile) > Math.abs(b.y-cyTile)) b.vx*=-1;
-          else b.vy*=-1;
+          reflectBulletOnTile(b,dt,col,row);
           b.bounces++;
-          b.x += b.vx*dt*2;
-          b.y += b.vy*dt*2;
           playBulletReflectSoundFor(b);
         } else {
           if(b.fastBullet) spawnFastBulletImpactFx(b.x,b.y); else spawnHitFx(b.x,b.y);
@@ -3098,6 +3130,7 @@ function graySimulateShot(t, angle, target, targetPath, othersGrid, out, maxBoun
   const hitR=(target.r+BULLET_R)*0.96, hitR2=hitR*hitR;
   out.hit=false; out.time=0; out.miss=1e6; out.bounces=0;
   for(let i=1;i<=steps;i++){
+    const ppx=x, ppy=y;
     x+=vx*GRAY_SHOT_STEP; y+=vy*GRAY_SHOT_STEP;
     // 外周での反射（通常弾と同じく合計1回まで）。
     if(x<BULLET_R){x=BULLET_R;vx=-vx;bounces++;}
@@ -3109,10 +3142,10 @@ function graySimulateShot(t, angle, target, targetPath, othersGrid, out, maxBoun
     const col=Math.floor(x/TILE), row=Math.floor(y/TILE);
     if(row>=0&&col>=0&&row<ROWS&&col<COLS&&blocksBullet(walls[row][col])){
       if(bounces<maxBounce){
-        const cx=col*TILE+TILE/2, cy=row*TILE+TILE/2;
-        if(Math.abs(x-cx)>Math.abs(y-cy)) vx=-vx; else vy=-vy;
+        const fl=tileReflectFlip(ppx,ppy,x,y,vx,vy,col,row);
+        if(fl.fx) vx=-vx; if(fl.fy) vy=-vy;
         bounces++;
-        x+=vx*GRAY_SHOT_STEP*2; y+=vy*GRAY_SHOT_STEP*2;
+        if(fl.ok){ x=ppx+vx*GRAY_SHOT_STEP; y=ppy+vy*GRAY_SHOT_STEP; } else { x+=vx*GRAY_SHOT_STEP*2; y+=vy*GRAY_SHOT_STEP*2; }
       }else break;
     }
     if(bounces>maxBounce) break;
@@ -3205,6 +3238,7 @@ function grayShotReturnsToSelf(t){
   const hitR=t.r+BULLET_R+4, hitR2=hitR*hitR;
   const steps=Math.ceil(3.0/step);
   for(let i=1;i<=steps;i++){
+    const ppx=x, ppy=y;
     x+=vx*step; y+=vy*step;
     if(x<BULLET_R){x=BULLET_R;vx=-vx;bounces++;}
     else if(x>WORLD_W-BULLET_R){x=WORLD_W-BULLET_R;vx=-vx;bounces++;}
@@ -3214,10 +3248,10 @@ function grayShotReturnsToSelf(t){
     const col=Math.floor(x/TILE), row=Math.floor(y/TILE);
     if(row>=0&&col>=0&&row<ROWS&&col<COLS&&blocksBullet(walls[row][col])){
       if(bounces<maxBounce){
-        const cx=col*TILE+TILE/2, cy=row*TILE+TILE/2;
-        if(Math.abs(x-cx)>Math.abs(y-cy)) vx=-vx; else vy=-vy;
+        const fl=tileReflectFlip(ppx,ppy,x,y,vx,vy,col,row);
+        if(fl.fx) vx=-vx; if(fl.fy) vy=-vy;
         bounces++;
-        x+=vx*step*2; y+=vy*step*2;
+        if(fl.ok){ x=ppx+vx*step; y=ppy+vy*step; } else { x+=vx*step*2; y+=vy*step*2; }
       }else return false;
     }
     const dx=x-t.x, dy=y-t.y;
@@ -3293,6 +3327,7 @@ function grayPredictDodgeBulletPath(b,horizon,step){
     if(!alive){path.push(null);continue;}
     path.push({x,y});
     if(i===count) break;
+    const ppx=x, ppy=y;
     x+=vx*step; y+=vy*step;
 
     if(maxBounce<=0){
@@ -3308,10 +3343,10 @@ function grayPredictDodgeBulletPath(b,horizon,step){
     const col=Math.floor(x/TILE),row=Math.floor(y/TILE);
     if(row>=0&&col>=0&&row<ROWS&&col<COLS&&blocksBullet(walls[row][col])){
       if(maxBounce>0&&bounces<maxBounce){
-        const cx=col*TILE+TILE/2,cy=row*TILE+TILE/2;
-        if(Math.abs(x-cx)>Math.abs(y-cy)) vx=-vx; else vy=-vy;
+        const fl=tileReflectFlip(ppx,ppy,x,y,vx,vy,col,row);
+        if(fl.fx) vx=-vx; if(fl.fy) vy=-vy;
         bounces++;
-        x+=vx*step*2; y+=vy*step*2;
+        if(fl.ok){ x=ppx+vx*step; y=ppy+vy*step; } else { x+=vx*step*2; y+=vy*step*2; }
         if(bounces>maxBounce) alive=false;
       }else alive=false;
     }
@@ -3729,6 +3764,7 @@ function simulateReflectShot(owner, angle, target, others, out){
   const tvx = (target.vx||0)*CYAN_LEAD, tvy = (target.vy||0)*CYAN_LEAD;
   out.hit=false; out.time=0; out.bounces=0; out.miss=1e6;
   for(let i=0;i<480;i++){
+    const ppx=x, ppy=y;
     x += vx*dt; y += vy*dt; time += dt;
     if(x<BULLET_R){ x=BULLET_R; vx=-vx; bounces++; }
     else if(x>WORLD_W-BULLET_R){ x=WORLD_W-BULLET_R; vx=-vx; bounces++; }
@@ -3737,10 +3773,10 @@ function simulateReflectShot(owner, angle, target, others, out){
     const col=Math.floor(x/TILE), row=Math.floor(y/TILE);
     if(row>=0&&col>=0&&row<ROWS&&col<COLS&&blocksBullet(walls[row][col])){
       if(bounces<maxB){
-        const cx=col*TILE+TILE/2, cy=row*TILE+TILE/2;
-        if(Math.abs(x-cx)>Math.abs(y-cy)) vx=-vx; else vy=-vy;
+        const fl=tileReflectFlip(ppx,ppy,x,y,vx,vy,col,row);
+        if(fl.fx) vx=-vx; if(fl.fy) vy=-vy;
         bounces++;
-        x += vx*dt*2; y += vy*dt*2;
+        if(fl.ok){ x=ppx+vx*dt; y=ppy+vy*dt; } else { x += vx*dt*2; y += vy*dt*2; }
       } else break;
     }
     if(bounces>maxB) break;
@@ -5575,43 +5611,63 @@ function render(){
 }
 
 function getAimPreviewSegments(t){
+  // ★実際の弾と同じ判定：弾の中心がブロックのマスに入った面で反射する（マス単位で正確に追跡）。
   const segments=[];
   let x=t.x + Math.cos(t.turretAngle)*(t.r+6);
   let y=t.y + Math.sin(t.turretAngle)*(t.r+6);
   let angle=t.turretAngle;
-  const maxDist=Math.hypot(WORLD_W,WORLD_H)*2;
   const maxPreviewBounce=(t.tankType && t.tankType!=="A") ? 0 : 1; // 戦車B/Cの高速弾は跳ね返らない
+  const solid=(c,r)=>r>=0&&c>=0&&r<ROWS&&c<COLS&&blocksBullet(walls[r][c]);
 
   for(let bounce=0; bounce<=maxPreviewBounce; bounce++){
     const dx=Math.cos(angle), dy=Math.sin(angle);
-    let hitDist=maxDist, hitX=x+dx*maxDist, hitY=y+dy*maxDist, hitNormal=null;
-    const step=2;
-    for(let d=0; d<=maxDist; d+=step){
-      const px=x+dx*d, py=y+dy*d;
-      if(px<=BULLET_R){ hitDist=d; hitX=BULLET_R; hitY=py; hitNormal={x:1,y:0}; break; }
-      if(px>=WORLD_W-BULLET_R){ hitDist=d; hitX=WORLD_W-BULLET_R; hitY=py; hitNormal={x:-1,y:0}; break; }
-      if(py<=BULLET_R){ hitDist=d; hitX=px; hitY=BULLET_R; hitNormal={x:0,y:1}; break; }
-      if(py>=WORLD_H-BULLET_R){ hitDist=d; hitX=px; hitY=WORLD_H-BULLET_R; hitNormal={x:0,y:-1}; break; }
-      const col=Math.floor(px/TILE), row=Math.floor(py/TILE);
-      if(row>=0&&col>=0&&row<ROWS&&col<COLS&&blocksBullet(walls[row][col])){
-        const left=col*TILE, right=left+TILE, top=row*TILE, bottom=top+TILE;
-        const dl=Math.abs(px-left), dr=Math.abs(px-right), dt=Math.abs(py-top), db=Math.abs(py-bottom);
-        const m=Math.min(dl,dr,dt,db);
-        if(m===dl) hitNormal={x:-1,y:0};
-        else if(m===dr) hitNormal={x:1,y:0};
-        else if(m===dt) hitNormal={x:0,y:-1};
-        else hitNormal={x:0,y:1};
-        hitDist=d; hitX=px; hitY=py; break;
+    // 外周の壁までの距離
+    let tHit=Infinity, fx=false, fy=false;
+    if(dx>1e-9){ const d=(WORLD_W-BULLET_R-x)/dx; if(d<tHit){tHit=d;fx=true;fy=false;} }
+    else if(dx<-1e-9){ const d=(BULLET_R-x)/dx; if(d<tHit){tHit=d;fx=true;fy=false;} }
+    if(dy>1e-9){ const d=(WORLD_H-BULLET_R-y)/dy; if(d<tHit){tHit=d;fx=false;fy=true;} }
+    else if(dy<-1e-9){ const d=(BULLET_R-y)/dy; if(d<tHit){tHit=d;fx=false;fy=true;} }
+    tHit=Math.max(0,tHit);
+    const tWall=tHit;
+
+    // マス目を1マスずつたどって、最初にぶつかるブロックを探す
+    let col=Math.floor(x/TILE), row=Math.floor(y/TILE);
+    if(solid(col,row)){
+      const cx=col*TILE+TILE/2, cy=row*TILE+TILE/2;
+      tHit=0; fx=Math.abs(x-cx)>Math.abs(y-cy); fy=!fx;
+    } else {
+      const stepC=dx>0?1:-1, stepR=dy>0?1:-1;
+      const tDX=Math.abs(dx)<1e-9?Infinity:TILE/Math.abs(dx);
+      const tDY=Math.abs(dy)<1e-9?Infinity:TILE/Math.abs(dy);
+      let tMaxX=Math.abs(dx)<1e-9?Infinity:((dx>0?(col+1)*TILE:col*TILE)-x)/dx;
+      let tMaxY=Math.abs(dy)<1e-9?Infinity:((dy>0?(row+1)*TILE:row*TILE)-y)/dy;
+      for(let i=0;i<2000;i++){
+        const pc=col, pr=row;
+        let tt, axisX=false, axisY=false;
+        if(tMaxX<tMaxY){ tt=tMaxX; col+=stepC; tMaxX+=tDX; axisX=true; }
+        else if(tMaxY<tMaxX){ tt=tMaxY; row+=stepR; tMaxY+=tDY; axisY=true; }
+        else { tt=tMaxX; col+=stepC; row+=stepR; tMaxX+=tDX; tMaxY+=tDY; axisX=true; axisY=true; }
+        if(!(tt<tWall)) break;
+        if(col<0||row<0||col>=COLS||row>=ROWS) break;
+        if(solid(col,row)){
+          tHit=tt;
+          if(axisX&&axisY){
+            const sx=solid(col,pr), sy=solid(pc,row);
+            if(sx&&!sy){fx=true;fy=false;}
+            else if(sy&&!sx){fx=false;fy=true;}
+            else {fx=true;fy=true;}
+          } else { fx=axisX; fy=axisY; }
+          break;
+        }
       }
     }
-    segments.push({x1:x,y1:y,x2:hitX,y2:hitY});
-    if(!hitNormal || bounce===maxPreviewBounce) break;
-    const vx=Math.cos(angle), vy=Math.sin(angle);
-    let rvx=vx, rvy=vy;
-    if(hitNormal.x) rvx=-rvx;
-    if(hitNormal.y) rvy=-rvy;
+    if(!isFinite(tHit)) tHit=0;
+    const hx=x+dx*tHit, hy=y+dy*tHit;
+    segments.push({x1:x,y1:y,x2:hx,y2:hy});
+    if(bounce===maxPreviewBounce) break;
+    const rvx=fx?-dx:dx, rvy=fy?-dy:dy;
     angle=Math.atan2(rvy,rvx);
-    x=hitX+rvx*0.5; y=hitY+rvy*0.5;
+    x=hx+rvx*0.01; y=hy+rvy*0.01;
   }
   return segments;
 }
