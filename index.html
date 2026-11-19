@@ -45,12 +45,19 @@
     --missile:#ff6f91;
   }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  /* スマホの長押しでブラウザ標準のコピー等のメニューを出さない */
-  #startScreen, #startScreen *{
+  /* スマホの長押しでブラウザ標準のコピー等のメニューを出さない（全画面。入力欄だけ除く） */
+  *{
     -webkit-touch-callout:none;
     -webkit-user-select:none;
     user-select:none;
   }
+  input, textarea{
+    -webkit-touch-callout:default;
+    -webkit-user-select:text;
+    user-select:text;
+  }
+  img, canvas{ -webkit-user-drag:none; }
+  html, body{ -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
   html,body{
     margin:0; padding:0; width:100%; height:100%;
     background:linear-gradient(160deg,#ffe3f3 0%,#f0e0ff 45%,#dcebff 100%);
@@ -201,7 +208,6 @@
   #stageClearScreen .enemyIcons{display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:10px 14px; margin-top:7px;}
   #stageClearScreen .enemyIconWrap{display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:58px;}
   #stageClearScreen .enemyTankIcon{width:clamp(52px,15vw,72px); height:auto; image-rendering:auto; filter:drop-shadow(2px 2px 0 rgba(210,150,230,.35));}
-  #stageClearScreen .enemySushiIcon{background:rgba(255,255,255,.28);border-radius:10px;}
   #stageClearScreen .enemyCount{font-size:clamp(13px,3.5vw,16px); color:#ff9ecb; font-weight:700; margin-top:-2px;}
   #stageClearScreen .tapHint{margin-top:6px; font-size:12px; color:#a98bb0; letter-spacing:1px; animation:pulse 1.2s infinite;}
   @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
@@ -1092,7 +1098,6 @@ const EMPTY=0, BRICK=1, STEEL=2, WATER=3, PYRAMID=4;
 function blocksBullet(v){ return v===BRICK || v===STEEL || v===PYRAMID; }
 // ピラミッドブロックの見た目（緑のパステル）。(x,y)=左上、w,h=描くマスの大きさ。ゲーム画面・エディタ・一覧で共用。
 function drawPyramidTile(g,x,y,w,h=w){
-  if(!useClassicSkin()){ drawSushiBlock(g,23,x,y,w,h); return; } // ピラミッド＝升
   g.save(); g.translate(x,y); g.scale(w/40,h/40);
   g.fillStyle="#8fd3a0"; g.fillRect(1,1,38,38);          // ふちどり
   g.save(); g.beginPath(); g.rect(2,2,36,36); g.clip();
@@ -1364,7 +1369,14 @@ function updatePcMouse(dt){
   }
 }
 // 右クリックのブラウザメニューは出さない（入力欄では通常どおり出す）
-window.addEventListener("contextmenu", e=>{ if(IS_PC && !pcTypingTarget(e.target)) e.preventDefault(); });
+// スマホの長押しでコピー・画像保存などのメニューを出さない（入力欄だけは除く）。キャプチャ段階で受けて確実に止める
+window.addEventListener("contextmenu", e=>{ if(!pcTypingTarget(e.target)) e.preventDefault(); }, true);
+window.addEventListener("selectstart", e=>{ if(!pcTypingTarget(e.target)) e.preventDefault(); }, true);
+window.addEventListener("dragstart", e=>{ if(!pcTypingTarget(e.target)) e.preventDefault(); }, true);
+document.addEventListener("selectionchange", ()=>{
+  const a=document.activeElement; if(a && /^(INPUT|TEXTAREA)$/.test(a.tagName)) return;
+  const sel=window.getSelection && window.getSelection(); if(sel && !sel.isCollapsed) sel.removeAllRanges();
+});
 
 const input = {
   moveX:0, moveY:0, moving:false,   // 左スティックの入力状態
@@ -2059,1144 +2071,15 @@ function getMpSpawns(lvl, cellAt){
    ================================================================ */
 // 自機＝マグロ / 黄色＝ウニ / 茶色＝エビ / 緑＝ネギトロ / 水色＝ウナギ / 灰色＝サーモン
 // （赤＝いくら、紫＝玉子 は仮の割り当て。変えたいときはここだけ書き換える）
-/* お寿司の世界観ブロック 30個（1ブロック＝20×20ドット）
-   ゲームの1マス(TILE=40px)にぴったり：1ドット＝2px の整数倍で、ぼやけずに表示できる。
-   使い方：drawSushiBlock(ctx, id, x, y, 40)  … id は 1〜30、(x,y)=マスの左上 */
-const SUSHI_BLOCK_SIZE = 20;
-const SUSHI_BLOCKS = [
-{
-"id": 1,
-"name": "寿司桶",
-"role": "壊せる箱",
-"pal": {
-"a": "#a07a68",
-"b": "#f5dfb8",
-"c": "#e8c99a",
-"d": "#d3a672",
-"e": "#d9a878",
-"f": "#b98458"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"acdcccdcccdcccdcccca",
-"aeeeeeeeeeeeeeeeeeea",
-"affdffffdfffdfffdffa",
-"affffffffffffffffffa",
-"acdcccdcccdcccdcccca",
-"acdcccdcccdcccdcccca",
-"acdcccdcccdcccdcccca",
-"acdcccdcccdcccdcccca",
-"acdcccdcccdcccdcccca",
-"acdcccdcccdcccdcccca",
-"acdcccdcccdcccdcccca",
-"aeeeeeeeeeeeeeeeeeea",
-"affdffffdfffdfffdffa",
-"affffffffffffffffffa",
-"acdcccdcccdcccdcccca",
-"acdcccdcccdcccdcccca",
-"acdcccdcccdcccdcccca",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 2,
-"name": "まな板",
-"role": "壊せる箱",
-"pal": {
-"a": "#a07a68",
-"b": "#f5dfb8",
-"c": "#b98458",
-"d": "#e8c99a",
-"e": "#fff1d6",
-"f": "#d3a672"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbcccbba",
-"abdddddbbdddddcecdba",
-"abbbbbbbbbbbbbcccbba",
-"abbbccbbbbbbbbbbbbba",
-"abdddbcccdddbbddddba",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"abdddddbbdddddbbddba",
-"abbbbbbbbbbcccbbbbba",
-"abbbbbbbbbbbbbcccbba",
-"abddbbdddddbbdddddba",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbccbbbbbbbbbbbba",
-"abddddbcdddddbbdddba",
-"abbbbbbbccbbbbbbbbba",
-"affffffffffffffffffa",
-"affffffffffffffffffa",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 3,
-"name": "寿司下駄",
-"role": "壊せる箱",
-"pal": {
-"a": "#a07a68",
-"b": "#f5dfb8",
-"c": "#d3a672",
-"d": "#b98458",
-"e": "#e8c99a",
-"f": "#c99a6a"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbcddbbbbbbbbcddbba",
-"acccddcccccccccddcca",
-"aeecfdeeeeeeeecfdeea",
-"abbcfdbbbbbbbbcfdbba",
-"acccfdcccccccccfdcca",
-"aeecfdeeeeeeeecfdeea",
-"abbcfdbbbbbbbbcfdbba",
-"acccfdcccccccccfdcca",
-"aeecfdeeeeeeeecfdeea",
-"abbcfdbbbbbbbbcfdbba",
-"acccfdcccccccccfdcca",
-"aeecfdeeeeeeeecfdeea",
-"abbcfdbbbbbbbbcfdbba",
-"acccfdcccccccccfdcca",
-"aeecfdeeeeeeeecfdeea",
-"abbcfdbbbbbbbbcfdbba",
-"acccddcccccccccddcca",
-"aeecddeeeeeeeecddeea",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 4,
-"name": "醤油皿",
-"role": "壊せる箱",
-"pal": {
-"a": "#e6d2ae",
-"b": "#fff1d6",
-"c": "#d6dbe3",
-"d": "#fffaf5",
-"e": "#c79468",
-"f": "#b5805a",
-"g": "#e8c9a8",
-"h": "#9c6c4a"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbccccccccbbbbba",
-"abbbbcddddddddcbbbba",
-"abbbcddddddddddcbbba",
-"abbcdddeeeeeedddcbba",
-"abcdddeffffffedddcba",
-"abcddefgggffffeddcba",
-"abcddefgffffffeddcba",
-"abcddeffffffffeddcba",
-"abcddeffffffffeddcba",
-"abcddeffffffffeddcba",
-"abcddeffffffffeddcba",
-"abcdddefffffhhdddcba",
-"abbcdddeeeeeedddcbba",
-"abbbcddddddddddcbbba",
-"abbbbcddddddddcbbbba",
-"abbbbbccccccccbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 5,
-"name": "わさび",
-"role": "水（戦車は通れない）",
-"pal": {
-"a": "#e6d2ae",
-"b": "#fff1d6",
-"c": "#b5e3ae",
-"d": "#86c795",
-"e": "#5fa874",
-"f": "#d9f5cf"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbcccba",
-"abbbbbbbbbbbbbdcccba",
-"abbbbbbbbbbbbbeedbba",
-"abbbbbdddcdddebbbbba",
-"abbbedcccfcccddebbba",
-"abbedccccccfccddebba",
-"abbdccfccccccccddbba",
-"abedccccccccfccddeba",
-"abedcccccccccccddeba",
-"abeddcccfcccccdddeba",
-"abeddfcccccccfdddeba",
-"abbedddddcddddddebba",
-"abbeeddddddddddeebba",
-"abbbeeddddddddeebbba",
-"abbbbbeeeeeeeebbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 6,
-"name": "ガリ",
-"role": "壊せる箱",
-"pal": {
-"a": "#e6d2ae",
-"b": "#fff1d6",
-"c": "#f2a0b8",
-"d": "#ffe1ea",
-"e": "#ffc6d6"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbcdddccba",
-"abbbbedddddccdddccca",
-"abbbedddddddccccccba",
-"abbbeedddddeeebbbbba",
-"aedddeeeeeeeedddccba",
-"adddddddecdddddddcca",
-"aeedddeeeccdddddccca",
-"aeeeeeeeedccccccccba",
-"abbbbdddddddddcbbbba",
-"abbbbccdddddcccbbbba",
-"abcdddccccccccbbbbba",
-"acddddddccccdddeebba",
-"accdddddedddddddeeba",
-"abcccccceedddddeeeba",
-"abbbbbbbbeeeeeeeebba",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 7,
-"name": "海苔",
-"role": "壊せない壁",
-"pal": {
-"a": "#566a60",
-"b": "#92a79b",
-"c": "#6c8276",
-"d": "#7e9488",
-"e": "#98ada1"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"acdeddcddddcddedcdda",
-"adddcddddcedddcdddda",
-"adcdddecddddcddddeda",
-"adeddcddddcddedcddda",
-"addcddddcedddcddddca",
-"acdddecddddcddddedda",
-"aeddcddddcddedcdddda",
-"acccccccccccccccccca",
-"adddecddddcddddeddda",
-"addcddddcddedcddddca",
-"acddddcedddcddddcdea",
-"addecddddcddddedddda",
-"adcddddcddedcddddcda",
-"addddcedddcddddcdeda",
-"adecddddcddddeddddca",
-"acddddcddedcddddcdda",
-"adddcedddcddddcdedda",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 8,
-"name": "巻き寿司",
-"role": "壊せない壁",
-"pal": {
-"a": "#e6d2ae",
-"b": "#fff1d6",
-"c": "#6c8276",
-"d": "#fffaf5",
-"e": "#ece0cc",
-"f": "#ff9aa8",
-"g": "#ffe58a",
-"h": "#ffd0d6",
-"i": "#e8707f",
-"j": "#86c795"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbccccccbbbbbba",
-"abbbbccccccccccbbbba",
-"abbbccddddddedccbbba",
-"abbccddddddddddccbba",
-"abccddddddddddedccba",
-"abcddedddffddddddcba",
-"accddddffffffddddcca",
-"accdggdfhhiifdjjdcca",
-"accdggffhhiiffjjdcca",
-"accdggffiiiiffjjdcca",
-"accdggdfiiiifdjjdcca",
-"accdeddffffffddddcca",
-"abcddddddffddddedcba",
-"abccddddddddddddccba",
-"abbccdddddeddddccbba",
-"abbbccddedddddccbbba",
-"abbbbccccccccccbbbba",
-"abbbbbbccccccbbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 9,
-"name": "お櫃",
-"role": "壊せる箱",
-"pal": {
-"a": "#e6d2ae",
-"b": "#fff1d6",
-"c": "#b98458",
-"d": "#d3a672",
-"e": "#fffaf5",
-"f": "#eadfcb"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbccccccccbbbbba",
-"abbbbccddddddccbbbba",
-"abbccddddeeddddccbba",
-"abbcddeeeeeeeeddcbba",
-"abcddeeeeeeeeeeddcba",
-"accdeeeeeeffeeeedcca",
-"acddeeeffeeeeeeeddca",
-"acddeeeeeeeeeffeddca",
-"acdceeeeeeeeeeeecdca",
-"acdceeeeeeffeeeecdca",
-"acddeeeeffeeeeeeddca",
-"acddeeeeeeeeffeeddca",
-"accdeeffeeeeeeffdcca",
-"abcddeeeeffeeeeddcba",
-"abbcddeeeeeeeeddcbba",
-"abbccddddeeddddccbba",
-"abbbbccddddddccbbbba",
-"abbbbbccccccccbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 10,
-"name": "米俵",
-"role": "壊せる箱",
-"pal": {
-"a": "#a8843f",
-"b": "#ecd08a",
-"c": "#cfa464",
-"d": "#b58a4a",
-"e": "#d9b866",
-"f": "#9a7438"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbcdeebbbbcdeeeba",
-"abbeecdbbbbbecdbbbba",
-"aeebbcdbbeeebcdbbbea",
-"abbbbfdeebbbbcfeeeba",
-"abbeecdbbbbbecdbbbba",
-"aeebbcdbbeeebcdbbbea",
-"abbbbcdeebbbbcdeeeba",
-"abbeecdbbbbbecdbbbba",
-"aeebbcdbbeeebcdbbbea",
-"abbbbfdeebbbbcfeeeba",
-"abbeecdbbbbbecdbbbba",
-"aeebbcdbbeeebcdbbbea",
-"abbbbcdeebbbbcdeeeba",
-"abbeecdbbbbbecdbbbba",
-"aeebbfdbbeeebcfbbbea",
-"abbbbcdeebbbbcdeeeba",
-"abbeecdbbbbbecdbbbba",
-"aeebbcdbbeeebcdbbbea",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 11,
-"name": "湯のみ",
-"role": "壊せる箱",
-"pal": {
-"a": "#e6d2ae",
-"b": "#fff1d6",
-"c": "#8cc6ea",
-"d": "#5fa3d6",
-"e": "#fffaf5",
-"f": "#c3dba0",
-"g": "#add08c",
-"h": "#e3f1cf"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbcdccbbbbbbba",
-"abbbbccceeeecccbbbba",
-"abbbcceeeeeeeeccbbba",
-"abbcdeeffffffeedcbba",
-"abcceeffggggffeeccba",
-"abceefghhhggggfeecba",
-"abceffhgggggggffecba",
-"aceefggggggggggfeeca",
-"aceefggggggggggfeeca",
-"adeefggggggggggfeeda",
-"aceefggggggggggfeeca",
-"abceffggggggffffecba",
-"abceefggggggfffeecba",
-"abcceeffggggffeeccba",
-"abbcdeeffffffeedcbba",
-"abbbcceeeeeeeeccbbba",
-"abbbbccceeeecccbbbba",
-"abbbbbbbccdcbbbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 12,
-"name": "暖簾",
-"role": "水（戦車は通れない）",
-"pal": {
-"a": "#7f96c8",
-"b": "#d3a672",
-"c": "#b98458",
-"d": "#a9bfe8",
-"e": "#8ea6d6",
-"f": "#c3d3f2",
-"g": "#fffaf5"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"acccccccccccccccccca",
-"adddddeddddddeddddda",
-"adddddeddddddeddddda",
-"addfddefdddfdedfddda",
-"adddddeddddddeddddda",
-"adddddedgggddeddddda",
-"adddddeggdggdeddddda",
-"addfddggdddggedfddda",
-"adddddggdddggeddddda",
-"adddddeggdggdeddddda",
-"adddddedgggddeddddda",
-"addfddefdddfdedfddda",
-"adddddeddddddeddddda",
-"adddddeddddddeddddda",
-"adddddeddddddeddddda",
-"addfddeedddfdedfddda",
-"adddddeedddddeddddda",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 13,
-"name": "提灯",
-"role": "壊せる箱",
-"pal": {
-"a": "#e6d2ae",
-"b": "#fff1d6",
-"c": "#6c6c7c",
-"d": "#4c4c5c",
-"e": "#ff9aa8",
-"f": "#e8707f",
-"g": "#ffd0d6"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbccccccccccbbbba",
-"abbbbddddddddddbbbba",
-"abbbbddddddddddbbbba",
-"abbbeeeeeeeeeeeebbba",
-"abbffffggggggffffbba",
-"abeeeeegeeeegeeeeeba",
-"abeeeegeeeeeegeeeeba",
-"abffffgeeeeeegffffba",
-"abeeeegeeeeeegeeeeba",
-"abeeeegeeeeeegeeeeba",
-"abffffgeeeeeegffffba",
-"abeeeegeeeeeegeeeeba",
-"abeeeeegeeeegeeeeeba",
-"abbffffggggggffffbba",
-"abbbeeeeeeeeeeeebbba",
-"abbbbbeeeeeeeebbbbba",
-"abbbbddddddddddbbbba",
-"abbbbddddddddddbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 14,
-"name": "氷",
-"role": "壊せない壁",
-"pal": {
-"a": "#8cc6ea",
-"b": "#cdeaf7",
-"c": "#e8f8fe",
-"d": "#b8dff2",
-"e": "#fffaf5",
-"f": "#a9d6ee"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbcbbbbbcbbbbbcbdda",
-"abeeeeeebbcbbbbbcdda",
-"abeeeeeebbbcbbbbbdda",
-"abeebbcbbbbbcbbbbdda",
-"aceebbbcbbbbbcbbbdda",
-"abeebbbbcbbbbbcbbdda",
-"abeebbbbbcbbbbbcbdda",
-"abbbcbbbbbcbbbbbcdda",
-"abbbbcbbbbbcbbbbbdda",
-"abbbbbcbbaabcbbbbdda",
-"acbbbbbcababbcbbbdda",
-"abcbbbaacbbabbcbbdda",
-"abbcbbbbbcbabbbebdda",
-"abbbcbbbbbcbabebcdda",
-"abbbbcbbbbbcaebbbdda",
-"abbbbbcbbbbbcabbbdda",
-"affffffffffffffffdda",
-"affffffffffffffffdda",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 15,
-"name": "魚箱",
-"role": "壊せる箱",
-"pal": {
-"a": "#8aa8b4",
-"b": "#cfe3ea",
-"c": "#bcd5de",
-"d": "#e6f3f6",
-"e": "#bfd9e2",
-"f": "#ffbf86",
-"g": "#f0955a",
-"h": "#ffd9b0",
-"i": "#6f5a50"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbaaaabbbbaaaabbba",
-"abbbaaaabbbbaaaabbba",
-"abbbbbbbbbbbbbbbbbba",
-"acccccccccccccccccca",
-"adededededededededea",
-"adddddddddddddddddda",
-"addddddffffdddgggdda",
-"addddfhhhhhfffffffda",
-"adddfihhhhhhffffffda",
-"adddffhhhhhfffgggdda",
-"addddffffffffdgggdda",
-"addddddffffdddddddda",
-"adddddddddddddddddda",
-"adddddddddddddddddda",
-"acccccccccccccccccca",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 16,
-"name": "鉄板",
-"role": "壊せない壁（鉄壁）",
-"pal": {
-"a": "#6f7a8c",
-"b": "#eef1f5",
-"c": "#d6dbe3",
-"d": "#c5ccd7",
-"e": "#a4adbb",
-"f": "#e8ecf1",
-"g": "#fffaf5",
-"h": "#c1c8d3"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"acdeccfccccdccfcecca",
-"acegefccccccdfcegeca",
-"accedcccccccfdccecca",
-"accfcdcccccfccdcccca",
-"acfcccdcffffcccdccfa",
-"afcccccdhhhhccccdfca",
-"accccccchhhhccccfdca",
-"accccccfhhhhcccfccda",
-"adccccfchhhhccfcccca",
-"acdccfcchhhhcfccccca",
-"accdfccchhhhdcccccca",
-"accfdccchhhhcdccccca",
-"acfccdccccfcccdcccfa",
-"afceccdccfcccccdefca",
-"acegeccdfccccccegeca",
-"accecccfdccccccfedca",
-"aeeeeeeeeeeeeeeeeeea",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 17,
-"name": "鯛",
-"role": "壊せる箱",
-"pal": {
-"a": "#8cc6ea",
-"b": "#cdeaf7",
-"c": "#e8707f",
-"d": "#ff9aa8",
-"e": "#ffb8c2",
-"f": "#4c4c5c",
-"g": "#fffaf5"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbccccccbbbbbba",
-"abbbbbbccccccbbbbbba",
-"abbbbbbbddbbbbbdddca",
-"abbbddeeeeedddbdddca",
-"abbdeeeeeeeeedddddca",
-"abdefeeeeeeeeeddddca",
-"abdegeceeceeceddddca",
-"abddeeeeeeeeeddddbba",
-"abddddeeeeedddddddca",
-"abbddddcddcdddddddca",
-"abbbddddddddddbdddca",
-"abbbbbbbddbbbbbdddca",
-"abbbbbbbbbbbbbbdddca",
-"abbbbbbbccccbbbbbbba",
-"abbbbbbbccccbbbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 18,
-"name": "ホタテ貝",
-"role": "壊せる箱",
-"pal": {
-"a": "#8cc6ea",
-"b": "#cdeaf7",
-"c": "#f2a0b8",
-"d": "#ffe1ea",
-"e": "#ffc6d6"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbcccccccccbbbbba",
-"abbccccccdccccccbbba",
-"acccddeeeddeeedcccba",
-"acedddeeeddeeedddcca",
-"aeeedddeeddeeeddeeea",
-"adeedddeeddeedddeeea",
-"adeeeddeeddeeddeeeda",
-"addeeddeeddeeddeedda",
-"adddeeddeddeddeeddda",
-"aeddeeddedeeddeeddea",
-"aeeddeededeedeeddeea",
-"aeeeddedededeeddeeea",
-"addeeddeddededdeedda",
-"aedddededdeedeedddda",
-"aeeeddededddedddeeea",
-"adddeeeceeeeceeeeeea",
-"abbbbbbccccccbbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 19,
-"name": "青海波（水）",
-"role": "水（つなげて使える）",
-"pal": {
-"a": "#8cc6ea",
-"b": "#fffaf5",
-"c": "#5fa3d6",
-"d": "#c7e6f7"
-},
-"rows": [
-"aabccccbaaaabccccbaa",
-"bbccbbccbbbbccbbccbb",
-"cccbddbccccccbddbccc",
-"cccbddbccccccbddbccc",
-"bbccbbccbbbbccbbccbb",
-"aabccccbaaaabccccbaa",
-"bbabccbabbbbabccbabb",
-"dbabccbabddbabccbabd",
-"dbccccccbddbccccccbd",
-"bccbbbbccbbccbbbbccb",
-"ccbaaaabccccbaaaabcc",
-"cbabbbbabccbabbbbabc",
-"cbabddbabccbabddbabc",
-"cccbddbccccccbddbccc",
-"bbccbbccbbbbccbbccbb",
-"aabccccbaaaabccccbaa",
-"bbabccbabbbbabccbabb",
-"dbabccbabddbabccbabd",
-"dbabccbabddbabccbabd",
-"bbabccbabbbbabccbabb"
-]
-},
-{
-"id": 20,
-"name": "昆布",
-"role": "壊せない壁",
-"pal": {
-"a": "#476b52",
-"b": "#86ae92",
-"c": "#5c8868",
-"d": "#6f9a7c",
-"e": "#9fc4a9",
-"f": "#557f61"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"acccdddbbbddccccddba",
-"acccdddbbbddccccedba",
-"acccedbbbdddcccdddba",
-"acccddbbbddccccddbba",
-"accdddbbbddceccddbba",
-"accddbbbdddcccdddbba",
-"accddbbbddccccddbbba",
-"acdddbbbddccccddbbba",
-"acddbbbdddcccdddbbba",
-"acddbbbddccccddbbbda",
-"adddbbbedccccddbbbda",
-"addbbbdddcccdddbbbda",
-"addbbbddccccddbebdda",
-"addebbddccccddbbbdda",
-"adbbbdddccedddbbbdda",
-"adbbbddccccddbbbddda",
-"affffffffffffffffffa",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 21,
-"name": "竹",
-"role": "壊せる箱",
-"pal": {
-"a": "#86c795",
-"b": "#dff1d8",
-"c": "#b5e3ae",
-"d": "#c9eec3",
-"e": "#5fa874"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abcdaaaebbbcdaaaebba",
-"abcdaaaebbbcdaaaebba",
-"abcdaaaebbbcdaaaebba",
-"aeeeeeeeebbcdaaaebba",
-"aeeeeeeeebbcdaaaebba",
-"abcdaaaebbbcdaaaebba",
-"abcdaaaebbeeeeeeeeba",
-"abcdaaaebbeeeeeeeeba",
-"abcdaaaebbeeeeeeeeba",
-"abcdaaaebbbcdaaaebba",
-"abcdaaaebbbcdaaaebba",
-"aeeeeeeeebbcdaaaebba",
-"aeeeeeeeebbcdaaaebba",
-"abcdaaaebbbcdaaaebba",
-"abcdaaaebbbcdaaaebba",
-"abcdaaaebbbcdaaaebba",
-"abcdaaaebbbcdaaaebba",
-"abcdaaaebbbcdaaaebba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 22,
-"name": "笹の葉",
-"role": "水（戦車は通れない）",
-"pal": {
-"a": "#a8dba0",
-"b": "#e4f5dc",
-"c": "#86c795",
-"d": "#5fa874",
-"e": "#d4f0c8"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbcbddbbbbbba",
-"abbbbbbccbddbbbbbdba",
-"abbbbbccdddcbbbddbba",
-"abbbbccdddcbccddbbba",
-"abbbcdddbcbccddbbbba",
-"abbcdddcccccddbcbbba",
-"abbddbcccccddbcbbbba",
-"abddbcccccedbcbbbbba",
-"abbbbcbcbedbcbbbbbba",
-"abbbbbcbddccbcbbbdda",
-"abbbbcbddccbcbccddba",
-"abbbcbddccccccbddbba",
-"abbcbedcccbcceddccba",
-"abbbddccbbbcdddcbbba",
-"abbddccbbccddbccbbba",
-"abddbbbbbbddbccbbbba",
-"adbbbbbbbddccbbbbbba",
-"abbbbbbbddbbbbbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 23,
-"name": "升",
-"role": "壊せる箱",
-"pal": {
-"a": "#a07a68",
-"b": "#f5dfb8",
-"c": "#d3a672",
-"d": "#e8c99a",
-"e": "#b98458",
-"f": "#efe0b0",
-"g": "#fff3cf",
-"h": "#fffaf5"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbcca",
-"abbbbbbbbbbbbbbbbcca",
-"abbddddddddddddddcca",
-"abbdeeeeeeeeeeeedcca",
-"abbdeffffffffffedcca",
-"abbdefgggggggggedcca",
-"abbdefgggghggggedcca",
-"abbdefghgggggggedcca",
-"abbdefggggghgggedcca",
-"abbdefgggggggggedcca",
-"abbdefgggggghggedcca",
-"abbdefgghggggggedcca",
-"abbdefgggggggggedcca",
-"abbdefgggggggggedcca",
-"abbdeeeeeeeeeeeedcca",
-"abbddddddddddddddcca",
-"acccccccccccccccccca",
-"acccccccccccccccccca",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 24,
-"name": "割り箸の束",
-"role": "壊せる箱",
-"pal": {
-"a": "#a07a68",
-"b": "#e8c99a",
-"c": "#d3a672",
-"d": "#f5dfb8",
-"e": "#ffd0d6",
-"f": "#ff9aa8",
-"g": "#fffaf5",
-"h": "#e8707f"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abcdbcdbcdbcdbcdbcda",
-"abcdbcdbcdbcdbcdbcda",
-"abcdbcdbcdbcdbcdbcda",
-"abcdbcdbcdbcdbcdbcda",
-"abcdbcdbcdbcdbcdbcda",
-"abcdbcdbcdbcdbcdbcda",
-"aeeeeeeeeeeeeeeeeeea",
-"affffffffffffffffffa",
-"afgfffgfffgfffgfffga",
-"affgfffgfffgfffgfffa",
-"affffffffffffffffffa",
-"ahhhhhhhhhhhhhhhhhha",
-"abcdbcdbcdbcdbcdbcda",
-"abcdbcdbcdbcdbcdbcda",
-"abcdbcdbcdbcdbcdbcda",
-"abcdbcdbcdbcdbcdbcda",
-"abcdbcdbcdbcdbcdbcda",
-"abcdbcdbcdbcdbcdbcda",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 25,
-"name": "ネタケース（ガラス）",
-"role": "壊せない壁",
-"pal": {
-"a": "#6f7a8c",
-"b": "#a4adbb",
-"c": "#fffaf5",
-"d": "#e7f6fb",
-"e": "#ff9aa8",
-"f": "#ffbf86",
-"g": "#ffe58a",
-"h": "#cfe3ea"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"abcddddddcddddddcdba",
-"abddddddcddddddcddba",
-"abdddddcddddddcdddba",
-"abddddcddddddcddddba",
-"abdddcddddddcdddddba",
-"abddcddddddcddddddba",
-"abdcddddddcddddddcba",
-"abcddddddcddddddcdba",
-"abdddeedcdddffdcddba",
-"abdeeeeeedffffffddba",
-"abdeeeeeedffffffddba",
-"abdddeedddddffddddba",
-"abdddddgggggddddddba",
-"abdddddgggggddddddba",
-"abhhhhhhhhhhhhhhhhba",
-"abhhhhhhhhhhhhhhhhba",
-"abbbbbbbbbbbbbbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 26,
-"name": "おしぼり",
-"role": "壊せる箱",
-"pal": {
-"a": "#f2a0b8",
-"b": "#ffc6d6",
-"c": "#fffaf5",
-"d": "#f3ebe0",
-"e": "#efe5d8",
-"f": "#ece2d4",
-"g": "#e6dccf"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbbbcba",
-"adddddddddddddddddda",
-"accccecccecccecccfca",
-"acccceccceccceccfffa",
-"acccceccceccceccfcfa",
-"acccceccceccceccfcfa",
-"acccceccceccceccfcfa",
-"acccceccceccceccfffa",
-"accccecccecccecccfca",
-"acccceccceccceccccca",
-"agggggggggggggggggga",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"abbbbbbbbbbbbbbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 27,
-"name": "招き猫",
-"role": "壊せる箱",
-"pal": {
-"a": "#e8707f",
-"b": "#ff9aa8",
-"c": "#fffaf5",
-"d": "#ffc6d6",
-"e": "#4c4c5c",
-"f": "#a4adbb",
-"g": "#f2a0b8",
-"h": "#a07a68",
-"i": "#ffe58a",
-"j": "#f5c960"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"abbccccbbbbbbccccbba",
-"abbcddcbbbbbbcddcbba",
-"abbcddccccccccddcbba",
-"abbcdccccccccccdcbba",
-"abbccccccccccccccbba",
-"abbccccccccccccccbba",
-"abbccccccccccccccbba",
-"abccccecccccccecccba",
-"abccceecccccceecccba",
-"abffdccccggccccdffba",
-"abccdccchhhhcccdccba",
-"abfffccccccccccfffba",
-"abbccccccccccccccbba",
-"abbbaaaaaiiaaaaabbba",
-"abbbaaaaiiiiaaaabbba",
-"abbbbbbciijicbbbbbba",
-"abbbbbbbbiibbbbbbbba",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 28,
-"name": "回転レーン",
-"role": "水（つなげて使える）",
-"pal": {
-"a": "#a4adbb",
-"b": "#6f7a8c",
-"c": "#e6ecf2",
-"d": "#dde4ec",
-"e": "#f2a0b8",
-"f": "#566070"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"bbbbbbbbbbbbbbbbbbbb",
-"abbbbabbbbabbbbabbbb",
-"bbbbbbbbbbbbbbbbbbbb",
-"cccccccccccccccccccc",
-"dddddddddddddddddddd",
-"ceecccccccceeccccccc",
-"ddeeddddddddeedddddd",
-"ccceecccccccceeccccc",
-"ddddeeddddddddeedddd",
-"cccceecccccccceecccc",
-"dddeeddddddddeeddddd",
-"cceecccccccceecccccc",
-"deeddddddddeeddddddd",
-"cccccccccccccccccccc",
-"dddddddddddddddddddd",
-"bbbbbbbbbbbbbbbbbbbb",
-"abbbbabbbbabbbbabbbb",
-"bbbbbbbbbbbbbbbbbbbb",
-"ffffffffffffffffffff"
-]
-},
-{
-"id": 29,
-"name": "玉子焼き",
-"role": "壊せる箱",
-"pal": {
-"a": "#d9a040",
-"b": "#f5c960",
-"c": "#f0b64e",
-"d": "#ffd966",
-"e": "#fff0a8",
-"f": "#ffe58a"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abccccccccccccccccca",
-"abccccccccccccccccca",
-"abddddddddddddddddca",
-"abddddddddddddddddca",
-"abddddddddddddcdddca",
-"abeeeeeeeeeeeeeeeeca",
-"abeeeceeeeeeeeeeeeca",
-"abeeeeeeeeeeeeeeeeca",
-"abffffffffffffffffca",
-"abffffffffffcfffffca",
-"abffffffffffffffffca",
-"abddcdddddddddddddca",
-"abddddddddddddddddca",
-"abddddddcdddddddddca",
-"abeeeeeeeeeeeeeeeeca",
-"abeeeeeeeeeeeeeeeeca",
-"abeeeeeeeeeeeeeeeeca",
-"acccccccccccccccccca",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-},
-{
-"id": 30,
-"name": "マグロの柵",
-"role": "壊せない壁",
-"pal": {
-"a": "#b94a5e",
-"b": "#ff9fae",
-"c": "#f08a9c",
-"d": "#ffc2cc",
-"e": "#e8707f",
-"f": "#ffd9df",
-"g": "#d85f72"
-},
-"rows": [
-"aaaaaaaaaaaaaaaaaaaa",
-"abbbbbbbbbbbbbbbbbba",
-"accccdecccccdcceccca",
-"acccdfcecccdfcccecda",
-"accdccccecdccccccefa",
-"acdfccccceccccccdcea",
-"aefcccccdfeccccdfcca",
-"aceccccdccceccdfccca",
-"acceccdcccccedccccca",
-"acccedfcccccdeccccca",
-"acccdecccccdfcecccda",
-"accdccecccdccccecdfa",
-"acdfcccecdfcccccefca",
-"adccccccefcccccdceca",
-"accccccdceccccdfccea",
-"aeccccdfcceccdfcccca",
-"aceccdfccccedcccccca",
-"accedccccccdecccccda",
-"agggggggggggggggggga",
-"aaaaaaaaaaaaaaaaaaaa"
-]
-}
-];
-// 寿司スキン全体をやわらかなパステル調にそろえるための色変換。
-// 元の色相と陰影は残しつつ、彩度を少し落として白を混ぜる。
-function pastelizeColor(hex){
-  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex));
-  if(!m) return hex;
-  const n = parseInt(m[1],16);
-  const r=(n>>16)&255, g=(n>>8)&255, b=n&255;
-  const gray = 0.299*r + 0.587*g + 0.114*b;
-  const soften = v => Math.max(0,Math.min(255,Math.round((gray+(v-gray)*0.78)*0.82+255*0.18)));
-  return `rgb(${soften(r)},${soften(g)},${soften(b)})`;
-}
-function pastelizeCanvasPixels(cv){
-  const c=cv.getContext("2d",{willReadFrequently:true});
-  const im=c.getImageData(0,0,cv.width,cv.height), d=im.data;
-  for(let i=0;i<d.length;i+=4){
-    if(d[i+3]===0) continue;
-    const r=d[i], g=d[i+1], b=d[i+2];
-    const gray=0.299*r+0.587*g+0.114*b;
-    d[i]=Math.round((gray+(r-gray)*0.78)*0.82+255*0.18);
-    d[i+1]=Math.round((gray+(g-gray)*0.78)*0.82+255*0.18);
-    d[i+2]=Math.round((gray+(b-gray)*0.78)*0.82+255*0.18);
-  }
-  c.putImageData(im,0,0);
-}
-const _sbCache = {};
-function sushiBlockCanvas(id){
-  if(_sbCache[id]) return _sbCache[id];
-  const b = SUSHI_BLOCKS[id-1], cv = document.createElement("canvas");
-  cv.width = cv.height = SUSHI_BLOCK_SIZE;
-  const c = cv.getContext("2d");
-  const softPalette={};
-  for(const [key,value] of Object.entries(b.pal)) softPalette[key]=pastelizeColor(value);
-  for(let y=0;y<SUSHI_BLOCK_SIZE;y++) for(let x=0;x<SUSHI_BLOCK_SIZE;x++){
-    c.fillStyle = softPalette[b.rows[y][x]]; c.fillRect(x,y,1,1);
-  }
-  return (_sbCache[id] = cv);
-}
-// (x,y)=左上、w,h=描く大きさ。ドットのまま拡大する
-function drawSushiBlock(g, id, x, y, w, h=w){
-  g.save(); g.imageSmoothingEnabled = false;
-  g.drawImage(sushiBlockCanvas(id), x, y, w, h);
-  g.restore();
-}
+// 寿司ネタ（皿の上の寿司）をパステルカラーにする：色を白へ近づける割合
+const PASTEL_K_SUSHI = 0.30;
 
 // ---- スキン（寿司／戦車）。ゲーム全体の見た目を切り替える。誰でも自由に選べる ----
 var tankSkin = "sushi";
 try{ if(localStorage.getItem("tankSkinV1")==="classic") tankSkin="classic"; }catch(e){}
 function useClassicSkin(){ return tankSkin==="classic"; }
-// 寿司スキンのレンガ＝寿司下駄(3)。弾が1発当たってひびが入った状態は、白っぽくして割れ目を重ねる
-function drawSushiBrick(g,x,y,w,h,damaged){
-  drawSushiBlock(g,3,x,y,w,h);
-  if(!damaged) return;
-  g.save(); g.translate(x,y); g.scale(w/40,h/40);
-  g.fillStyle="rgba(255,250,244,.42)"; g.fillRect(0,0,40,40);
-  g.strokeStyle="#b99c89"; g.lineWidth=1.8; g.lineCap="round"; g.lineJoin="round";
-  g.beginPath(); g.moveTo(15,2); g.lineTo(21,12); g.lineTo(15,21); g.lineTo(24,30); g.lineTo(20,38); g.stroke();
-  g.lineWidth=1.2; g.beginPath(); g.moveTo(21,12); g.lineTo(30,15); g.moveTo(15,21); g.lineTo(7,25); g.stroke();
-  g.restore();
-}
 const SUSHI_KIND = { player:"tuna", yellow:"uni", brown:"ebi", green:"negitoro", cyan:"unagi", gray:"salmon", red:"ikura", purple:"tamago" };
-const SUSHI_PLAYER_COLOR = { color:"#f3a0b6", dark:"#c9859a" }; // パステル調のマグロ色（爆発の破片・エフェクト用）
+const SUSHI_PLAYER_COLOR = { color:"#ff9db4", dark:"#d9718c" }; // マグロの色（爆発の破片・エフェクト用）
 const SUSHI_ROWS = 35;  // マグロの縦のドット数（これを基準に全部の寿司を同じドットの大きさで描く）
 const SUSHI = {
   tuna:{w:23,h:35,src:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABcAAAAjCAYAAAB/wZEbAAAFWUlEQVR42s2Wz29UVRTHP+e+mU5/twSUn22n05lBBKIb4z8gC4mYuDQu/FGNBH+REONCE2KiCxOjJJDiBo0rDeKOgMGtCzbGBMRpX4dWaOWHQEtb2pnpvHePi3unM2VAcOdLJnmZd+/3nPP9fs+5F/5vz5WxMX2YdfKgBSP7994XaM8b79G3fZv8J/DL5y/oyWOHARhev41EYEBArKJYACKrHLs+BsDzw++yZefj8kDw4yMjejM8x3BvhkRXB2xaj8QWvTULlQrid6iFaqkMrSm+vlZg14vD5J5+ahVe4m7wm+E5hh/Jkdy4Hp58AtpS8MtZpLoMRlCriIC0BKSGdqB3Fnm1ssw33x1rYsDci99EezvsfgY2rIWffoa5eZ+uIkbQoTz0D2KvXUWvXoEo4gW7pkmfFfDL4bgC7KYXVMBa+OEkWEVFQRUVQbJ5JCHo5EWYWwAsQSJJwsNOFQraBL68uATAhq41mJ4OOPsrWq2ggHiiZetWtCVAR0OI1e22YIwQtLQAMD013cz5mW+PumgB2IVFmJtHjI89lHVZW4HRUUQUFBTx6RlQl/Bvp37kchhqfz4viWZzCqLq1opALo9ikRgICw5wpW5xoAJW7crfsQ9kakK+cvATn3nCedoIms06s1YjNBwFxWXtTezYEgShO50G4KUPPuT00S9X05Lq6AbAiuOQobzjemEemZoGAQUnNtajG2RwAAxEY0UA2to77uFzqbGikM0iYrAX/sAYB6qN61TcSy4Hy1X04kWWb8+5717YVeDl2ZvupXetE6tQALSmkw8sTtjWJGwegCjCTk5AVOe7dHumGTzhI0pnBxqGiDRKpysJy7p10NnlaCoWXT+IunkApJJJAIphqGZk/159/bNDJNo7HczUNBJb1zyN0GKcz3t60cB7Xd0ooKG6oL2Tlz86yJmRL7xLg4QzeG0iqXUbG2nODLmgRmA8dD5bKccFB2eG1q6eOi12YYags7dOgoIYz7daZPsOJLbYwmhDmuLAjYIaanVaa6mWFurg5XKZFmrDqe5f8nlEDEQROhY6C2rzxJZNG+hsaYWp61QXFyiXlhoEFYirlfp6MTCURnADTAujjgZd3cmoIuk0xBFqnaCVxTtEcdWB7zv0lQA6/PGnvqUNpFIQONV1LKSumtYbQhXJ5aAaYS9NM3fjhqMFOHH4CM++836DFVudW0QtOtDvIMLQ8+TbXKTOeHoQohi9dAm1FhtbMJBsawdgcGioPrjK8978fX2u4tHwLn7xogmSyQCCjoWouv8TfoImjWluonjZcW4v/4VcvdaoLH7CwuCgG2ixRccvug/OItR6dLlcWS33n8WinjryOQCvdaZJdrR6YQUxLoBmMkhkXWdOTKCxd44qVpX5mVmOcwuAXcNvk9u5wzk/nc3WO90fad7k7rel370GBp2YRK2vyk9Ka+1KEQDJlmTzAQ0QRzFW/WYVNJ2BVBKWyuh40TVVQ+uKcXZNrVtbP0M8703gldIS2NjtzWZcdoUxdHrKVwRaq0oECQKSj26kMju3gtGfy8kq8OfeOgDA98xQqlSQ/gGoxmix6D2iqOqKY0AcFRs3UZ2fYfzvK+72te9A89WiFg1AgiR2dobF878TlaoO1DYcGQqyuQ/pH6A0Ps7stZtE/tOWfAPO/S6eLyU3IAI2jtFY0cAvtUpPZhCNYmYmJgkSAXG1yonEHHve3E/ftsfknjeuVcIKRHGMtYoab2kVuvv60WrMrclJAhGWKstMz866/msAvu8tt5b9nkoPopa2lgBMQNf6jQAsXL9KJY6pLJY43e2axs+oh7+f/9vdvPbcC7T2/AMnln0Ng3oA1QAAAABJRU5ErkJggg=="},
@@ -3214,10 +2097,12 @@ for(const k of Object.keys(SUSHI)){
     // 6倍に拡大（ドットのまま）→ 回転して描いてもぎざぎざになりにくくする
     const cv = document.createElement("canvas"); cv.width = s.w*6; cv.height = s.h*6;
     const c = cv.getContext("2d"); c.imageSmoothingEnabled = false; c.drawImage(img,0,0,cv.width,cv.height);
-    // 寿司ネタの画像もブロックと同じ彩度・明るさに調整する。
-    pastelizeCanvasPixels(cv);
+    try{ // パステル化：全ピクセルの色を白へ近づける
+      const id=c.getImageData(0,0,cv.width,cv.height), d=id.data, k=PASTEL_K_SUSHI;
+      for(let i=0;i<d.length;i+=4){ d[i]+=(255-d[i])*k; d[i+1]+=(255-d[i+1])*k; d[i+2]+=(255-d[i+2])*k; }
+      c.putImageData(id,0,0);
+    }catch(e){}
     s.cv = cv;
-    if(window.renderEnemyClearIcons) window.renderEnemyClearIcons();
   };
   img.src = s.src;
 }
@@ -3233,27 +2118,30 @@ function drawSushi(g, kind, x, y, len, ang){
 }
 // 車体＝木の板のお皿。寿司を当たり判定の直径（2r）まで大きくしたため、
 // 皿も余白を保ったまま拡大（長さ3.2r×幅約1.93r）。
-function drawPlate(g, x, y, r, ang){
+function drawPlate(g, x, y, r, ang, col){
+  // 円い皿。半径＝当たり判定の半径r。col＝敵の皿の色（戦車スキンと同じ色）。指定なし（自機）は白。
+  // 車体の向き（ang）に沿った等間隔のシマシマと、前側の三角で、向いている方向が分かる。
+  const R=r;
+  const face=col?col.color:"#ffffff", rim=col?col.dark:"#e4dcf0", line=col?col.dark:"#d5cbe6";
   g.save(); g.translate(x,y); g.rotate(ang);
-  const w=r*3.2, h=r*1.93, rd=r*0.20;
-  const rr=(ww,hh,rd2)=>{ g.beginPath(); g.moveTo(-ww/2+rd2,-hh/2); g.lineTo(ww/2-rd2,-hh/2); g.arcTo(ww/2,-hh/2,ww/2,-hh/2+rd2,rd2);
-    g.lineTo(ww/2,hh/2-rd2); g.arcTo(ww/2,hh/2,ww/2-rd2,hh/2,rd2); g.lineTo(-ww/2+rd2,hh/2); g.arcTo(-ww/2,hh/2,-ww/2,hh/2-rd2,rd2);
-    g.lineTo(-ww/2,-hh/2+rd2); g.arcTo(-ww/2,-hh/2,-ww/2+rd2,-hh/2,rd2); g.closePath(); };
-  rr(w,h,rd); g.fillStyle="#e8cbaa"; g.fill();                       // パステル調の板のふち
-  rr(w*0.92,h*0.9,rd*0.8); g.fillStyle="#f8ebd7"; g.fill();          // 明るい板の面
-  g.strokeStyle="#dfc8aa"; g.lineWidth=Math.max(.8,r*0.06); g.lineCap="round";   // 木目（車体の進行方向に沿う）
-  for(const k of [-0.28,-0.05,0.2,0.36]){
-    g.beginPath(); g.moveTo(-w*0.38,k*h); g.quadraticCurveTo(0,k*h+h*0.05,w*0.38,k*h-h*0.02); g.stroke();
-  }
-  g.fillStyle="#dfc8aa"; g.beginPath(); g.ellipse(-w*0.22,h*0.12,r*0.13,r*0.08,0,0,7); g.fill(); // 節
+  g.beginPath(); g.arc(0,0,R,0,7); g.fillStyle=rim; g.fill();            // 皿のふち
+  g.beginPath(); g.arc(0,0,R*0.9,0,7); g.fillStyle=face; g.fill();       // 皿の面
+  g.save();                                                              // シマシマ：面の内側の円で切り抜く（両端がそろう）
+  g.beginPath(); g.arc(0,0,R*0.78,0,7); g.clip();
+  g.fillStyle=line; g.globalAlpha=col?0.4:0.9;
+  const sw=R*0.11, gap=R*0.3;                                            // 線の太さ・間隔（等間隔）
+  for(let k=-3;k<=3;k++) g.fillRect(-R, k*gap-sw/2, R*2, sw);
+  g.restore();
+  g.fillStyle=line; g.globalAlpha=col?0.75:1;
+  g.beginPath(); g.moveTo(R*0.86,0); g.lineTo(R*0.62,-R*0.17); g.lineTo(R*0.62,R*0.17); g.closePath(); g.fill();  // 前向きの三角
   g.restore();
 }
 // 板＋寿司。板は車体の向き、寿司（砲台）は照準の向きに回る。r＝戦車の半径。従来スキン選択中は false を返す（呼び出し側が従来の描き方にする）
-function drawSushiPlate(g, kind, x, y, r, bodyAng, turretAng){
+function drawSushiPlate(g, kind, x, y, r, bodyAng, turretAng, plateCol){
   if(useClassicSkin()) return false;
-  drawPlate(g,x,y,r,bodyAng);
-  // 寿司の長辺を当たり判定の直径（2r）に合わせる。
-  return drawSushi(g,kind,x,y,r*2.0,turretAng);
+  drawPlate(g,x,y,r,bodyAng,plateCol);
+  // 寿司の長辺は皿（直径2r）より少し長くして、皿から少しはみ出させる。
+  return drawSushi(g,kind,x,y,r*2.3,turretAng);
 }
 // 醤油の弾（しずく）。(x,y)を中心に、向きangへ細長く描く
 function drawSoyDrop(g, x, y, ang, len, rad, outline){
@@ -3261,9 +2149,9 @@ function drawSoyDrop(g, x, y, ang, len, rad, outline){
   g.beginPath(); g.moveTo(len*0.5,0);
   g.arc(len*0.5-rad, 0, rad, -Math.PI/2, Math.PI/2);          // 先頭の丸み
   g.lineTo(-len*0.5, 0); g.closePath();                          // 後ろへ細くなる
-  g.fillStyle = "#d7b894"; g.fill();
-  g.strokeStyle = outline || "#b99a83"; g.lineWidth = 1.2; g.stroke();
-  g.fillStyle = "rgba(255,249,237,.9)"; g.beginPath(); g.arc(len*0.5-rad*1.1, -rad*0.35, rad*0.28, 0, 7); g.fill(); // つや
+  g.fillStyle = "#ddbfa4"; g.fill();
+  g.strokeStyle = outline || "#bf9f89"; g.lineWidth = 1.2; g.stroke();
+  g.fillStyle = "rgba(255,244,225,.85)"; g.beginPath(); g.arc(len*0.5-rad*1.1, -rad*0.35, rad*0.28, 0, 7); g.fill(); // つや
   g.restore();
 }
 
@@ -3564,7 +2452,7 @@ function drawCyanTrail(pts,alphaMul){
     d+=seg;
     if(seg<0.01) continue;
     ctx.globalAlpha=alphaMul*0.5*f;
-    ctx.strokeStyle=useClassicSkin()?"#7fe4f2":"#e2c9ae"; ctx.lineWidth=1.5+4.5*f;
+    ctx.strokeStyle=useClassicSkin()?"#7fe4f2":"#ecd2bd"; ctx.lineWidth=1.5+4.5*f;
     ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(c.x,c.y); ctx.stroke();
     ctx.globalAlpha=alphaMul*0.75*f;
     ctx.strokeStyle=useClassicSkin()?"#ffffff":"#fff0d0"; ctx.lineWidth=0.8+1.4*f;
@@ -4095,7 +2983,7 @@ function explodeMissile(m){
     playWaterSplashSound();
     return; // 水上では爆発せず、敵・弾・レンガにも影響しない
   }
-  spawnExplosion(m.targetX,m.targetY,2.0); // ★実際の爆風範囲(MISSILE_BLAST_RADIUS)に見た目を合わせて少し大きめに
+  spawnMissileBlast(m.targetX,m.targetY); // ★見た目は爆風範囲(MISSILE_BLAST_RADIUS)に合わせる（戦車スキン＝従来の輪／寿司スキン＝ワサビ）
   playMissileExplosion();
 
   const blastR = MISSILE_BLAST_RADIUS;
@@ -4147,14 +3035,59 @@ function spawnWaterSplash(x,y){
       life:rand(0.28,0.52),t:0,color:"#ffffff",r:rand(2.2,4.2)});
   }
 }
-function spawnExplosion(x,y,scaleF){
-  mpq("se", x, y, scaleF);
+function spawnExplosion(x,y,scaleF,quiet){
+  if(!quiet) mpq("se", x, y, scaleF);
   explosions.push({x,y,t:0, dur:0.5, scaleF});
   for(let i=0;i<14;i++){
     const a=Math.random()*Math.PI*2, sp=rand(40,180)*scaleF;
     particles.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:rand(0.3,0.6), t:0,
       color: Math.random()>0.5 ? "#ffd166":"#ff8aa8"});
   }
+}
+// ---- ワサビミサイル（寿司スキン） ----
+const WASABI = { g1:"#c4eab0", g2:"#9ad88f", g3:"#79c27c", dk:"#4f9a5c", hi:"#f2ffe8" };
+function spawnMissileBlast(x,y){
+  mpq("sm", x, y);
+  if(useClassicSkin()){ spawnExplosion(x,y,2.0,true); return; }
+  const B = MISSILE_BLAST_RADIUS, drops=[];
+  for(let i=0;i<12;i++){
+    drops.push({ a:Math.random()*Math.PI*2, v:B*(0.55+Math.random()*0.45), r:2.5+Math.random()*3, k:Math.random() });
+  }
+  explosions.push({x,y,t:0,dur:0.9,scaleF:2.0,wasabi:true,ph:Math.random()*6.28,drops});
+}
+function wasabiLobe(r,ph){
+  ctx.beginPath();
+  for(let i=0;i<=28;i++){
+    const a=i/28*Math.PI*2, rr=r*(1+0.05*Math.sin(a*5+ph)+0.03*Math.sin(a*3+ph*1.7));
+    ctx.lineTo(Math.cos(a)*rr, Math.sin(a)*rr);
+  }
+  ctx.closePath();
+}
+function drawWasabiBall(m){
+  const s=1+0.14*Math.sin(performance.now()/1000*34), r=8;
+  ctx.save(); ctx.translate(m.x,m.y); ctx.rotate(m.angle); ctx.scale(s,1/s);
+  ctx.beginPath(); ctx.arc(0,0,r,0,7); ctx.fillStyle=WASABI.g2; ctx.fill(); ctx.strokeStyle=WASABI.dk; ctx.lineWidth=1.4; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,0,r*0.78,0,7); ctx.fillStyle=WASABI.g1; ctx.fill();
+  ctx.beginPath(); ctx.arc(-r*0.3,-r*0.35,r*0.25,0,7); ctx.fillStyle=WASABI.hi; ctx.fill();
+  ctx.restore();
+}
+function drawWasabiBurst(e){
+  const t=e.t/e.dur, R=MISSILE_BLAST_RADIUS*0.8;           // べちゃっと広がる範囲＝爆風の約8割、しぶきは爆風の端まで
+  const k=Math.min(1,t*5), ease=1-Math.pow(1-k,3), r=R*(0.12+0.88*ease);
+  const fade = t>0.7 ? 1-(t-0.7)/0.3 : 1;
+  ctx.save(); ctx.translate(e.x,e.y);
+  const A=0.55;                                              // 全体の濃さ（小さいほど薄い）
+  ctx.globalAlpha=fade*A;
+  wasabiLobe(r,e.ph+t*2); ctx.fillStyle=WASABI.g1; ctx.fill(); ctx.strokeStyle=WASABI.g3; ctx.lineWidth=1.5; ctx.stroke();
+  wasabiLobe(r*0.72,e.ph+1+t*2); ctx.fillStyle="#e3f6d8"; ctx.fill();
+  ctx.beginPath(); ctx.arc(-r*0.28,-r*0.3,Math.max(1,r*0.13),0,7); ctx.fillStyle=WASABI.hi; ctx.globalAlpha=fade*A*0.9; ctx.fill();
+  const ee=1-(1-t)*(1-t);
+  for(const d of e.drops){
+    ctx.globalAlpha=Math.max(0,1-t*t*t)*A*1.1;
+    ctx.beginPath(); ctx.arc(Math.cos(d.a)*d.v*ee, Math.sin(d.a)*d.v*ee, Math.max(.5,d.r*(1-t*0.4)),0,7);
+    ctx.fillStyle=d.k>0.5?WASABI.hi:WASABI.g1; ctx.fill(); ctx.strokeStyle=WASABI.g3; ctx.lineWidth=1; ctx.stroke();
+  }
+  ctx.restore();
 }
 function spawnHitFx(x,y){
   mpq("sf", x, y);
@@ -5349,17 +4282,14 @@ function drawEditorMap(){
   ectx.fillStyle="#fffafc"; ectx.fillRect(0,0,editorCanvas.width,editorCanvas.height);
   for(let r=0;r<editorHeight;r++)for(let c=0;c<editorWidth;c++){
     const ch=editorMap[r][c],x=c*w,y=r*h;
-    if(ch==="#" && !useClassicSkin()){drawSushiBlock(ectx,3,x,y,w,h);}
-    else if(ch==="X" && !useClassicSkin()){drawSushiBlock(ectx,21,x,y,w,h);}
-    else if(ch==="W" && !useClassicSkin()){drawSushiBlock(ectx,19,x,y,w,h);}
-    else if(ch==="#"){ectx.fillStyle="#f3b57e";ectx.fillRect(x+1,y+1,w-2,h-2);ectx.strokeStyle="#d99a63";ectx.strokeRect(x+3,y+3,w-6,h-6);}
+    if(ch==="#"){ectx.fillStyle="#f3b57e";ectx.fillRect(x+1,y+1,w-2,h-2);ectx.strokeStyle="#d99a63";ectx.strokeRect(x+3,y+3,w-6,h-6);}
     else if(ch==="X"){ectx.fillStyle="#b9afe8";ectx.fillRect(x+1,y+1,w-2,h-2);ectx.fillStyle="#eee9ff";ectx.fillRect(x+w*.4,y+h*.4,w*.2,h*.2);}
     else if(ch==="G"){ drawPyramidTile(ectx,x,y,w,h); }
     else if(ch==="P" || CUSTOM_CHAR_TO_ENEMY[ch]){
       const type=ch==="P"?"player":CUSTOM_CHAR_TO_ENEMY[ch];
       const col=type==="player"?"#8ecbff":ENEMY_TYPES[type].color;
       const label=ch==="P"?"自":ch;
-      if(drawSushiPlate(ectx,SUSHI_KIND[type],x+w/2,y+h/2,Math.min(w,h)*.38,-Math.PI/2,-Math.PI/2)){
+      if(drawSushiPlate(ectx,SUSHI_KIND[type],x+w/2,y+h/2,Math.min(w,h)*.38,-Math.PI/2,-Math.PI/2,type==="player"?null:{color:ENEMY_TYPES[type].color,dark:ENEMY_TYPES[type].dark})){
         // 寿司のうえに、敵の番号（自機は「自」）を小さく添える
         ectx.font=`bold ${Math.max(8,h*.26)}px sans-serif`;ectx.textAlign="right";ectx.textBaseline="bottom";
         ectx.lineWidth=3;ectx.strokeStyle="rgba(255,255,255,.95)";ectx.strokeText(label,x+w-2,y+h-1);
@@ -5374,7 +4304,7 @@ function drawEditorMap(){
   }
   // 水ブロック：となり同士がひと続きの水面になるようにまとめて描く
   const wp=buildWaterPaths((c,r)=>r>=0&&c>=0&&r<editorHeight&&c<editorWidth&&editorMap[r][c]==="W");
-  if(wp && useClassicSkin()){ ectx.save(); ectx.scale(w/TILE,h/TILE); drawWaterLayer(ectx,wp,0); ectx.restore(); }
+  if(wp){ ectx.save(); ectx.scale(w/TILE,h/TILE); drawWaterLayer(ectx,wp,0); ectx.restore(); }
   // ★1P・2Pのリスポーン位置（自機スポーンに重なっているときは、自機の丸のまわりに輪と小さな文字で表す）
   editorMp.forEach((m,i)=>{
     if(!m) return;
@@ -5694,9 +4624,9 @@ function makeStagePreview(map,bg){
   const preview=document.createElement("canvas");preview.width=364;preview.height=252;
   const pc=preview.getContext("2d"),rows=STAGE_ROWS,cols=STAGE_COLS,cw=364/cols,ch=252/rows;
   pc.fillStyle=bg||"#fffafc";pc.fillRect(0,0,364,252);
-  map.forEach((line,r)=>Array.from(line).forEach((v,c)=>{const x=c*cw,y=r*ch;if(v==="#"&&!useClassicSkin()){drawSushiBlock(pc,3,x,y,cw,ch);}else if(v==="X"&&!useClassicSkin()){drawSushiBlock(pc,21,x,y,cw,ch);}else if(v==="W"&&!useClassicSkin()){drawSushiBlock(pc,19,x,y,cw,ch);}else if(v==="#"){pc.fillStyle="#f3b57e";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="X"){pc.fillStyle="#a898e0";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="G"){drawPyramidTile(pc,x,y,cw,ch);}else if(v==="P"||CUSTOM_CHAR_TO_ENEMY[v]){const kd=SUSHI_KIND[v==="P"?"player":CUSTOM_CHAR_TO_ENEMY[v]];if(!drawSushiPlate(pc,kd,x+cw/2,y+ch/2,Math.min(cw,ch)*.38,-Math.PI/2,-Math.PI/2)){pc.fillStyle=v==="P"?"#8ecbff":ENEMY_TYPES[CUSTOM_CHAR_TO_ENEMY[v]].color;pc.beginPath();pc.arc(x+cw/2,y+ch/2,Math.min(cw,ch)*.28,0,7);pc.fill();}}}));
+  map.forEach((line,r)=>Array.from(line).forEach((v,c)=>{const x=c*cw,y=r*ch;if(v==="#"){pc.fillStyle="#f3b57e";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="X"){pc.fillStyle="#a898e0";pc.fillRect(x+1,y+1,cw-2,ch-2);}else if(v==="G"){drawPyramidTile(pc,x,y,cw,ch);}else if(v==="P"||CUSTOM_CHAR_TO_ENEMY[v]){const kd=SUSHI_KIND[v==="P"?"player":CUSTOM_CHAR_TO_ENEMY[v]];if(!drawSushiPlate(pc,kd,x+cw/2,y+ch/2,Math.min(cw,ch)*.38,-Math.PI/2,-Math.PI/2)){pc.fillStyle=v==="P"?"#8ecbff":ENEMY_TYPES[CUSTOM_CHAR_TO_ENEMY[v]].color;pc.beginPath();pc.arc(x+cw/2,y+ch/2,Math.min(cw,ch)*.28,0,7);pc.fill();}}}));
   const wp=buildWaterPaths((c,r)=>map[r]?.[c]==="W");
-  if(wp && useClassicSkin()){pc.save();pc.scale(cw/TILE,ch/TILE);drawWaterLayer(pc,wp,0);pc.restore();}
+  if(wp){pc.save();pc.scale(cw/TILE,ch/TILE);drawWaterLayer(pc,wp,0);pc.restore();}
   return preview;
 }
 // ★ステージ一覧：「通常ステージ」と「オリジナルステージ」を切り替えて表示する（最初は通常ステージ）
@@ -5819,7 +4749,7 @@ const MP_FX = {
   ml:()=>playMissileLaunch(), ws:()=>playWaterSplashSound(),
   d0:()=>playTankDefeat(), d1:()=>playTankDefeatSlowRetro(), d2:()=>playTankDefeatRichRetro(),
   rf:(a)=>playBulletReflectSoundFor({reflectSfx:a?"cyan":null}), bi:(a)=>playBulletImpactSound(!!a),
-  se:(x,y,s)=>spawnExplosion(x,y,s), sf:(x,y)=>spawnHitFx(x,y), sb:(x,y)=>spawnFastBulletImpactFx(x,y), sw:(x,y)=>spawnWaterSplash(x,y),
+  se:(x,y,s)=>spawnExplosion(x,y,s), sm:(x,y)=>spawnMissileBlast(x,y), sf:(x,y)=>spawnHitFx(x,y), sb:(x,y)=>spawnFastBulletImpactFx(x,y), sw:(x,y)=>spawnWaterSplash(x,y),
 };
 function mpq(k,a,b,c){
   if(!mp.active || mp.role!=="host") return;
@@ -6239,8 +5169,7 @@ function mpRenderClear(anyDead){
     enemyTankIcon(type).replace('COUNT_PLACEHOLDER', String(count))).join("");
   clearStageTitle.textContent = `ステージ ${stageNum} CLEAR!`;
   clearStats.innerHTML = "";
-  nextStageInfo.innerHTML = `次のステージ：<b>ステージ ${nextNum}</b><br><span class="enemyLabel">${useClassicSkin()?"敵戦車":"敵寿司"}</span><div class="enemyIcons">${icons || "なし"}</div>`;
-  renderEnemyClearIcons();
+  nextStageInfo.innerHTML = `次のステージ：<b>ステージ ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${icons || "なし"}</div>`;
   clearTapHint.textContent = "まもなく次のステージへ…";
   stageClearScreen.classList.remove("hidden");
 }
@@ -6651,11 +5580,11 @@ function getStageBackgroundColor(){ return stageBackgroundColorFor(stageNum); }
 function stageBackgroundColorFor(num){
   // ステージ番号は1〜50を周回するため、2周目以降も同じ10ステージ区分を適用する。
   const stage = ((num - 1) % 50) + 1;
-  if(stage <= 10) return "#fffafc";       // 1〜10：ミルキーホワイト
-  if(stage <= 20) return "#fff0f6";       // 11〜20：淡い桜色
-  if(stage <= 30) return "#eff6df";       // 21〜30：ミント寄りの黄緑
-  if(stage <= 40) return "#e9f6fb";       // 31〜40：淡いソーダブルー
-  return "#f0eafb";                       // 41〜50：ミルキーラベンダー
+  if(stage <= 10) return "#fffafc";       // 1〜10：白
+  if(stage <= 20) return "#ffebf3";       // 11〜20：ピンク
+  if(stage <= 30) return "#dff3bd";       // 21〜30：黄緑
+  if(stage <= 40) return "#cfefff";       // 31〜40：水色
+  return "#ddd2f7";                       // 41〜50：薄紫
 }
 
 // 静的マップ（背景・格子・外周・壁）はオフスクリーンCanvasに描いて再利用する。
@@ -6671,19 +5600,19 @@ function rebuildMapCache(){
   // 背景
   ctx.fillStyle = getStageBackgroundColor();
   ctx.fillRect(0,0,WORLD_W,WORLD_H);
-  ctx.strokeStyle = useClassicSkin() ? "rgba(210,150,220,0.18)" : "rgba(185,140,100,0.2)";
+  ctx.strokeStyle = useClassicSkin() ? "rgba(210,150,220,0.18)" : "rgba(215,170,200,0.22)";
   ctx.lineWidth = 1;
   for(let x=0;x<=WORLD_W;x+=TILE){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,WORLD_H); ctx.stroke(); }
   for(let y=0;y<=WORLD_H;y+=TILE){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(WORLD_W,y); ctx.stroke(); }
 
   // 寿司スキン：白木のカウンターのような、ごく薄い木目
   if(!useClassicSkin()){
-    ctx.save(); ctx.strokeStyle="#c9ad91"; ctx.lineWidth=1; ctx.globalAlpha=0.07;
+    ctx.save(); ctx.strokeStyle="#e0b9c9"; ctx.lineWidth=1; ctx.globalAlpha=0.12;
     for(let y=6;y<WORLD_H;y+=9){ ctx.beginPath(); ctx.moveTo(0,y+Math.sin(y)*1.5); ctx.lineTo(WORLD_W,y+Math.cos(y*1.7)*1.5); ctx.stroke(); }
     ctx.restore();
   }
   // 外周の枠
-  ctx.strokeStyle = useClassicSkin() ? "#c9baf5" : "#e5cbaa";
+  ctx.strokeStyle = useClassicSkin() ? "#c9baf5" : "#efd5c4";
   ctx.lineWidth = 6;
   ctx.strokeRect(3,3,WORLD_W-6,WORLD_H-6);
 
@@ -6693,11 +5622,9 @@ function rebuildMapCache(){
       for(let c=0;c<COLS;c++){
         const v = walls[r][c];
         if(v===EMPTY) continue;
-        if(v===WATER){ if(!useClassicSkin()) drawSushiBlock(ctx,19,c*TILE,r*TILE,TILE); continue; } // 戦車スキンの水は、下でまとめて描く
+        if(v===WATER) continue; // 水は、下でまとめて描く
         const x=c*TILE, y=r*TILE;
-        if(v===BRICK && !useClassicSkin()){
-          drawSushiBrick(ctx,x,y,TILE,TILE,bricksHp[r][c]<=1);
-        } else if(v===BRICK){
+        if(v===BRICK){
           const dmg = bricksHp[r][c];
           const base = dmg>1 ? "#f3b57e" : "#ffd2a3";
           const dark = "#d99a63";
@@ -6739,8 +5666,6 @@ function rebuildMapCache(){
           }
         } else if(v===PYRAMID){
           drawPyramidTile(ctx,x,y,TILE);
-        } else if(!useClassicSkin()){
-          drawSushiBlock(ctx,21,x,y,TILE); // 鉄壁＝竹
         } else {
           ctx.fillStyle = "#d9d1f5";
           ctx.fillRect(x+1,y+1,TILE-2,TILE-2);
@@ -6773,26 +5698,31 @@ function render(){
   if(mapCacheDirty || !mapCacheCanvas) rebuildMapCache();
   ctx.drawImage(mapCacheCanvas, 0, 0);
   // 水面だけは波のアニメーションがあるため毎フレーム描画する。
-  if(walls.length && useClassicSkin()) drawWaterLayer(ctx, waterPaths, performance.now()/1000);
+  if(walls.length) drawWaterLayer(ctx, waterPaths, performance.now()/1000);
 
   // ミサイル：小さな円から大きな円へ伸びる着弾予告＋飛翔体
   for(const m of missiles){
     const p=clamp(m.time/m.flightTime,0,1);
-    ctx.save();
-    ctx.translate(m.x,m.y);
-    ctx.rotate(m.angle);
-    ctx.globalAlpha=0.22; ctx.fillStyle="#b9f2c4";
-    ctx.fillRect(-12,-2,18,4);
-    ctx.globalAlpha=1; ctx.fillStyle="#ffffff";
-    ctx.beginPath(); ctx.moveTo(8,0); ctx.lineTo(-4,-4); ctx.lineTo(-2,0); ctx.lineTo(-4,4); ctx.closePath(); ctx.fill();
-    ctx.fillStyle="#ffb3d9"; ctx.fillRect(-5,-2,10,4);
-    ctx.restore();
+    if(useClassicSkin()){
+      ctx.save();
+      ctx.translate(m.x,m.y);
+      ctx.rotate(m.angle);
+      ctx.globalAlpha=0.22; ctx.fillStyle="#b9f2c4";
+      ctx.fillRect(-12,-2,18,4);
+      ctx.globalAlpha=1; ctx.fillStyle="#ffffff";
+      ctx.beginPath(); ctx.moveTo(8,0); ctx.lineTo(-4,-4); ctx.lineTo(-2,0); ctx.lineTo(-4,4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle="#ffb3d9"; ctx.fillRect(-5,-2,10,4);
+      ctx.restore();
+    } else {
+      drawWasabiBall(m); // 寿司スキン：ぷるぷる揺れるワサビ玉
+    }
 
     // 着弾地点の予告輪。時間とともに小円→大円へ。
     const rr=3 + p*15;
-    ctx.globalAlpha=0.18 + p*0.22; ctx.fillStyle="#ffd166";
+    const clsc=useClassicSkin();
+    ctx.globalAlpha=0.18 + p*0.22; ctx.fillStyle=clsc?"#ffd166":WASABI.g2;
     ctx.beginPath(); ctx.arc(m.targetX,m.targetY,rr*0.45,0,7); ctx.fill();
-    ctx.globalAlpha=0.65; ctx.strokeStyle="#ff9ecb"; ctx.lineWidth=2;
+    ctx.globalAlpha=0.65; ctx.strokeStyle=clsc?"#ff9ecb":WASABI.g3; ctx.lineWidth=2;
     ctx.beginPath(); ctx.arc(m.targetX,m.targetY,rr,0,7); ctx.stroke();
     ctx.globalAlpha=1;
   }
@@ -6802,7 +5732,7 @@ function render(){
   for(const b of bullets){ if(b.cTrail) drawCyanTrail(b.cTrail.concat([{x:b.x,y:b.y}]), 1); }
   ctx.globalAlpha=1;
 
-  // 弾：寿司スキン＝醤油のしずく／戦車スキン＝従来の弾
+  // 弾：寿司スキン＝高速弾は醤油の弾（茶色の丸）／通常弾は水色の水滴（泡）、戦車スキン＝従来の弾
   const classicSk = useClassicSkin();
   for(const b of bullets){
     if(classicSk){
@@ -6833,28 +5763,37 @@ function render(){
       continue;
     }
     if(b.fastBullet){
+      // 高速弾：醤油の弾（茶色の丸・つや付き）に、進行方向の細い尾をつける
       const a=Math.atan2(b.vy,b.vx);
       ctx.save();
       ctx.translate(b.x,b.y); ctx.rotate(a);
-      ctx.globalAlpha=0.28; ctx.fillStyle="#e2c9ae";
+      ctx.globalAlpha=0.28; ctx.fillStyle="#ecd2bd";
       ctx.fillRect(-14,-2,20,4);
       ctx.restore();
       ctx.globalAlpha=1;
-      drawSoyDrop(ctx, b.x, b.y, a, 16, 3.4, null);
+      ctx.fillStyle="#ddbfa4";
+      ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_R,0,7); ctx.fill();
+      ctx.strokeStyle="#bf9f89"; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_R,0,7); ctx.stroke();
+      ctx.fillStyle="rgba(255,244,225,.85)";
+      ctx.beginPath(); ctx.arc(b.x-BULLET_R*0.35,b.y-BULLET_R*0.4,BULLET_R*0.32,0,7); ctx.fill();
     } else {
+      // 通常弾：水色の水滴（泡）。うっすら透けた玉に、白いつやを入れる
       for(let i=0;i<b.trail.length;i++){
         const pt=b.trail[i];
         ctx.globalAlpha = (i+1)/b.trail.length*0.4;
-        ctx.fillStyle="#e2c9ae";
+        ctx.fillStyle="#cdeefb";
         ctx.beginPath(); ctx.arc(pt.x,pt.y,BULLET_R*0.7,0,7); ctx.fill();
       }
       ctx.globalAlpha=1;
-      ctx.fillStyle="#d7b894";
+      const gr=ctx.createRadialGradient(b.x-BULLET_R*0.35,b.y-BULLET_R*0.4,0,b.x,b.y,BULLET_R);
+      gr.addColorStop(0,"#ffffff"); gr.addColorStop(0.5,"#d9f2fc"); gr.addColorStop(1,"#a6dcf3");
+      ctx.fillStyle=gr;
       ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_R,0,7); ctx.fill();
-      ctx.strokeStyle="#b99a83"; ctx.lineWidth=1.2;
+      ctx.strokeStyle="#7cc6e8"; ctx.lineWidth=1.2;
       ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_R,0,7); ctx.stroke();
-      ctx.fillStyle="rgba(255,249,237,.9)";
-      ctx.beginPath(); ctx.arc(b.x-BULLET_R*0.35,b.y-BULLET_R*0.4,BULLET_R*0.32,0,7); ctx.fill();
+      ctx.fillStyle="rgba(255,255,255,.95)";
+      ctx.beginPath(); ctx.arc(b.x-BULLET_R*0.35,b.y-BULLET_R*0.4,BULLET_R*0.3,0,7); ctx.fill();
     }
   }
 
@@ -6883,6 +5822,7 @@ function render(){
 
   // 爆発の輪
   for(const e of explosions){
+    if(e.wasabi){ drawWasabiBurst(e); continue; }
     const prog = e.t/e.dur;
     const rad = 10 + prog*30*e.scaleF;
     ctx.globalAlpha = 1-prog;
@@ -7028,7 +5968,6 @@ function drawTank(t){
   ctx.translate(t.x,t.y);
 
   // 砲台（醤油さし）：寿司の下から、砲塔の向きに先っぽが出る
-  ctx.fillStyle="rgba(150,110,130,.18)"; if(!useClassicSkin()){ ctx.beginPath(); ctx.ellipse(0,t.r*0.95,t.r*1.48,t.r*0.43,0,0,7); ctx.fill(); } // 大きくした皿に合わせた足もとの影
 
   // 車体＝お皿（進む向き）、砲台＝寿司（照準の向き。寿司の先が向いた方へ弾が出る）
   const kind = t.isPlayer ? SUSHI_KIND.player : SUSHI_KIND[t.type];
@@ -7044,7 +5983,7 @@ function drawTank(t){
     ctx.strokeStyle = cc.dark; ctx.lineWidth=1.5; ctx.stroke();
     ctx.fillStyle = cc.dark; ctx.fillRect(0, -3, t.r*1.35, 6);
     ctx.restore();
-  } else if(!drawSushiPlate(ctx, kind, 0, 0, t.r, t.angle, t.turretAngle)){
+  } else if(!drawSushiPlate(ctx, kind, 0, 0, t.r, t.angle, t.turretAngle, t.isPlayer ? null : {color:t.color, dark:t.dark})){
     ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(0,0,t.r*0.9,0,7); ctx.fill(); // 画像の読み込み前だけの仮表示
   }
 
@@ -7176,18 +6115,8 @@ const ENEMY_NAMES = {
   gray:"灰色戦車"
 };
 
-// クリア画面用アイコン。寿司スキンではゲーム中と同じ寿司＋皿、戦車スキンでは従来の戦車を表示する。
-const ENEMY_SUSHI_NAMES = {
-  yellow:"うに", brown:"えび", green:"ねぎとろ", red:"いくら",
-  purple:"たまご", cyan:"うなぎ", gray:"サーモン"
-};
+// クリア画面用の戦車アイコン。ゲーム中の戦車と同じ配色・形を使う。
 function enemyTankIcon(type){
-  if(!useClassicSkin()){
-    return `<div class="enemyIconWrap">
-      <canvas class="enemyTankIcon enemySushiIcon" data-enemy-type="${type}" width="144" height="108" aria-label="${ENEMY_SUSHI_NAMES[type] || "寿司"}"></canvas>
-      <span class="enemyCount">× COUNT_PLACEHOLDER</span>
-    </div>`;
-  }
   const t = ENEMY_TYPES[type] || ENEMY_TYPES.normal;
   const r = 18;
   return `<div class="enemyIconWrap">
@@ -7201,34 +6130,9 @@ function enemyTankIcon(type){
         </g>
       </g>
     </svg>
-    <span class="enemyCount">× COUNT_PLACEHOLDER</span>
-  </div>`;
+    <span class="enemyCount">× {COUNT}</span>
+  </div>`.replace('{COUNT}', 'COUNT_PLACEHOLDER');
 }
-
-// 寿司スキンのクリア画面アイコンを、ゲーム本編と同じ描画処理で描く。
-function renderEnemyClearIcons(){
-  const icons = nextStageInfo.querySelectorAll("canvas[data-enemy-type]");
-  for(const el of icons){
-    const type = el.dataset.enemyType;
-    const kind = SUSHI_KIND[type];
-    const g = el.getContext("2d");
-    if(!g || !kind) continue;
-    g.clearRect(0,0,el.width,el.height);
-    g.save();
-    g.translate(el.width/2,el.height/2);
-    drawPlate(g,0,0,20,0);
-    if(!drawSushi(g,kind,0,0,40,0)){
-      // 画像ロード前だけの仮表示。ロード完了時に本物の寿司へ描き直す。
-      const t = ENEMY_TYPES[type] || ENEMY_TYPES.normal;
-      g.fillStyle = t.color;
-      g.strokeStyle = t.dark;
-      g.lineWidth = 1.5;
-      g.beginPath(); g.ellipse(0,0,18,11,0,0,Math.PI*2); g.fill(); g.stroke();
-    }
-    g.restore();
-  }
-}
-window.renderEnemyClearIcons = renderEnemyClearIcons;
 
 function getNextStageNumber(){
   return stageNum >= 50 ? 1 : stageNum + 1;
@@ -7274,8 +6178,7 @@ function showStageClear(){
 
   clearStageTitle.textContent = customPlayActive ? "オリジナルステージ CLEAR!" : `ステージ ${stageNum} CLEAR!`;
   clearStats.innerHTML = `残機：${Math.max(lives,0)}` + (gotExtraLife ? `　　<span style="color:var(--amber);">ライフ+1！</span>` : "");
-  nextStageInfo.innerHTML = (customPlayActive || backToLib) ? "ステージクリア！タップしてステージ一覧に戻ります。" : `次のステージ：<b>ステージ ${nextNum}</b><br><span class="enemyLabel">${useClassicSkin()?"敵戦車":"敵寿司"}</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
-  renderEnemyClearIcons();
+  nextStageInfo.innerHTML = (customPlayActive || backToLib) ? "ステージクリア！タップしてステージ一覧に戻ります。" : `次のステージ：<b>ステージ ${nextNum}</b><br><span class="enemyLabel">敵戦車</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
   clearTapHint.textContent = backToLib ? "画面をタップするとステージ一覧へ" : "画面をタップすると次のステージへ";
   stageClearScreen.classList.remove("hidden");
 }
@@ -7688,14 +6591,11 @@ function ammoBulletSvg(isFast, on, dark){
     return `<svg viewBox="-4 -7 8 14" width="8" height="14"><path d="M0 -7 L-3 1 L0 -1 L3 1 Z" fill="${tip}" stroke="${col}" stroke-width=".65" stroke-linejoin="round"/><path d="M0 0 L0 7" fill="none" stroke="${col}" stroke-width="2.2" stroke-linecap="round"/></svg>`;
   }
   if(!isFast){
-    // 実際の通常弾（直径8px・醤油の一滴）と同じ大きさ
-    return `<svg viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="4" fill="${on?"#d7b894":"#d4d0cb"}" stroke="${on?"#b99a83":"#aaa5a0"}" stroke-width=".8"/><circle cx="2.7" cy="2.6" r="1.1" fill="${on?"#fff9ed":"#f0eeeb"}" opacity=".85"/></svg>`;
+    // 実際の通常弾（直径8px・水色の水滴）と同じ大きさ
+    return `<svg viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="4" fill="${on?"#cdeefb":"#c4c4c4"}" stroke="${on?"#7cc6e8":"#9a9a9a"}" stroke-width=".8"/><circle cx="2.7" cy="2.6" r="1.1" fill="${on?"#ffffff":"#ececec"}" opacity=".95"/></svg>`;
   }
-  // 高速弾：細長い醤油のしずくを上向きに表示
-  return `<svg viewBox="-4 -8 8 16" width="8" height="16">
-    <path d="M0 -8 L-3.2 2.2 A3.4 3.4 0 0 0 3.2 2.2 Z" fill="${on?"#d7b894":"#d4d0cb"}" stroke="${on?"#b99a83":"#aaa5a0"}" stroke-width=".7" stroke-linejoin="round"/>
-    <circle cx="-1" cy="2" r="1" fill="${on?"#fff9ed":"#f0eeeb"}" opacity=".85"/>
-  </svg>`;
+  // 高速弾：醤油の弾（茶色の丸・直径8px）
+  return `<svg viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="4" fill="${on?"#ddbfa4":"#c4c4c4"}" stroke="${on?"#bf9f89":"#9a9a9a"}" stroke-width=".8"/><circle cx="2.7" cy="2.6" r="1.1" fill="${on?"#fff4e1":"#ececec"}" opacity=".85"/></svg>`;
 }
 function positionAmmo(){
   const c = canvas.getBoundingClientRect();
@@ -8154,13 +7054,19 @@ function renderEquip(){
   // 報酬の達成状況を先に更新し、デザイン画面だけでも受け取り・装備できるようにする。
   sync();
   const row=(label,kind)=>{
-    // 所持済み（受け取り済み）のエフェクトだけを表示。未解放・未受取の名前や条件も表示しない。
-    const items=ITEMS.filter(i=>i.kind===kind && rw.got[i.id]);
+    const items=ITEMS.filter(i=>i.kind===kind);
     const none='<button class="rwChip'+(localEq(kind)===""?' on':'')+'" data-kind="'+kind+'" data-id="">なし</button>';
-    const buttons=items.map(it=>
-      '<button class="rwChip'+(localEq(kind)===it.id?' on':'')+'" data-kind="'+kind+'" data-id="'+it.id+'">'+it.name+'</button>'
-    ).join("");
-    return '<div class="rwRowLabel">'+label+'</div><div class="rwChips">'+none+buttons+'</div>';
+    const buttons=items.map(it=>{
+      if(rw.got[it.id]){
+        return '<button class="rwChip'+(localEq(kind)===it.id?' on':'')+'" data-kind="'+kind+'" data-id="'+it.id+'">'+it.name+'</button>';
+      }
+      if(rw.ach[it.id]){
+        return '<button class="rwChip claim" data-claim="'+it.id+'">受け取る：'+it.name+'</button>';
+      }
+      return '<button class="rwChip locked" type="button" disabled title="'+it.cond+'">🔒 '+it.name+'</button>';
+    }).join("");
+    const hints=items.map(it=>it.name+'：'+it.cond).join(' ／ ');
+    return '<div class="rwRowLabel">'+label+'</div><div class="rwChips">'+none+buttons+'</div><div class="rwHint">'+hints+'</div>';
   };
   box.innerHTML='<div class="rwRowLabel">自機エフェクト</div>'
     +row("纏う系エフェクト","aura")+row("軌跡系エフェクト","trail");
