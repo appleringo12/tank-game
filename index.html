@@ -2166,7 +2166,20 @@ const SEAL_SEGS = [ // 体の右半分の外形（始点(0,247)から時計回�
   [70,1735,30,1700,0,1665]
 ];
 const SEAL_CACHE = {};
-const SEAL_LINE = "#c5c0cf", SEAL_SOFT = "#b9b3c6", SEAL_EYE = "#4f4960"; // 縁・ひげを明るいラベンダーグレーに
+const SEAL_LINE = "#c5c0cf", SEAL_SOFT = "#b9b3c6", SEAL_EYE = "#4f4960"; // 顔の細部用
+// アザラシの縁取りは、各個体の体色を少し濃くした色にする。
+const SEAL_OUTLINE_CACHE = {};
+function sealOutlineColor(fill){
+  if(SEAL_OUTLINE_CACHE[fill]) return SEAL_OUTLINE_CACHE[fill];
+  let out=SEAL_LINE;
+  try{
+    const t=document.createElement("canvas"); t.width=t.height=1;
+    const c=t.getContext("2d"); c.fillStyle=fill; c.fillRect(0,0,1,1);
+    const d=c.getImageData(0,0,1,1).data;
+    out="rgb("+[0,1,2].map(i=>Math.round(d[i]*0.72)).join(",")+")";
+  }catch(e){}
+  return (SEAL_OUTLINE_CACHE[fill]=out);
+}
 const SEAL_PASTEL_K = 0.38;               // 敵の色を白へ近づける割合（パステル調）
 const SEAL_PASTEL = {};
 function sealPastel(col){
@@ -2201,13 +2214,14 @@ function sealFlipper(c,fill,lw){
 }
 // fill＝体の色、lw＝線の太さ、ft＝顔のパーツの拡大率（小さく描くときは太く大きく）
 function sealSprite(fill, lw, ft){
-  const key=fill+"|"+lw+"|"+ft;
+  const outline=sealOutlineColor(fill);
+  const key=fill+"|"+outline+"|"+lw+"|"+ft;
   if(SEAL_CACHE[key]) return SEAL_CACHE[key];
   const cv=document.createElement("canvas");
   cv.width=Math.ceil(SEAL_W*SEAL_SC); cv.height=Math.ceil(SEAL_H*SEAL_SC);
   const c=cv.getContext("2d");
   c.scale(SEAL_SC,SEAL_SC); c.translate(SEAL_X0,-SEAL_Y0);
-  c.lineJoin="round"; c.lineCap="round"; c.strokeStyle=SEAL_LINE; c.lineWidth=lw;
+  c.lineJoin="round"; c.lineCap="round"; c.strokeStyle=outline; c.lineWidth=lw;
   // ひれ（左右）
   sealFlipper(c,fill,lw);
   c.save(); c.scale(-1,1); sealFlipper(c,fill,lw); c.restore();
@@ -2223,7 +2237,7 @@ function sealSprite(fill, lw, ft){
     c.beginPath(); c.moveTo(sx*175,488); c.lineTo(sx*122,508); c.stroke();
   }
   // ひげ
-  c.strokeStyle=SEAL_LINE; c.lineWidth=lw*0.7;
+  c.strokeStyle=outline; c.lineWidth=lw*0.7;
   for(const sx of [-1,1]){
     c.beginPath(); c.moveTo(sx*287,291); c.quadraticCurveTo(sx*230,300,sx*170,328); c.stroke();
     c.beginPath(); c.moveTo(sx*310,324); c.quadraticCurveTo(sx*240,334,sx*193,348); c.stroke();
