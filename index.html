@@ -1116,7 +1116,11 @@ function drawPyramidTile(g,x,y,w,h=w){
 
 // アザラシスキン用ブロック：氷ブロック（レンガ）・氷山（鉄壁）。(x,y)=左上、w,h=描くマスの大きさ。
 function _sealTile(g,x,y,w,h,fn){ g.save(); g.translate(x,y); g.scale(w/40,h/40); fn(g); g.restore(); }
-function _sealRR(g,x,y,w,h,r){ g.beginPath(); g.roundRect(x,y,w,h,r); }
+function _sealRR(g,x,y,w,h,r){   // 角丸の四角。古いスマホのブラウザは roundRect が無く描画が止まるので、arcTo で代用
+  g.beginPath();
+  if(typeof g.roundRect==="function"){ g.roundRect(x,y,w,h,r); return; }
+  g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath();
+}
 function _sealPoly(g,pts,f){ g.beginPath(); pts.forEach(([px,py],i)=>g[i?"lineTo":"moveTo"](px,py)); g.closePath(); g.fillStyle=f; g.fill(); }
 function _sealSpark(g,x,y,r,c){ _sealPoly(g,[[x,y-r],[x+r*.3,y-r*.3],[x+r,y],[x+r*.3,y+r*.3],[x,y+r],[x-r*.3,y+r*.3],[x-r,y],[x-r*.3,y-r*.3]],c); }
 function drawIceTile(g,x,y,w,h=w){   // アザラシスキンの鉄壁：うすいパステルの氷ブロック
