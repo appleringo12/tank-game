@@ -2215,11 +2215,24 @@ function drawSealOne(g, fill, x, y, r, ang, k, lw, ft){
   g.drawImage(spr.cv, -SEAL_X0*SEAL_SC*m, -(SEAL_PIVOT_Y-SEAL_Y0)*SEAL_SC*m, spr.cv.width*m, spr.cv.height*m);
   g.restore();
 }
+// 子どものアザラシは、大人の色と白のちょうど中間色にする（色ごとにキャッシュ）
+const SEAL_CHILD_COLOR_CACHE = {};
+function sealChildColor(adultFill){
+  if(SEAL_CHILD_COLOR_CACHE[adultFill]) return SEAL_CHILD_COLOR_CACHE[adultFill];
+  let out = "#ffffff";
+  try{
+    const t=document.createElement("canvas"); t.width=t.height=1;
+    const c=t.getContext("2d"); c.fillStyle=adultFill; c.fillRect(0,0,1,1);
+    const d=c.getImageData(0,0,1,1).data;
+    out="rgb("+[0,1,2].map(i=>Math.round((d[i]+255)/2)).join(",")+")";
+  }catch(e){}
+  return (SEAL_CHILD_COLOR_CACHE[adultFill]=out);
+}
 function drawSealTank(g, x, y, r, bodyAng, turretAng, plateCol){
   const fill = plateCol ? sealPastel(plateCol.color) : "#ffffff";   // 自機は白、敵は戦車スキンと同じ色
   drawSealOne(g, fill, x, y, r, bodyAng, 1.12, 60, 1.35);    // 大きなアザラシ（車体）：従来より少し大きく
-  // 縮小したアザラシ（背中に乗った子供＝砲台）：顔を隠さないよう少し尻尾側へ。子供も少しだけ大きく
-  drawSealOne(g, fill, x-Math.cos(bodyAng)*r*0.25, y-Math.sin(bodyAng)*r*0.25, r, turretAng, 0.60, 88, 1.7);
+  // 子どもは大人の色と白の中間色。自機は大人と同じ白色になる。
+  drawSealOne(g, sealChildColor(fill), x-Math.cos(bodyAng)*r*0.25, y-Math.sin(bodyAng)*r*0.25, r, turretAng, 0.60, 88, 1.7);
   return true;
 }
 // 車体＝木の板のお皿。寿司を当たり判定の直径（2r）まで大きくしたため、
