@@ -613,7 +613,7 @@
     <div id="designScreen" class="overlay hidden">
       <h1 class="title" style="font-size:clamp(22px,6vw,32px);">デザイン</h1>
       <div class="designPickerRow">
-        <div class="designPreview"><canvas id="designPreviewCanvas" width="280" height="180"></canvas><div>寿司プレビュー（エフェクト表示）</div></div>
+        <div class="designPreview"><canvas id="designPreviewCanvas" width="280" height="180"></canvas><div>プレビュー（エフェクト表示）</div></div>
       </div>
       <div id="rwEquip"></div>
       <div id="tankSkinBox"></div>
@@ -2076,10 +2076,13 @@ const PASTEL_K_SUSHI = 0.30;
 
 // ---- スキン（寿司／戦車）。ゲーム全体の見た目を切り替える。誰でも自由に選べる ----
 var tankSkin = "sushi";
-try{ if(localStorage.getItem("tankSkinV1")==="classic") tankSkin="classic"; }catch(e){}
+try{ const _sv=localStorage.getItem("tankSkinV1"); if(_sv==="classic"||_sv==="seal") tankSkin=_sv; }catch(e){}
 function useClassicSkin(){ return tankSkin==="classic"; }
+function useSealSkin(){ return tankSkin==="seal"; }
+function useSushiSkin(){ return tankSkin==="sushi"; }
 const SUSHI_KIND = { player:"tuna", yellow:"uni", brown:"ebi", green:"negitoro", cyan:"unagi", gray:"salmon", red:"ikura", purple:"tamago" };
 const SUSHI_PLAYER_COLOR = { color:"#ff9db4", dark:"#d9718c" }; // マグロの色（爆発の破片・エフェクト用）
+const SEAL_PLAYER_COLOR = { color:"#ffffff", dark:"#aeb8cc" };  // アザラシ（自機は白）
 const SUSHI_ROWS = 35;  // マグロの縦のドット数（これを基準に全部の寿司を同じドットの大きさで描く）
 const SUSHI = {
   tuna:{w:23,h:35,src:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABcAAAAjCAYAAAB/wZEbAAAFWUlEQVR42s2Wz29UVRTHP+e+mU5/twSUn22n05lBBKIb4z8gC4mYuDQu/FGNBH+REONCE2KiCxOjJJDiBo0rDeKOgMGtCzbGBMRpX4dWaOWHQEtb2pnpvHePi3unM2VAcOdLJnmZd+/3nPP9fs+5F/5vz5WxMX2YdfKgBSP7994XaM8b79G3fZv8J/DL5y/oyWOHARhev41EYEBArKJYACKrHLs+BsDzw++yZefj8kDw4yMjejM8x3BvhkRXB2xaj8QWvTULlQrid6iFaqkMrSm+vlZg14vD5J5+ahVe4m7wm+E5hh/Jkdy4Hp58AtpS8MtZpLoMRlCriIC0BKSGdqB3Fnm1ssw33x1rYsDci99EezvsfgY2rIWffoa5eZ+uIkbQoTz0D2KvXUWvXoEo4gW7pkmfFfDL4bgC7KYXVMBa+OEkWEVFQRUVQbJ5JCHo5EWYWwAsQSJJwsNOFQraBL68uATAhq41mJ4OOPsrWq2ggHiiZetWtCVAR0OI1e22YIwQtLQAMD013cz5mW+PumgB2IVFmJtHjI89lHVZW4HRUUQUFBTx6RlQl/Bvp37kchhqfz4viWZzCqLq1opALo9ikRgICw5wpW5xoAJW7crfsQ9kakK+cvATn3nCedoIms06s1YjNBwFxWXtTezYEgShO50G4KUPPuT00S9X05Lq6AbAiuOQobzjemEemZoGAQUnNtajG2RwAAxEY0UA2to77uFzqbGikM0iYrAX/sAYB6qN61TcSy4Hy1X04kWWb8+5717YVeDl2ZvupXetE6tQALSmkw8sTtjWJGwegCjCTk5AVOe7dHumGTzhI0pnBxqGiDRKpysJy7p10NnlaCoWXT+IunkApJJJAIphqGZk/159/bNDJNo7HczUNBJb1zyN0GKcz3t60cB7Xd0ooKG6oL2Tlz86yJmRL7xLg4QzeG0iqXUbG2nODLmgRmA8dD5bKccFB2eG1q6eOi12YYags7dOgoIYz7daZPsOJLbYwmhDmuLAjYIaanVaa6mWFurg5XKZFmrDqe5f8nlEDEQROhY6C2rzxJZNG+hsaYWp61QXFyiXlhoEFYirlfp6MTCURnADTAujjgZd3cmoIuk0xBFqnaCVxTtEcdWB7zv0lQA6/PGnvqUNpFIQONV1LKSumtYbQhXJ5aAaYS9NM3fjhqMFOHH4CM++836DFVudW0QtOtDvIMLQ8+TbXKTOeHoQohi9dAm1FhtbMJBsawdgcGioPrjK8978fX2u4tHwLn7xogmSyQCCjoWouv8TfoImjWluonjZcW4v/4VcvdaoLH7CwuCgG2ixRccvug/OItR6dLlcWS33n8WinjryOQCvdaZJdrR6YQUxLoBmMkhkXWdOTKCxd44qVpX5mVmOcwuAXcNvk9u5wzk/nc3WO90fad7k7rel370GBp2YRK2vyk9Ka+1KEQDJlmTzAQ0QRzFW/WYVNJ2BVBKWyuh40TVVQ+uKcXZNrVtbP0M8703gldIS2NjtzWZcdoUxdHrKVwRaq0oECQKSj26kMju3gtGfy8kq8OfeOgDA98xQqlSQ/gGoxmix6D2iqOqKY0AcFRs3UZ2fYfzvK+72te9A89WiFg1AgiR2dobF878TlaoO1DYcGQqyuQ/pH6A0Ps7stZtE/tOWfAPO/S6eLyU3IAI2jtFY0cAvtUpPZhCNYmYmJgkSAXG1yonEHHve3E/ftsfknjeuVcIKRHGMtYoab2kVuvv60WrMrclJAhGWKstMz866/msAvu8tt5b9nkoPopa2lgBMQNf6jQAsXL9KJY6pLJY43e2axs+oh7+f/9vdvPbcC7T2/AMnln0Ng3oA1QAAAABJRU5ErkJggg=="},
@@ -2116,6 +2119,108 @@ function drawSushi(g, kind, x, y, len, ang){
   g.restore();
   return true;
 }
+
+/* ================================================================
+   アザラシスキン：渡されたイラストをベクターで描き、色ごとにスプライト化して使う
+   車体＝大きなアザラシ（進む向き）、砲台＝同じ絵を縮小して背中に乗せた小さなアザラシ（照準の向き）
+   ================================================================ */
+const SEAL_SC = 0.12;                    // スプライトの縮尺（イラスト座標 → スプライトのpx）
+const SEAL_X0 = 660, SEAL_Y0 = 225;      // スプライトの左上に当たる位置（中心x=0基準・y）
+const SEAL_W = 1320, SEAL_H = 1585;      // スプライトが覆うイラスト座標の幅・高さ
+const SEAL_PIVOT_Y = 900;                // 回転の中心（体の真ん中）のy
+const SEAL_BODY_H = 1543;                // イラストの頭〜尾びれの長さ
+const SEAL_SEGS = [ // 体の右半分の外形（始点(0,247)から時計回り、左半分は左右反転）
+  [120,247,300,310,405,435],[500,525,560,770,575,925],[580,1060,530,1160,455,1250],
+  [390,1330,300,1385,240,1425],[190,1455,140,1485,140,1520],[140,1560,200,1590,240,1615],
+  [285,1650,300,1690,297,1725],[297,1770,235,1795,175,1790],[150,1790,125,1778,105,1762],
+  [70,1735,30,1700,0,1665]
+];
+const SEAL_CACHE = {};
+const SEAL_LINE = "#9a92ab", SEAL_SOFT = "#b9b3c6", SEAL_EYE = "#4f4960"; // 縁・ひげ／鼻・ほほ／目（やわらかい色）
+const SEAL_PASTEL_K = 0.38;               // 敵の色を白へ近づける割合（パステル調）
+const SEAL_PASTEL = {};
+function sealPastel(col){
+  if(SEAL_PASTEL[col]) return SEAL_PASTEL[col];
+  let out=col;
+  try{
+    const t=document.createElement("canvas"); t.width=t.height=1;
+    const c=t.getContext("2d"); c.fillStyle=col; c.fillRect(0,0,1,1);
+    const d=c.getImageData(0,0,1,1).data, k=SEAL_PASTEL_K;
+    out="rgb("+[0,1,2].map(i=>Math.round(d[i]+(255-d[i])*k)).join(",")+")";
+  }catch(e){}
+  return (SEAL_PASTEL[col]=out);
+}
+function sealBodyPath(c){
+  c.beginPath(); c.moveTo(0,247);
+  const pts=[[0,247]];
+  for(const s of SEAL_SEGS){ c.bezierCurveTo(s[0],s[1],s[2],s[3],s[4],s[5]); pts.push([s[4],s[5]]); }
+  for(let i=SEAL_SEGS.length;i>=1;i--){
+    const s=SEAL_SEGS[i-1], p=pts[i-1];
+    c.bezierCurveTo(-s[2],s[3],-s[0],s[1],-p[0],p[1]);
+  }
+  c.closePath();
+}
+function sealFlipper(c,fill,lw){
+  c.beginPath(); c.moveTo(405,435);
+  c.bezierCurveTo(450,385,495,335,540,320);
+  c.bezierCurveTo(570,310,600,308,612,316);
+  c.bezierCurveTo(630,340,628,400,600,490);
+  c.bezierCurveTo(580,560,550,630,532,675);
+  c.save(); c.fillStyle=fill; c.fill(); c.restore();   // 塗り（体との境目は閉じる）
+  c.stroke();                                            // 線は外側だけ（体側は開いたまま）
+}
+// fill＝体の色、lw＝線の太さ、ft＝顔のパーツの拡大率（小さく描くときは太く大きく）
+function sealSprite(fill, lw, ft){
+  const key=fill+"|"+lw+"|"+ft;
+  if(SEAL_CACHE[key]) return SEAL_CACHE[key];
+  const cv=document.createElement("canvas");
+  cv.width=Math.ceil(SEAL_W*SEAL_SC); cv.height=Math.ceil(SEAL_H*SEAL_SC);
+  const c=cv.getContext("2d");
+  c.scale(SEAL_SC,SEAL_SC); c.translate(SEAL_X0,-SEAL_Y0);
+  c.lineJoin="round"; c.lineCap="round"; c.strokeStyle=SEAL_LINE; c.lineWidth=lw;
+  // ひれ（左右）
+  sealFlipper(c,fill,lw);
+  c.save(); c.scale(-1,1); sealFlipper(c,fill,lw); c.restore();
+  // 体
+  sealBodyPath(c); c.fillStyle=fill; c.fill(); c.stroke();
+  // 鼻
+  c.fillStyle=SEAL_SOFT;
+  c.beginPath(); c.ellipse(0,343,60*ft,22*ft,0,0,7); c.fill();
+  c.beginPath(); c.ellipse(0,343+22*ft,22*ft,17*ft,0,0,7); c.fill();
+  // ほほの線
+  c.strokeStyle=SEAL_SOFT; c.lineWidth=lw*0.7;
+  for(const sx of [-1,1]){
+    c.beginPath(); c.moveTo(sx*175,488); c.lineTo(sx*122,508); c.stroke();
+  }
+  // ひげ
+  c.strokeStyle=SEAL_LINE; c.lineWidth=lw*0.7;
+  for(const sx of [-1,1]){
+    c.beginPath(); c.moveTo(sx*287,291); c.quadraticCurveTo(sx*230,300,sx*170,328); c.stroke();
+    c.beginPath(); c.moveTo(sx*310,324); c.quadraticCurveTo(sx*240,334,sx*193,348); c.stroke();
+    c.beginPath(); c.moveTo(sx*365,382); c.quadraticCurveTo(sx*280,380,sx*198,385); c.stroke();
+  }
+  // 目（つやつき）
+  for(const sx of [-1,1]){
+    c.fillStyle=SEAL_EYE; c.beginPath(); c.ellipse(sx*140,432,38*ft,33*ft,0,0,7); c.fill();
+    c.fillStyle="#fff"; c.beginPath(); c.arc(sx*141,413,9*ft,0,7); c.fill();
+  }
+  return (SEAL_CACHE[key]={cv});
+}
+function drawSealOne(g, fill, x, y, r, ang, k, lw, ft){
+  const spr=sealSprite(fill,lw,ft); if(!spr||!spr.cv) return;
+  const m=(r*2.0/SEAL_BODY_H)*k/SEAL_SC;   // 頭〜尾びれの長さ＝当たり判定の直径(2r)           // スプライトpx → ゲームのpx
+  g.save(); g.translate(x,y); g.rotate(ang+Math.PI/2);
+  g.imageSmoothingEnabled=true; g.imageSmoothingQuality="high";
+  g.drawImage(spr.cv, -SEAL_X0*SEAL_SC*m, -(SEAL_PIVOT_Y-SEAL_Y0)*SEAL_SC*m, spr.cv.width*m, spr.cv.height*m);
+  g.restore();
+}
+function drawSealTank(g, x, y, r, bodyAng, turretAng, plateCol){
+  const fill = plateCol ? sealPastel(plateCol.color) : "#ffffff";   // 自機は白、敵は戦車スキンと同じ色
+  drawSealOne(g, fill, x, y, r, bodyAng, 1, 60, 1.35);       // 大きなアザラシ（車体）
+  // 縮小したアザラシ（背中に乗った子供＝砲台）：大きいアザラシの顔が隠れないよう、少し尻尾側にずらす
+  drawSealOne(g, fill, x-Math.cos(bodyAng)*r*0.25, y-Math.sin(bodyAng)*r*0.25, r, turretAng, 0.55, 88, 1.7);
+  return true;
+}
 // 車体＝木の板のお皿。寿司を当たり判定の直径（2r）まで大きくしたため、
 // 皿も余白を保ったまま拡大（長さ3.2r×幅約1.93r）。
 function drawPlate(g, x, y, r, ang, col){
@@ -2139,6 +2244,7 @@ function drawPlate(g, x, y, r, ang, col){
 // 板＋寿司。板は車体の向き、寿司（砲台）は照準の向きに回る。r＝戦車の半径。従来スキン選択中は false を返す（呼び出し側が従来の描き方にする）
 function drawSushiPlate(g, kind, x, y, r, bodyAng, turretAng, plateCol){
   if(useClassicSkin()) return false;
+  if(useSealSkin()) return drawSealTank(g,x,y,r,bodyAng,turretAng,plateCol);
   drawPlate(g,x,y,r,bodyAng,plateCol);
   // 寿司の長辺は皿（直径2r）より少し長くして、皿から少しはみ出させる。
   return drawSushi(g,kind,x,y,r*2.3,turretAng);
@@ -2169,8 +2275,8 @@ function makePlayer(x,y,pidx=0){
     fireBuffered:false, // ★発射間隔制限中に押された入力を覚えておく（先行入力）
     invuln:2.0,  // ★復活直後の無敵時間(秒)
     blink:0,
-    color: SUSHI_PLAYER_COLOR.color, // 自機はマグロ固定（マルチの1P/2Pは丸と文字で見分ける）
-    dark:  SUSHI_PLAYER_COLOR.dark,
+    color: (useSealSkin()?SEAL_PLAYER_COLOR:SUSHI_PLAYER_COLOR).color, // 自機はマグロ（アザラシスキンでは白）固定
+    dark:  (useSealSkin()?SEAL_PLAYER_COLOR:SUSHI_PLAYER_COLOR).dark,
     pidx, fireLock:1.0, // マルチ：2Pの開始直後の射撃ロック
   };
 }
@@ -2452,10 +2558,10 @@ function drawCyanTrail(pts,alphaMul){
     d+=seg;
     if(seg<0.01) continue;
     ctx.globalAlpha=alphaMul*0.5*f;
-    ctx.strokeStyle=useClassicSkin()?"#7fe4f2":"#ecd2bd"; ctx.lineWidth=1.5+4.5*f;
+    ctx.strokeStyle=useSushiSkin()?"#ecd2bd":"#7fe4f2"; ctx.lineWidth=1.5+4.5*f;
     ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(c.x,c.y); ctx.stroke();
     ctx.globalAlpha=alphaMul*0.75*f;
-    ctx.strokeStyle=useClassicSkin()?"#ffffff":"#fff0d0"; ctx.lineWidth=0.8+1.4*f;
+    ctx.strokeStyle=useSushiSkin()?"#fff0d0":"#ffffff"; ctx.lineWidth=0.8+1.4*f;
     ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(c.x,c.y); ctx.stroke();
   }
   ctx.restore();
@@ -3048,7 +3154,7 @@ function spawnExplosion(x,y,scaleF,quiet){
 const WASABI = { g1:"#c4eab0", g2:"#9ad88f", g3:"#79c27c", dk:"#4f9a5c", hi:"#f2ffe8" };
 function spawnMissileBlast(x,y){
   mpq("sm", x, y);
-  if(useClassicSkin()){ spawnExplosion(x,y,2.0,true); return; }
+  if(!useSushiSkin()){ spawnExplosion(x,y,2.0,true); return; }
   const B = MISSILE_BLAST_RADIUS, drops=[];
   for(let i=0;i<12;i++){
     drops.push({ a:Math.random()*Math.PI*2, v:B*(0.55+Math.random()*0.45), r:2.5+Math.random()*3, k:Math.random() });
@@ -5600,19 +5706,19 @@ function rebuildMapCache(){
   // 背景
   ctx.fillStyle = getStageBackgroundColor();
   ctx.fillRect(0,0,WORLD_W,WORLD_H);
-  ctx.strokeStyle = useClassicSkin() ? "rgba(210,150,220,0.18)" : "rgba(215,170,200,0.22)";
+  ctx.strokeStyle = !useSushiSkin() ? "rgba(210,150,220,0.18)" : "rgba(215,170,200,0.22)";
   ctx.lineWidth = 1;
   for(let x=0;x<=WORLD_W;x+=TILE){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,WORLD_H); ctx.stroke(); }
   for(let y=0;y<=WORLD_H;y+=TILE){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(WORLD_W,y); ctx.stroke(); }
 
   // 寿司スキン：白木のカウンターのような、ごく薄い木目
-  if(!useClassicSkin()){
+  if(useSushiSkin()){
     ctx.save(); ctx.strokeStyle="#e0b9c9"; ctx.lineWidth=1; ctx.globalAlpha=0.12;
     for(let y=6;y<WORLD_H;y+=9){ ctx.beginPath(); ctx.moveTo(0,y+Math.sin(y)*1.5); ctx.lineTo(WORLD_W,y+Math.cos(y*1.7)*1.5); ctx.stroke(); }
     ctx.restore();
   }
   // 外周の枠
-  ctx.strokeStyle = useClassicSkin() ? "#c9baf5" : "#efd5c4";
+  ctx.strokeStyle = !useSushiSkin() ? "#c9baf5" : "#efd5c4";
   ctx.lineWidth = 6;
   ctx.strokeRect(3,3,WORLD_W-6,WORLD_H-6);
 
@@ -5703,7 +5809,7 @@ function render(){
   // ミサイル：小さな円から大きな円へ伸びる着弾予告＋飛翔体
   for(const m of missiles){
     const p=clamp(m.time/m.flightTime,0,1);
-    if(useClassicSkin()){
+    if(!useSushiSkin()){
       ctx.save();
       ctx.translate(m.x,m.y);
       ctx.rotate(m.angle);
@@ -5719,7 +5825,7 @@ function render(){
 
     // 着弾地点の予告輪。時間とともに小円→大円へ。
     const rr=3 + p*15;
-    const clsc=useClassicSkin();
+    const clsc=!useSushiSkin();
     ctx.globalAlpha=0.18 + p*0.22; ctx.fillStyle=clsc?"#ffd166":WASABI.g2;
     ctx.beginPath(); ctx.arc(m.targetX,m.targetY,rr*0.45,0,7); ctx.fill();
     ctx.globalAlpha=0.65; ctx.strokeStyle=clsc?"#ff9ecb":WASABI.g3; ctx.lineWidth=2;
@@ -5733,11 +5839,11 @@ function render(){
   ctx.globalAlpha=1;
 
   // 弾：寿司スキン＝高速弾は醤油の弾（茶色の丸）／通常弾は水色の水滴（泡）、戦車スキン＝従来の弾
-  const classicSk = useClassicSkin();
+  const classicSk = useClassicSkin(), sealSk = useSealSkin();
   for(const b of bullets){
-    if(classicSk){
+    if(classicSk || (sealSk && b.fastBullet)){   // アザラシスキン：通常弾は寿司の水玉、高速弾は緑
       if(b.fastBullet){
-        const pc = (b.owner && b.owner.isPlayer) ? classicColors(b.owner).dark : null;
+        const pc = (classicSk && b.owner && b.owner.isPlayer) ? classicColors(b.owner).dark : null;
         ctx.save();
         ctx.translate(b.x,b.y);
         ctx.rotate(Math.atan2(b.vy,b.vx));
@@ -6594,6 +6700,9 @@ function ammoBulletSvg(isFast, on, dark){
     // 実際の通常弾（直径8px・水色の水滴）と同じ大きさ
     return `<svg viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="4" fill="${on?"#cdeefb":"#c4c4c4"}" stroke="${on?"#7cc6e8":"#9a9a9a"}" stroke-width=".8"/><circle cx="2.7" cy="2.6" r="1.1" fill="${on?"#ffffff":"#ececec"}" opacity=".95"/></svg>`;
   }
+  if(useSealSkin()){ // アザラシスキンの高速弾：緑の弾
+    return `<svg viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="4" fill="${on?"#8fdc9e":"#c4c4c4"}" stroke="${on?"#48c96a":"#9a9a9a"}" stroke-width=".8"/><circle cx="2.7" cy="2.6" r="1.1" fill="${on?"#e9ffee":"#ececec"}" opacity=".9"/></svg>`;
+  }
   // 高速弾：醤油の弾（茶色の丸・直径8px）
   return `<svg viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="4" fill="${on?"#ddbfa4":"#c4c4c4"}" stroke="${on?"#bf9f89":"#9a9a9a"}" stroke-width=".8"/><circle cx="2.7" cy="2.6" r="1.1" fill="${on?"#fff4e1":"#ececec"}" opacity=".85"/></svg>`;
 }
@@ -6632,7 +6741,7 @@ function updateAmmo(){
     }
     used = Math.max(0, Math.min(max, used));
     const isFast = !!(player.tankType && player.tankType !== "A");
-    const key = max + "|" + used + "|" + (isFast?1:0) + "|" + (player.dark||"") + "|" + (useClassicSkin()?"c":"s");
+    const key = max + "|" + used + "|" + (isFast?1:0) + "|" + (player.dark||"") + "|" + tankSkin;
     if(key !== ammoKey){
       ammoKey = key;
       const remain = max - used;
@@ -6721,20 +6830,21 @@ function classicColors(t){
 }
 function renderTankSkin(){
   const box=document.getElementById("tankSkinBox"); if(!box) return;
-  const cur=useClassicSkin()?"classic":"sushi";
+  const cur=tankSkin;
   box.innerHTML='<div class="rwRowLabel">スキン</div><div class="rwChips">'
     +'<button class="rwChip'+(cur==="sushi"?' on':'')+'" data-skin="sushi">寿司</button>'
+    +'<button class="rwChip'+(cur==="seal"?' on':'')+'" data-skin="seal">アザラシ</button>'
     +'<button class="rwChip'+(cur==="classic"?' on':'')+'" data-skin="classic">戦車</button></div>';
 }
 document.getElementById("tankSkinBox").addEventListener("click",e=>{
   const b=e.target.closest("[data-skin]"); if(!b) return;
-  tankSkin=b.dataset.skin==="classic"?"classic":"sushi";
+  tankSkin=b.dataset.skin==="classic"?"classic":(b.dataset.skin==="seal"?"seal":"sushi");
   try{ localStorage.setItem(TANK_SKIN_KEY,tankSkin); }catch(err){}
   mapCacheDirty=true; // 背景・ブロックを描き直す
   renderTankSkin();
 });
 // 自機はマグロ固定（色を変えるシステムは廃止）
-function tankDesignColor(){ return SUSHI_PLAYER_COLOR; }
+function tankDesignColor(){ return useSealSkin()?SEAL_PLAYER_COLOR:SUSHI_PLAYER_COLOR; }
 function paintDesignPreview(){
   const cv=document.getElementById("designPreviewCanvas"); if(!cv) return;
   const x=cv.getContext("2d"); x.clearRect(0,0,cv.width,cv.height); x.save(); x.translate(cv.width/2,cv.height/2);
@@ -7054,7 +7164,9 @@ function renderEquip(){
   // 報酬の達成状況を先に更新し、デザイン画面だけでも受け取り・装備できるようにする。
   sync();
   const row=(label,kind)=>{
-    const items=ITEMS.filter(i=>i.kind===kind);
+    // まだ達成していない（持っていない）エフェクトは見せない。ひとつも持っていない系統は行ごと出さない
+    const items=ITEMS.filter(i=>i.kind===kind&&(rw.got[i.id]||rw.ach[i.id]));
+    if(!items.length) return "";
     const none='<button class="rwChip'+(localEq(kind)===""?' on':'')+'" data-kind="'+kind+'" data-id="">なし</button>';
     const buttons=items.map(it=>{
       if(rw.got[it.id]){
@@ -7063,13 +7175,12 @@ function renderEquip(){
       if(rw.ach[it.id]){
         return '<button class="rwChip claim" data-claim="'+it.id+'">受け取る：'+it.name+'</button>';
       }
-      return '<button class="rwChip locked" type="button" disabled title="'+it.cond+'">🔒 '+it.name+'</button>';
+      return "";
     }).join("");
-    const hints=items.map(it=>it.name+'：'+it.cond).join(' ／ ');
-    return '<div class="rwRowLabel">'+label+'</div><div class="rwChips">'+none+buttons+'</div><div class="rwHint">'+hints+'</div>';
+    return '<div class="rwRowLabel">'+label+'</div><div class="rwChips">'+none+buttons+'</div>';
   };
-  box.innerHTML='<div class="rwRowLabel">自機エフェクト</div>'
-    +row("纏う系エフェクト","aura")+row("軌跡系エフェクト","trail");
+  const rows=row("纏う系エフェクト","aura")+row("軌跡系エフェクト","trail");
+  box.innerHTML=rows?'<div class="rwRowLabel">自機エフェクト</div>'+rows:"";
 }
 document.getElementById("rwEquip").addEventListener("click",e=>{
   const b=e.target.closest(".rwChip"); if(!b||b.disabled) return;
