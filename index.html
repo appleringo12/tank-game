@@ -500,6 +500,9 @@
   html.skin-seal .rwChip{ border-color:#a9d3ec; color:#3f6f93; }
   html.skin-seal .rwChip.on{ background:#86c9ee; color:#fff; }
   html.skin-seal #ammoBox{ border-color:#b9dcef; background:rgba(244,251,255,.96); }
+  /* アザラシスキンでも残弾警告色を優先 */
+  html.skin-seal #ammoBox.warn{ border-color:#f3d58b; background:rgba(255,251,239,.97); }
+  html.skin-seal #ammoBox.empty{ border-color:#efb4c8; background:rgba(255,244,248,.97); }
 </style>
 </head>
 <body>
@@ -5864,12 +5867,8 @@ function getStageBackgroundColor(){ return stageBackgroundColorFor(stageNum); }
 function stageBackgroundColorFor(num){
   // ステージ番号は1〜50を周回するため、2周目以降も同じ10ステージ区分を適用する。
   const stage = ((num - 1) % 50) + 1;
-  if(useSealSkin()){ // アザラシスキン：雪原→氷→浅瀬→海→夜明けの氷海
-    if(stage <= 10) return "#f3fbff";
-    if(stage <= 20) return "#e4f5fd";
-    if(stage <= 30) return "#d9f3ee";
-    if(stage <= 40) return "#cbe9f8";
-    return "#d9def6";
+  if(useSealSkin()){ // アザラシスキンは全ステージで背景を白に統一
+    return "#ffffff";
   }
   if(stage <= 10) return "#fffafc";       // 1〜10：白
   if(stage <= 20) return "#ffebf3";       // 11〜20：ピンク
@@ -6046,20 +6045,33 @@ function render(){
   for(const b of bullets){ if(b.cTrail) drawCyanTrail(b.cTrail.concat([{x:b.x,y:b.y}]), 1); }
   ctx.globalAlpha=1;
 
-  // 弾：寿司スキン＝高速弾は醤油の弾（茶色の丸）／通常弾は水色の水滴（泡）、戦車スキン＝従来の弾
+  // 弾：アザラシスキンの高速弾は紫色の氷柱。それ以外の弾は従来デザイン。
   const classicSk = useClassicSkin(), sealSk = useSealSkin();
   for(const b of bullets){
-    if(classicSk || (sealSk && b.fastBullet)){   // アザラシスキン：通常弾は寿司の水玉、高速弾は緑
+    if(classicSk || (sealSk && b.fastBullet)){
       if(b.fastBullet){
         const pc = (classicSk && b.owner && b.owner.isPlayer) ? classicColors(b.owner).dark : null;
         ctx.save();
         ctx.translate(b.x,b.y);
         ctx.rotate(Math.atan2(b.vy,b.vx));
-        ctx.globalAlpha=0.28; ctx.fillStyle=pc||"#70d98a";
-        ctx.fillRect(-14,-2,20,4);
-        ctx.globalAlpha=1; ctx.fillStyle="#ffffff";
-        ctx.beginPath(); ctx.moveTo(9,0); ctx.lineTo(-5,-4); ctx.lineTo(-2,0); ctx.lineTo(-5,4); ctx.closePath(); ctx.fill();
-        ctx.fillStyle=pc||"#48c96a"; ctx.fillRect(-5,-2,10,4);
+        if(sealSk){
+          // 先端が尖った細長い氷柱。淡いラベンダーの面と濃い紫の縁で立体感を出す。
+          ctx.globalAlpha=0.24; ctx.fillStyle="#b69aff";
+          ctx.beginPath(); ctx.moveTo(-17,0); ctx.lineTo(-8,-3.2); ctx.lineTo(7,-2.4); ctx.lineTo(12,0); ctx.lineTo(7,2.4); ctx.lineTo(-8,3.2); ctx.closePath(); ctx.fill();
+          ctx.globalAlpha=1;
+          ctx.fillStyle="#9270dc"; ctx.strokeStyle="#7051bd"; ctx.lineWidth=0.8;
+          ctx.beginPath(); ctx.moveTo(10,0); ctx.lineTo(-9,-3.5); ctx.lineTo(-5,0); ctx.lineTo(-9,3.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.fillStyle="#e8ddff";
+          ctx.beginPath(); ctx.moveTo(10,0); ctx.lineTo(-6,-2.2); ctx.lineTo(-3,0); ctx.closePath(); ctx.fill();
+          ctx.fillStyle="#c8b4ff";
+          ctx.beginPath(); ctx.moveTo(-9,-3.5); ctx.lineTo(-5,0); ctx.lineTo(-9,3.5); ctx.lineTo(-3,0); ctx.closePath(); ctx.fill();
+        } else {
+          ctx.globalAlpha=0.28; ctx.fillStyle=pc||"#70d98a";
+          ctx.fillRect(-14,-2,20,4);
+          ctx.globalAlpha=1; ctx.fillStyle="#ffffff";
+          ctx.beginPath(); ctx.moveTo(9,0); ctx.lineTo(-5,-4); ctx.lineTo(-2,0); ctx.lineTo(-5,4); ctx.closePath(); ctx.fill();
+          ctx.fillStyle=pc||"#48c96a"; ctx.fillRect(-5,-2,10,4);
+        }
         ctx.restore();
       } else {
         for(let i=0;i<b.trail.length;i++){
@@ -6947,8 +6959,8 @@ function ammoBulletSvg(isFast, on, dark){
     // 実際の通常弾（直径8px・水色の水滴）と同じ大きさ
     return `<svg viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="4" fill="${on?"#cdeefb":"#c4c4c4"}" stroke="${on?"#7cc6e8":"#9a9a9a"}" stroke-width=".8"/><circle cx="2.7" cy="2.6" r="1.1" fill="${on?"#ffffff":"#ececec"}" opacity=".95"/></svg>`;
   }
-  if(useSealSkin()){ // アザラシスキンの高速弾：緑の弾
-    return `<svg viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="4" fill="${on?"#8fdc9e":"#c4c4c4"}" stroke="${on?"#48c96a":"#9a9a9a"}" stroke-width=".8"/><circle cx="2.7" cy="2.6" r="1.1" fill="${on?"#e9ffee":"#ececec"}" opacity=".9"/></svg>`;
+  if(useSealSkin()){ // アザラシスキンの高速弾：紫色の氷柱アイコン
+    return `<svg viewBox="0 0 8 14" width="8" height="14"><path d="M4 0 L7.5 10.5 L4 14 L.5 10.5 Z" fill="${on?"#bca4ff":"#c4c4c4"}" stroke="${on?"#795bc7":"#9a9a9a"}" stroke-width=".8" stroke-linejoin="round"/><path d="M4 1.5 L4 11.8 L1.6 10 Z" fill="${on?"#eee7ff":"#ececec"}"/></svg>`;
   }
   // 高速弾：醤油の弾（茶色の丸・直径8px）
   return `<svg viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="4" fill="${on?"#ddbfa4":"#c4c4c4"}" stroke="${on?"#bf9f89":"#9a9a9a"}" stroke-width=".8"/><circle cx="2.7" cy="2.6" r="1.1" fill="${on?"#fff4e1":"#ececec"}" opacity=".85"/></svg>`;
