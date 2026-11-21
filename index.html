@@ -2391,6 +2391,7 @@ function makeEnemy(type,x,y){
     dodge: t.dodge !== false, // ★弾を避けるかどうか（黄色・茶色はfalseで避けない）
     wanderTimer: rand(0.5,1.5), wanderDir: Math.random()*Math.PI*2,
     stuckTimer:0,
+    stepTimer: 0.5, stepRemain: 0, stepDir: 0, // 追跡中のランダム寄り道（0.5秒に1回50％で1〜3マス）
     // AIの重い判断だけ約12.5回/秒に間引く。移動・旋回そのものは毎フレーム更新する。
     aiThinkTimer: Math.random()*0.08,
     canSeePlayerCache: false,
@@ -2491,6 +2492,16 @@ const SEAL_WATER_IMG = new Image();
 SEAL_WATER_IMG.onload = ()=>{ try{
   const cv=document.createElement("canvas"); cv.width=cv.height=21; const g=cv.getContext("2d"); g.drawImage(SEAL_WATER_IMG,0,0);
   SEAL_WATER_PX = g.getImageData(0,0,21,21).data; _sealWaterCache=null;
+  // 穴の底（青の濃い部分）をもう少し暗くする。明るいふちは変えず、色が濃いほど強く暗くする。
+  const SEAL_WATER_DARKEN = 0.30; // 底の暗さ（0〜1。大きいほど暗い）
+  for(let q=0;q<SEAL_WATER_PX.length;q+=4){
+    if(SEAL_WATER_PX[q+3]===0) continue;
+    const tt = Math.max(0, Math.min(1, (0xc0 - SEAL_WATER_PX[q]) / (0xc0 - 0x8e)));
+    const m = 1 - SEAL_WATER_DARKEN*tt;
+    SEAL_WATER_PX[q]   = Math.round(SEAL_WATER_PX[q]*m);
+    SEAL_WATER_PX[q+1] = Math.round(SEAL_WATER_PX[q+1]*m);
+    SEAL_WATER_PX[q+2] = Math.round(SEAL_WATER_PX[q+2]*m);
+  }
   invalidateMapCache(); if(typeof editorScreen!=="undefined" && !editorScreen.classList.contains("hidden")) drawEditorMap();
 }catch(e){} };
 SEAL_WATER_IMG.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABUAAAAVCAYAAACpF6WWAAAC60lEQVR42qWUzW8jRRDFf9XdMx7bcbLxbpaPFQpIILE3BGf+BP77vSBAKyBEm5DYsWPPV3dXcZhxohU3b11mNOquevNevSd3TQbgw2MyM54qOIgKhuFEKJ0Q1chqiAhmz0+A0gsXJ0EAghlcbaK9nHtmhQPgoc0sJp6mVwovBC/EbMg4UM0ITuiycVI+3/lzHe3yvJBwvX1u2ETjn03kahN5Nfd8tghkE9aPyqpOTAvHxTwgAn899NS98vkisJx5zioPwPU2WVCDaXCsm8y6zlxvI10yrjaJbDANwrpRNm2mCkpWIxus6kzMRpsiSQfkpxPProuEbGDArlNudomooDZwWfdKn4Rdr2SDNhkPjeIcdElRg8ILj91hqFA4IQiQ1PjwmFg3mXnpaG0QZ98rToSUbeQS6qi4kVwZBd20StZEFRyTIITDgaw2IDTINohh40XD6LPhRSi8fHSuz4Yq7HtFBLwTgncD0stlyV3dUEelS0ablFnhcGK0yYh54K0qBC9CE5WoRlJHFYTvliUvKs99nQjBCW00FqUjZWPb6dOu7vvnd0aadp199G3XKYXzfHVWjEPAiQjTQtjHgfhjattmbveJJg4gnAAPjbKYOL5eFkc1VYO/15H5aAQnAq9PPNtW6dNxUI1BtMIJckC67ZSLueePVTyqaXDCj28qumyIgFODeem4rzPfviyPRtpnY1UP4eTyqM6qzvz6b3dU06zG+9WQF2bgDIjZuN0lPqXer3raOBjGmUEVhMXEf1LT86nntHJkHSyOc8L3ryecVoN3D3VSOk4rR+HlKYgXE/eUu4edfDX3/PzN7Fk4A9poTAvhl7cL7vaZdzcdAvzwZcWscPx+33OzS3yxCFyeFzw0md/uh99dzjw/vanwTujH4JF3t4PvljNPOSLatMq0GGIs6RgmTqjCwfMw8UKblEkYvN+PuhROkNs64wRudsnaaKgZVeH+ZwTvhmSycYcG2iCP8eAFZqXjrPLyH7+cxynFkjHwAAAAAElFTkSuQmCC";
@@ -3495,6 +3506,27 @@ function updateEnemy(t, dt){
     t.stuckTimer = 0;
   }
 
+  // ★ランダム寄り道：プレイヤーを追っている間、0.5秒に1回、50％の確率で
+  //   ランダムな方向へ1〜3マス移動する（それ以外は今までどおりまっすぐ追う）。
+  //   弾避け中・プレイヤーを見失ったときは寄り道を中止する。
+  if(!canSeePlayer || t.dodgeDirCache !== null){
+    if(t.stepRemain > 0){ t.stepRemain = 0; t.wanderTimer = 0; }
+  } else if(t.stepRemain > 0){
+    t.wanderDir = t.stepDir;   // 寄り道中はその方向へ進み続ける
+    t.wanderTimer = 0.2;
+  } else {
+    t.stepTimer -= dt;         // 寄り道していない間だけ0.5秒を数える（寄り道中は抽選しない）
+    if(t.stepTimer <= 0){
+      t.stepTimer = 0.5;
+      if(Math.random() < 0.5){
+        t.stepDir = Math.random()*Math.PI*2;
+        t.stepRemain = TILE * (1 + Math.floor(Math.random()*3)); // 1〜3マス
+        t.wanderDir = t.stepDir;
+        t.wanderTimer = 0.2;
+      }
+    }
+  }
+
   const prevX=t.x, prevY=t.y;
   t.angle = lerpAngle(t.angle, t.wanderDir, 1-Math.pow(0.001,dt));
   t.x += Math.cos(t.angle)*t.speed*dt;
@@ -3502,6 +3534,12 @@ function updateEnemy(t, dt){
   resolveWallCollision(t);
   const moved = Math.hypot(t.x-prevX, t.y-prevY);
   if(moved < t.speed*dt*0.3) t.stuckTimer += dt; else t.stuckTimer = 0;
+  if(t.stepRemain > 0){
+    t.stepRemain -= moved;
+    if(t.stepRemain <= 0 || t.stuckTimer > 0.2){ // 目標距離に達した／壁にぶつかったら追跡に戻る
+      t.stepRemain = 0; t.wanderTimer = 0; t.stuckTimer = 0;
+    }
+  }
 
   if(canSeePlayer){
     t.turretAngle = lerpAngle(t.turretAngle, Math.atan2(p.y-t.y,p.x-t.x), 1-Math.pow(0.0005,dt));
