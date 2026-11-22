@@ -118,6 +118,8 @@
     border-top:1px solid rgba(255,150,205,0.18);
   }
   #leftZone{ border-right:2px dashed rgba(255,150,205,0.35); }
+  /* 片手操作：下部全体が1つの移動エリアなので、中央の区切り線は消す */
+  #app.scheme-c #leftZone{ border-right:0; }
   .zone-label{
     margin-top:8px;
     color:rgba(150,105,170,0.65);
@@ -693,6 +695,7 @@
           <div class="schemeToggle">
             <button class="btn schemeBtn" id="controlSchemeABtn">通常操作</button>
             <button class="btn schemeBtn" id="controlSchemeBBtn">簡単操作</button>
+            <button class="btn schemeBtn" id="controlSchemeCBtn">片手操作</button>
           </div>
           <div class="schemeDesc" id="controlSchemeDesc"></div>
         </div>
@@ -1505,6 +1508,7 @@ function leftEnd(id){
 function rightStart(x,y,id){
   // 右側の指は照準専用。照準中の2本目の指は、短いタップなら通常弾、
   // 0.1秒以上の長押しならミサイルとして判定する。
+  if(controlScheme==="C"){ leftStart(x,y,id); return; } // 片手操作：右側も移動スティックとして使う
   if(controlScheme!=="A") return; // 操作Bではこのゾーンは使わない
   if(rightJoy.active) return;
   rightJoy.active=true; rightJoy.id=id; rightJoy.sx=x; rightJoy.sy=y;
@@ -1529,6 +1533,7 @@ function rightStart(x,y,id){
   input.aiming = true;
 }
 function rightMove(x,y,id){
+  if(controlScheme==="C"){ leftMove(x,y,id); return; }
   if(!rightJoy.active || id!==rightJoy.id) return;
   let dx=x-rightJoy.sx, dy=y-rightJoy.sy;
   const d=Math.hypot(dx,dy);
@@ -1544,6 +1549,7 @@ function rightMove(x,y,id){
   }
 }
 function rightEnd(id){
+  if(controlScheme==="C"){ leftEnd(id); return; }
   if(!rightJoy.active || id!==rightJoy.id) return;
   // 照準ドラッグを離しただけでは発射しない。
   // 1回目の長押しが成立(発射)も先行入力もしないまま離された場合だけ、次のタップをダブルタップとして受け付ける。
@@ -1744,6 +1750,163 @@ window.addEventListener("touchcancel", e=>{
   for(const t of e.changedTouches){ if(t.identifier===schemeB.id) schemeBEnd(t.identifier); }
 }, {passive:true, capture:true});
 
+
+// ================================================================
+// 操作C：片手操作（スマホ）
+// ・画面下部全体＝移動のみ
+// ・自機との間に障害物がない敵に、自動でエイム（最寄りの敵）。エイムは早めの速度で合わせる
+// ・指を離して止まっている間、エイムが合った敵へ自動で撃ち続ける（移動中は撃たない）
+// ・画面下部の操作エリアを動かさず長押し＝超距離ミサイル／ダブルタップの2回目を長押し＝短距離ミサイル（どちらも自機の向いている方向）（短距離ミサイルは使えない）
+// ================================================================
+const SCHEME_C_TURN_RATE = 4;       // 砲台が回れる最大の速さ(rad/秒)（以前の12の1/3）
+const SCHEME_C_AIM_SMOOTH = 0.067;  // 小さいほど速くエイムが合う（1秒あたりの残り割合）（以前の0.0003と比べ、合わせる速さが1/3）
+const SCHEME_C_FIRE_TOL = 0.14;     // この角度(rad)以内に合ったら撃ち始める
+const SCHEME_C_SWITCH_MARGIN = 24;  // 今の標的より24px以上近い敵が現れたときだけ標的を切り替える（ちらつき防止）
+const SCHEME_C_DOUBLE_TAP = 0.35;   // ダブルタップの受付時間(秒)
+const cAim = { pl:null, active:false, dist:0, target:null };
+const cTap = { lastEnd:0, touches:{}, ignore:{} };
+function angDiffC(a,b){ return ((b-a+Math.PI*3)%(Math.PI*2))-Math.PI; }
+function schemeCFindTarget(){
+  let best=null, bd=Infinity, cur=null, cd=0;
+  for(const t of tanks){
+    if(t===player || t.isPlayer || !t.alive) continue;
+    if(!hasLineOfSight(player.x,player.y,t.x,t.y)) continue; // 間に壁があれば対象外
+    const d=Math.hypot(t.x-player.x, t.y-player.y);
+    if(t===cAim.target){ cur=t; cd=d; }
+    if(d<bd){ bd=d; best=t; }
+  }
+  if(cur && cd <= bd + SCHEME_C_SWITCH_MARGIN) return cur;
+  return best;
+}
+// 毎フレーム：標的選び → 砲台をなめらかに回す → 自動射撃の判定
+function updateSchemeCAim(dt){
+  if(!player || !player.alive){ cAim.active=false; cAim.target=null; return; }
+  if(cAim.pl !== player){ cAim.pl=player; cAim.active=false; cAim.target=null; }
+  schemeCUpdateSecond();
+  const tg = schemeCFindTarget();
+  cAim.target = tg;
+  let aligned = false;
+  if(tg){
+    const dx=tg.x-player.x, dy=tg.y-player.y;
+    const ta=Math.atan2(dy,dx), td=Math.hypot(dx,dy);
+    if(!cAim.active){ cAim.active=true; cAim.dist=td; }
+    const k = 1-Math.pow(SCHEME_C_AIM_SMOOTH, dt);
+    const lim = SCHEME_C_TURN_RATE*dt;
+    const step = clamp(angDiffC(player.turretAngle, ta)*k, -lim, lim);
+    player.turretAngle += step;
+    cAim.dist += (td-cAim.dist)*k;
+    aligned = Math.abs(angDiffC(player.turretAngle, ta)) < SCHEME_C_FIRE_TOL;
+  } else {
+    cAim.active=false;
+    // 狙える敵がいないときは、砲台を車体の向きへゆっくり戻す
+    player.turretAngle = lerpAngle(player.turretAngle, player.angle, 1-Math.pow(0.02,dt));
+  }
+  // 自動射撃：指を離して止まっていて、エイムが合っているときだけ。それ以外は先行入力も残さない。
+  const idle = !input.moving && !leftJoy.active;
+  if(tg && aligned && idle) input.fireRequested = true;
+  else player.fireBuffered = false;
+}
+// ダブルタップ判定：下部の操作エリア内のタップだけを数える
+// ダブルタップの2回目の指：
+//   ・長押しが成立する前に離す＝何も出ない
+//   ・通常操作の「ダブルタップ後の長押し」と同じ時間(MISSILE_HOLD_TIME_SECOND)押し続ける＝短距離ミサイル（成立した瞬間）
+//   ・どちらでもなく、その指をドラッグした＝ミサイルは出さず、そのまま移動スティックとして使う
+// 方向はどちらも、常に自機（車体）が向いている方向。
+let cSecond = null; // {id, t, x, y, dragged, done}
+// 超距離ミサイル＝ただの長押し：下部エリアを、動かさずに通常操作の長押し(MISSILE_HOLD_TIME_FIRST)と同じ時間押し続ける
+const SCHEME_C_HOLD_MOVE = 20;  // この距離(px)以上ドラッグした指は「移動中」とみなし、長押しミサイルは出さない
+const cHolds = {};              // {指のid: {t, x, y, dragged, done}}
+// ステージ開始前（タイトル・クリア画面など）から押しっぱなしの指。開始後に動かしたら、そのまま移動スティックとして使う。
+const cCarry = {};
+function schemeCFireMissile(distance){
+  if(!player || !player.alive) return;
+  fireMissile(player.angle, distance);
+}
+// 毎フレーム：2回目の指の長押し成立を見る（updateSchemeCAimから呼ぶ）
+function schemeCUpdateSecond(){
+  // ただの長押し＝超距離ミサイル
+  const nowH = performance.now()/1000;
+  for(const id in cHolds){
+    const h = cHolds[id];
+    if(h.done || h.dragged) continue;
+    if(nowH - h.t >= MISSILE_HOLD_TIME_FIRST){
+      h.done = true; // 1回の長押しにつき1発だけ
+      // ステージ開始から数秒は、親指を置いただけで出てしまわないよう長押しミサイルを出さない（通常操作と同じ）
+      if(mpTagAge >= MISSILE_START_LOCK_TIME) schemeCFireMissile(MISSILE_DISTANCE);
+    }
+  }
+  if(!cSecond || cSecond.done || cSecond.dragged) return;
+  if(performance.now()/1000 - cSecond.t >= MISSILE_HOLD_TIME_SECOND){
+    cSecond.done = true;
+    schemeCFireMissile(MISSILE_TRIPLE_DISTANCE); // 長押し成立＝短距離
+  }
+}
+function schemeCTouchOk(t){
+  if(IS_PC || controlScheme!=="C" || state!=="playing" || !player || !player.alive) return false;
+  if(pcIsUiTarget(t.target)) return false;
+  const r = document.getElementById("controls").getBoundingClientRect();
+  // 下部の操作エリア内のタップだけを数える（ゲーム画面のタップは何もしない）
+  return t.clientX>=r.left && t.clientX<=r.right && t.clientY>=r.top && t.clientY<=r.bottom;
+}
+window.addEventListener("touchstart", e=>{
+  if(IS_PC || controlScheme!=="C") return;
+  for(const t of e.changedTouches){
+    if(state!=="playing"){ cCarry[t.identifier] = true; continue; } // ステージ開始前から押している指
+    if(!schemeCTouchOk(t)) continue;
+    const now = performance.now()/1000;
+    if(cTap.lastEnd>0 && now-cTap.lastEnd < SCHEME_C_DOUBLE_TAP){
+      cTap.lastEnd = 0;
+      cTap.ignore[t.identifier] = true; // この2回目の指は、新しいタップとして数えない
+      // 2回目の指：長押しで短距離、短く離して超距離。ドラッグしたら移動（ミサイルなし）
+      cSecond = {id:t.identifier, t:now, x:t.clientX, y:t.clientY, dragged:false, done:false};
+    } else {
+      cTap.touches[t.identifier] = {t:now, x:t.clientX, y:t.clientY};
+      cHolds[t.identifier] = {t:now, x:t.clientX, y:t.clientY, dragged:false, done:false};
+    }
+  }
+}, {passive:false, capture:true});
+window.addEventListener("touchend", e=>{
+  if(IS_PC || controlScheme!=="C") return;
+  const now = performance.now()/1000;
+  for(const t of e.changedTouches){
+    const id=t.identifier;
+    delete cHolds[id]; delete cCarry[id];
+    if(leftJoy.active && leftJoy.id===id) leftEnd(id); // 開始前から押していた指を、移動スティックとして使っていた場合
+    if(cSecond && cSecond.id===id){
+      cSecond = null; // 長押しが成立する前に離した場合は、何も出さない
+    }
+    if(cTap.ignore[id]){ delete cTap.ignore[id]; continue; }
+    const st=cTap.touches[id]; if(!st) continue;
+    delete cTap.touches[id];
+    // 短く押して、ほとんど動かさずに離したものだけを「タップ」とする
+    if(now-st.t < 0.25 && Math.hypot(t.clientX-st.x, t.clientY-st.y) < 24) cTap.lastEnd = now;
+  }
+}, {passive:true, capture:true});
+window.addEventListener("touchmove", e=>{
+  if(IS_PC || controlScheme!=="C") return;
+  for(const t of e.changedTouches){
+    const id=t.identifier;
+    if(cSecond && id===cSecond.id && !cSecond.done && Math.hypot(t.clientX-cSecond.x, t.clientY-cSecond.y) > MISSILE_MOVE_DEADZONE) cSecond.dragged = true;
+    const h = cHolds[id];
+    if(h && !h.dragged && Math.hypot(t.clientX-h.x, t.clientY-h.y) > SCHEME_C_HOLD_MOVE) h.dragged = true;
+    // ステージ開始前から押しっぱなしだった指を動かしたら、その場から移動スティックを始める
+    if(cCarry[id] && state==="playing" && !leftJoy.active){
+      const r = document.getElementById("controls").getBoundingClientRect();
+      if(t.clientX>=r.left && t.clientX<=r.right && t.clientY>=r.top && t.clientY<=r.bottom){
+        delete cCarry[id];
+        leftStart(t.clientX, t.clientY, id);
+      }
+    }
+  }
+}, {passive:true, capture:true});
+window.addEventListener("touchcancel", e=>{
+  for(const t of e.changedTouches){
+    delete cTap.touches[t.identifier]; delete cTap.ignore[t.identifier]; delete cHolds[t.identifier]; delete cCarry[t.identifier];
+    if(leftJoy.active && leftJoy.id===t.identifier) leftEnd(t.identifier);
+    if(cSecond && cSecond.id===t.identifier) cSecond = null;
+  }
+}, {passive:true, capture:true});
+
 // 操作方法を切り替えたときに、両方式の入力状態を持ち越さないようにする。
 function resetAllControlInputs(){
   if(rightJoy.active) rightEnd(rightJoy.id);
@@ -1752,6 +1915,7 @@ function resetAllControlInputs(){
   schemeB.active=false; schemeB.id=null; schemeB.holdTriggered=false; schemeB.pendingAngle=null;
   pcMouse.rightDown=false; pcMouse.rightTriggered=false; pcMouse.pendingT=0;
   input.fireRequested=false; input.aiming=false; input.aimMag=0;
+  cTap.lastEnd=0; cTap.touches={}; cTap.ignore={}; cSecond=null; for(const k in cHolds) delete cHolds[k]; for(const k in cCarry) delete cCarry[k]; cAim.active=false; cAim.target=null;
 }
 
 /* ================================================================
@@ -1861,7 +2025,7 @@ function loadSettings(){
     const d = JSON.parse(raw);
     if(typeof d.bgmEnabled === "boolean") bgmEnabled = d.bgmEnabled;
     if(Number.isFinite(d.seLevel)) seLevel = Math.max(0, Math.min(SFX_LEVEL_MAX, Math.floor(d.seLevel)));
-    if(d.controlScheme === "A" || d.controlScheme === "B") controlScheme = d.controlScheme;
+    if(d.controlScheme === "A" || d.controlScheme === "B" || d.controlScheme === "C") controlScheme = d.controlScheme;
     if(d.screenOrient === "auto" || d.screenOrient === "portrait" || d.screenOrient === "landscape") screenOrient = d.screenOrient;
   }catch(e){}
 }
@@ -3297,6 +3461,7 @@ function spawnWaterSplash(x,y){
 }
 function spawnExplosion(x,y,scaleF,quiet){
   if(!quiet) mpq("se", x, y, scaleF);
+  if(useSealSkin()){ spawnIceBurst(x,y,scaleF); return; } // アザラシスキン：氷の破片＋雪の結晶＋キラキラ
   explosions.push({x,y,t:0, dur:0.5, scaleF});
   for(let i=0;i<14;i++){
     const a=Math.random()*Math.PI*2, sp=rand(40,180)*scaleF;
@@ -3356,6 +3521,40 @@ function drawFlakeBurst(e){
     ctx.translate((rn(i)-0.5)*R*1.7*eo(u*2),(rn(i+9)-0.5)*R*1.4+30*u*rn(i+3));
     ctx.rotate(u*3+i); flakeArms(7,"#72bde4",3); flakeArms(7,"#f8fdff",1.5);
     ctx.restore();
+  }
+  ctx.restore();
+}
+// ---- アザラシスキンの撃破エフェクト「結晶まじり」 ----
+function spawnIceBurst(x,y,scaleF){
+  const R=Math.random, mk=(n,f)=>Array.from({length:n},f);
+  explosions.push({x,y,t:0,dur:1.35,scaleF,iceBurst:true,k:1+(scaleF-1)*0.5,
+    p:mk(10,()=>({a:R()*7,v:50+R()*100,s:2+R()*3,w:(R()-0.5)*14})),
+    f:mk(7,()=>({a:R()*7,v:35+R()*70,s:3+R()*2.5,w:(R()-0.5)*5})),
+    s:mk(6,()=>({a:R()*7,v:20+R()*50,d:R()*0.3}))});
+}
+function drawIceBurst(e){
+  const q=e.t, k=e.k, c=clamp(q/1.1,0,1), sg=(a,b,v)=>clamp((v-a)/(b-a),0,1);
+  const pp=v=>v*k/6*(1-Math.exp(-6*q));
+  ctx.save(); ctx.translate(e.x,e.y);
+  ctx.save(); ctx.globalAlpha=0.9*(1-sg(0,0.35,q)); ctx.rotate(q*2); // 中心の大きな結晶
+  const fr=(8+q*30)*k; flakeArms(fr,"#72bde4",Math.max(0.6,fr*0.14)); flakeArms(fr,"#f8fdff",Math.max(0.3,fr*0.07)); ctx.restore();
+  ctx.globalAlpha=1-sg(0,0.25,q); ctx.strokeStyle="#eaf8ff"; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(0,0,(6+q*80)*k,0,7); ctx.stroke();
+  for(const p of e.p){ // 氷の破片
+    ctx.save(); ctx.globalAlpha=1-sg(0.5,1,c); ctx.translate(Math.cos(p.a)*pp(p.v),Math.sin(p.a)*pp(p.v)+q*q*26); ctx.rotate(p.a+p.w*q);
+    const r=p.s*k; ctx.fillStyle="#bfe6ff"; ctx.strokeStyle="#7fc3ea"; ctx.lineWidth=0.5;
+    ctx.beginPath(); ctx.moveTo(r,0); ctx.lineTo(-r*0.6,r*0.7); ctx.lineTo(-r*0.4,-r*0.6); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  for(const p of e.f){ // 雪の結晶
+    ctx.save(); ctx.globalAlpha=1-sg(0.55,1,c); ctx.translate(Math.cos(p.a)*pp(p.v),Math.sin(p.a)*pp(p.v)+q*q*14); ctx.rotate(p.a+p.w*q);
+    const r=p.s*k; flakeArms(r,"#72bde4",Math.max(0.6,r*0.14)); flakeArms(r,"#f8fdff",Math.max(0.3,r*0.07)); ctx.restore();
+  }
+  for(const p of e.s){ // キラキラ
+    const z=q-p.d; if(z<=0) continue;
+    const r=3*k*Math.sin(clamp(z/0.6,0,1)*Math.PI);
+    ctx.save(); ctx.globalAlpha=1; ctx.translate(Math.cos(p.a)*pp(p.v)*1.3,Math.sin(p.a)*pp(p.v)*1.3); ctx.rotate(z*4); ctx.fillStyle="#fff";
+    ctx.beginPath(); for(let i=0;i<8;i++){ const rr=i%2?r*0.3:r, an=i*Math.PI/4; ctx.lineTo(Math.cos(an)*rr,Math.sin(an)*rr); }
+    ctx.closePath(); ctx.fill(); ctx.restore();
   }
   ctx.restore();
 }
@@ -4381,6 +4580,8 @@ function updatePlayer(dt){
     player.turretAngle = pcAim.angle; // PC：マウスの向き
   } else if(input.aiming && input.aimMag>0.2){
     player.turretAngle = input.aimAngle;
+  } else if(!IS_PC && controlScheme==="C"){
+    updateSchemeCAim(dt); // 片手操作：自動エイム・自動射撃
   } else if(!input.aiming && controlScheme!=="B"){
     player.turretAngle = lerpAngle(player.turretAngle, player.angle, 1-Math.pow(0.02,dt));
   }
@@ -5714,6 +5915,8 @@ function updateGuestPlayer(dt){
     player.turretAngle = pcAim.angle; // PC：マウスの向き
   } else if(input.aiming && input.aimMag>0.2){
     player.turretAngle = input.aimAngle;
+  } else if(!IS_PC && controlScheme==="C"){
+    updateSchemeCAim(dt); // 片手操作：自動エイム・自動射撃
   } else if(!input.aiming && controlScheme!=="B"){
     player.turretAngle = lerpAngle(player.turretAngle, player.angle, 1-Math.pow(0.02,dt));
   }
@@ -6162,9 +6365,11 @@ function render(){
   }
 
   // 自機の砲塔方向と、壁で1回反射した弾道を点線で表示（操作Bでは照準そのものが不要なので出さない）
-  if(IS_PC || controlScheme!=="B") drawAimPreview(player);
+  if(IS_PC || (controlScheme!=="B" && controlScheme!=="C")) drawAimPreview(player);
+  // 片手操作：十字（自動エイム）から自機までの点線
+  if(!IS_PC && controlScheme==="C") drawSchemeCLine();
   // ミサイルの着弾予測地点（二重丸＋十字）（操作Bでは出さない）
-  if(IS_PC || controlScheme!=="B") drawMissileTargetPreview();
+  if(IS_PC || (controlScheme!=="B" && controlScheme!=="C")) drawMissileTargetPreview();
 
   // 戦車
   if(window.rwStepAll){ rwStepAll(); rwDrawLayer(0); }
@@ -6175,6 +6380,7 @@ function render(){
     if(mp.active && t.isPlayer) drawPlayerTag(t);
   }
   if(window.rwDrawLayer) rwDrawLayer(1);
+  if(!IS_PC && controlScheme==="C") drawSchemeCCross(); // 十字は戦車より手前に描く
 
   // 破片パーティクル
   for(const p of particles){
@@ -6187,6 +6393,7 @@ function render(){
   // 爆発の輪
   for(const e of explosions){
     if(e.flake){ drawFlakeBurst(e); continue; }
+    if(e.iceBurst){ drawIceBurst(e); continue; }
     if(e.wasabi){ drawWasabiBurst(e); continue; }
     const prog = e.t/e.dur;
     const rad = 10 + prog*30*e.scaleF;
@@ -6302,6 +6509,42 @@ function drawMissileTargetPreview(){
   ctx.stroke();
   // 中心点
   ctx.fillStyle = "rgba(190,160,230,0.8)";
+  ctx.beginPath(); ctx.arc(0,0,1.6,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+
+// ---- 片手操作：自動エイムの表示（十字＋自機までの点線） ----
+function schemeCAimPoint(){
+  if(!player || !player.alive || !cAim.active || cAim.pl!==player) return null;
+  return { x: player.x + Math.cos(player.turretAngle)*cAim.dist, y: player.y + Math.sin(player.turretAngle)*cAim.dist };
+}
+function drawSchemeCLine(){
+  const p = schemeCAimPoint(); if(!p) return;
+  ctx.save();
+  ctx.setLineDash([4,8]);
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(160,110,220,0.6)";
+  ctx.beginPath(); ctx.moveTo(player.x, player.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+  ctx.restore();
+}
+function drawSchemeCCross(){
+  const p = schemeCAimPoint(); if(!p) return;
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.lineCap = "round";
+  ctx.setLineDash([]);
+  const arm = (ctx2, c, w)=>{
+    ctx2.strokeStyle = c; ctx2.lineWidth = w;
+    ctx2.beginPath();
+    ctx2.moveTo(-11,0); ctx2.lineTo(-4,0); ctx2.moveTo(4,0); ctx2.lineTo(11,0);
+    ctx2.moveTo(0,-11); ctx2.lineTo(0,-4); ctx2.moveTo(0,4); ctx2.lineTo(0,11);
+    ctx2.stroke();
+  };
+  arm(ctx, "rgba(255,255,255,0.9)", 4.5); // 白い縁取りで、どの敵の色の上でも見えるように
+  arm(ctx, "rgba(150,95,215,0.95)", 2.2);
+  ctx.fillStyle = "rgba(150,95,215,0.95)";
   ctx.beginPath(); ctx.arc(0,0,1.6,0,Math.PI*2); ctx.fill();
   ctx.restore();
 }
@@ -6707,10 +6950,12 @@ const settingsBtnPause = document.getElementById("settingsBtnPause");
 const bgmToggleBtn = document.getElementById("bgmToggleBtn");
 const controlSchemeABtn = document.getElementById("controlSchemeABtn");
 const controlSchemeBBtn = document.getElementById("controlSchemeBBtn");
+const controlSchemeCBtn = document.getElementById("controlSchemeCBtn");
 const controlSchemeDesc = document.getElementById("controlSchemeDesc");
 const CONTROL_SCHEME_DESC = {
   A: "ドラッグで照準、長押しでミサイル発射。",
   B: "画面をタップした方向に通常弾が飛ぶ。長押しでミサイル発射、狙った位置が近いと短距離ミサイルになる。",
+  C: "下の画面全体をドラッグして移動。敵に自動でエイムし、止まっている間は自動で撃ち続ける。下の画面を動かさずに長押しすると、自機の向いている方向へ超距離ミサイル。ダブルタップの2回目を長押しすると短距離ミサイル。",
 };
 const seVolumeSlider = document.getElementById("seVolumeSlider");
 const seVolumeHandle = document.getElementById("seVolumeHandle");
@@ -6724,6 +6969,8 @@ function updateBgmToggleUI(){
 function updateControlSchemeUI(){
   controlSchemeABtn.classList.toggle("active", controlScheme==="A");
   controlSchemeBBtn.classList.toggle("active", controlScheme==="B");
+  controlSchemeCBtn.classList.toggle("active", controlScheme==="C");
+  document.getElementById("app").classList.toggle("scheme-c", !IS_PC && controlScheme==="C");
   controlSchemeDesc.textContent = CONTROL_SCHEME_DESC[controlScheme] || "";
   updateZoneLabels();
 }
@@ -6736,12 +6983,18 @@ function updateZoneLabels(){
     rl.innerHTML = `マウスポインター＝照準<br>左クリック＝通常弾<br>右クリック＝短いミサイル<br>右クリック長押し＝長距離ミサイル`;
     return;
   }
+  if(controlScheme==="C"){
+    ll.innerHTML = "ドラッグ＝移動<br>長押し＝超距離ミサイル<br>ダブルタップ長押し＝短距離";
+    rl.innerHTML = "指を離して止まる＝自動で射撃";
+    return;
+  }
+  ll.textContent = "移動";
   rl.innerHTML = controlScheme==="B"
     ? "操作Bでは使いません<br>ゲーム画面をタップ／長押し"
     : "ドラッグ＝照準<br>ドラッグ中にタップ＝発射<br>長押し＝ミサイル発射";
 }
 function setControlScheme(v){
-  if(v!=="A" && v!=="B") return;
+  if(v!=="A" && v!=="B" && v!=="C") return;
   if(controlScheme===v) return;
   controlScheme = v;
   saveSettings();
@@ -6751,6 +7004,7 @@ function setControlScheme(v){
 }
 controlSchemeABtn.addEventListener("click", ()=>setControlScheme("A"));
 controlSchemeBBtn.addEventListener("click", ()=>setControlScheme("B"));
+controlSchemeCBtn.addEventListener("click", ()=>setControlScheme("C"));
 
 // ---- 画面の向き（スマホ・タブレット） ----
 const ORIENT_DESC = {
