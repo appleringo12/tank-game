@@ -289,6 +289,10 @@
   .settingsLabel{ font-size:clamp(15px,4.2vw,19px); color:var(--paper); font-weight:700; letter-spacing:2px; }
   .settingsToggleBtn{ min-width:96px; padding:8px 0; font-size:clamp(14px,3.8vw,17px); letter-spacing:2px; }
   .settingsToggleBtn.alt{ opacity:0.7; }
+  .settingsNumberControl{display:flex;align-items:center;gap:8px;color:var(--paper);font-size:15px;font-weight:700}
+  .settingsNumberControl input{width:104px;min-height:42px;padding:7px 9px;border:2px solid #b9dcef;border-radius:10px;background:#fff;color:var(--paper);font:700 16px/1.2 'Yu Gothic',sans-serif;text-align:right}
+  .settingsNumberControl input:focus{outline:2px solid #86c9ee;outline-offset:2px}
+  .settingsHint{font-size:11px;line-height:1.6;color:#5d89a8;margin-top:-16px}
   /* 設定画面は項目が増えても上下にスクロールできるようにする */
   #settingsScreen{ overflow-y:auto; justify-content:flex-start; }
   #settingsScreen > :first-child{ margin-top:auto; }
@@ -715,14 +719,19 @@
             <div class="volumeSliderLine"></div>
             <div class="volumeSliderTicks">
               <div class="volumeSliderTick" style="left:0%"><span class="tickMark"></span><span class="tickNum">0</span></div>
-              <div class="volumeSliderTick" style="left:20%"><span class="tickMark"></span><span class="tickNum">1</span></div>
-              <div class="volumeSliderTick" style="left:40%"><span class="tickMark"></span><span class="tickNum">2</span></div>
-              <div class="volumeSliderTick" style="left:60%"><span class="tickMark"></span><span class="tickNum">3</span></div>
-              <div class="volumeSliderTick" style="left:80%"><span class="tickMark"></span><span class="tickNum">4</span></div>
-              <div class="volumeSliderTick" style="left:100%"><span class="tickMark"></span><span class="tickNum">5</span></div>
+              <div class="volumeSliderTick" style="left:16.6667%"><span class="tickMark"></span><span class="tickNum">1</span></div>
+              <div class="volumeSliderTick" style="left:33.3333%"><span class="tickMark"></span><span class="tickNum">2</span></div>
+              <div class="volumeSliderTick" style="left:50%"><span class="tickMark"></span><span class="tickNum">3</span></div>
+              <div class="volumeSliderTick" style="left:66.6667%"><span class="tickMark"></span><span class="tickNum">4</span></div>
+              <div class="volumeSliderTick" style="left:83.3333%"><span class="tickMark"></span><span class="tickNum">5</span></div>
+              <div class="volumeSliderTick" style="left:100%"><span class="tickMark"></span><span class="tickNum">6</span></div>
             </div>
             <div class="volumeSliderHandle" id="shakeHandle"></div>
           </div>
+        </div>
+        <div class="settingsRow settingsRowVolume">
+          <span class="settingsLabel">敵撃破時のヒットストップ</span>
+          <span class="settingsLabel" style="font-size:15px;">300 ms（固定）</span>
         </div>
         <div class="settingsRow settingsRowVolume" id="schemeRow">
           <span class="settingsLabel">操作方法</span>
@@ -1853,6 +1862,15 @@ let state = "start"; // start | playing | paused | dying | stageclear_wait | sta
 let stageClearTimer = 0;
 let stageClearDelay = 0;
 
+// 敵を倒した瞬間だけ300ms停止する。射撃時のヒットストップは使用しない。
+const HIT_STOP_MAX_MS = 500;
+const ENEMY_KILL_HIT_STOP_MS = 300;
+let hitStopTimer = 0;         // 実際にゲーム進行を止める残り時間（秒）
+function sanitizeHitStopMs(value, fallback){
+  if(!Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.min(HIT_STOP_MAX_MS, Math.round(value / 5) * 5));
+}
+
 // ================================================================
 // 設定（BGMのオン/オフ・効果音の音量レベル）
 // ================================================================
@@ -1860,7 +1878,10 @@ const SETTINGS_KEY = "tankBattleSettingsV1";
 const SFX_LEVEL_MAX = 6; // 効果音レベルの最大値（0〜6の7段階、3が真ん中＝デフォルト）
 let bgmEnabled = true;
 let seLevel = 3; // 0(無音)〜6。3が元々の音量（デフォルト）。
-const SHAKE_LEVEL_MAX = 5; // 画面の揺れの強さ（0〜5、デフォルト3）
+const SHAKE_LEVEL_MAX = 6; // 画面の揺れの強さ（0〜6、デフォルト3）
+const SHAKE_SETTINGS_VERSION = 2;
+// 新レベル3の揺れ具合を、従来レベル2と同じにする。旧設定の各段階の強さも引き継ぐ。
+const SHAKE_LEVEL_AMPLITUDES = [0, 1.6, 2.4, 3.2, 4.8, 6.4, 8.0];
 let shakeLevel = 3;
 let controlScheme = IS_PC ? "A" : "B"; // 初期設定：PCは通常操作、スマホ・タブレットは簡単操作
 let screenOrient = "auto"; // 画面の向き：auto(回転する) / portrait(縦固定) / landscape(横固定)
@@ -1871,13 +1892,22 @@ function loadSettings(){
     const d = JSON.parse(raw);
     if(typeof d.bgmEnabled === "boolean") bgmEnabled = d.bgmEnabled;
     if(Number.isFinite(d.seLevel)) seLevel = Math.max(0, Math.min(SFX_LEVEL_MAX, Math.floor(d.seLevel)));
-    if(Number.isFinite(d.shakeLevel)) shakeLevel = Math.max(0, Math.min(SHAKE_LEVEL_MAX, Math.floor(d.shakeLevel)));
+    if(Number.isFinite(d.shakeLevel)){
+      const savedShake = Math.floor(d.shakeLevel);
+      if(d.shakeLevelVersion === SHAKE_SETTINGS_VERSION){
+        shakeLevel = Math.max(0, Math.min(SHAKE_LEVEL_MAX, savedShake));
+      }else{
+        // 旧0〜5設定を新0〜6へ移行。旧レベル2は新レベル3（同じ揺れの強さ）。
+        const oldLevel = Math.max(0, Math.min(5, savedShake));
+        shakeLevel = [0, 1, 3, 4, 5, 6][oldLevel];
+      }
+    }
     if(d.controlScheme === "A" || d.controlScheme === "B" || d.controlScheme === "C") controlScheme = d.controlScheme;
     if(d.screenOrient === "auto" || d.screenOrient === "portrait" || d.screenOrient === "landscape") screenOrient = d.screenOrient;
   }catch(e){}
 }
 function saveSettings(){
-  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bgmEnabled, seLevel, shakeLevel, controlScheme, screenOrient })); }catch(e){}
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bgmEnabled, seLevel, shakeLevel, shakeLevelVersion: SHAKE_SETTINGS_VERSION, controlScheme, screenOrient })); }catch(e){}
 }
 loadSettings();
 
@@ -2868,6 +2898,8 @@ function damageFighter(t){
   t.hp--;
   if(t.hp<=0){
     t.alive=false;
+    // 自機が倒れた場合ではなく、敵を倒した瞬間だけ撃破用ヒットストップを発生させる。
+    if(!t.isPlayer) triggerHitStop(ENEMY_KILL_HIT_STOP_MS);
     spawnExplosion(t.x,t.y, t.isPlayer?1.4:1.0);
     if(t.isPlayer) {
       playExplosion();
@@ -3211,11 +3243,11 @@ function spawnWaterSplash(x,y){
   }
 }
 // ---- 画面の揺れ（自機・敵が倒されたとき） ----
-// 強さは設定(shakeLevel 0〜5)で決まる。自機が倒されたとき(scaleF=1.4)は敵より大きく・長く揺れる。
+// 強さは設定(shakeLevel 0〜6)で決まる。自機が倒されたとき(scaleF=1.4)は敵より大きく・長く揺れる。
 const shakeFx = { start:0, dur:0, amp:0 };
 function triggerScreenShake(scaleF){
   if(shakeLevel <= 0) return;
-  const amp = shakeLevel * 1.6 * scaleF;          // 揺れの大きさ(px)。レベル3の敵撃破で約4.8px
+  const amp = SHAKE_LEVEL_AMPLITUDES[shakeLevel] * scaleF; // 新レベル3は従来レベル2と同じ揺れ幅
   const dur = 0.3 + (scaleF-1) * 0.5;             // 揺れる時間(秒)。敵0.3秒・自機0.5秒
   const now = performance.now()/1000;
   const remain = Math.max(0, shakeFx.dur - (now - shakeFx.start));
@@ -4969,7 +5001,7 @@ document.getElementById("importCodeInput").addEventListener("keydown",e=>{ if(e.
    ・ゲスト：自分の操作（移動・照準・発射）をホストへ送り、返ってきた状態を表示する
    ・遊んでいた途中のデータは、マッチング成立時に保存される
    ================================================================ */
-const EV = { HELLO:1, LEVEL:2, SNAP:3, INPUT:4, FIRE:5, MISSILE:6, WALLS:7, CLEAR:8, OVER:9, BYE:10 };
+const EV = { HELLO:1, LEVEL:2, SNAP:3, INPUT:4, FIRE:5, MISSILE:6, WALLS:7, CLEAR:8, OVER:9, BYE:10, HITSTOP:11 };
 const MP_SNAP_INTERVAL = 0.05;   // ホスト→ゲストの状態送信間隔(秒)
 const MP_INPUT_INTERVAL = 0.033; // ゲスト→ホストの操作送信間隔(秒)
 const MP_TIMEOUT_MS = 8000;      // これだけ相手から何も届かなければ切断扱い
@@ -5000,6 +5032,22 @@ function mpq(k,a,b,c){
   if(b!==undefined) e.push(r1(b));
   if(c!==undefined) e.push(r1(c));
   mp.fxq.push(e);
+}
+
+// ホストがゲーム進行を止める唯一の基準点。
+// マルチではヒットストップ通知を即時送信し、ホスト側だけ通信の片道遅延ぶんを加算する。
+// これによりゲストが通知を受け取ってから同じ残り時間だけ止まり、両者の再開時刻を近づける。
+function triggerHitStop(durationMs, broadcast=true){
+  const ms = sanitizeHitStopMs(Number(durationMs), 0);
+  if(ms <= 0) return;
+  let localMs = ms;
+  if(broadcast && mp.active && mp.role === "host"){
+    const oneWayEstimateMs = Math.max(0, Math.min(150, (Number(mp.rtt) || 0) * 500));
+    localMs += oneWayEstimateMs;
+    // SNAP(20Hz)を待たず、専用イベントで即時通知する。ゲーム本体の計算はホストだけが行う。
+    mpSend(EV.HITSTOP, {ms});
+  }
+  hitStopTimer = Math.max(hitStopTimer, localMs / 1000);
 }
 
 // ================================================================
@@ -5196,6 +5244,12 @@ function mpOnEvent(code, data){
     case EV.SNAP:
       if(mp.active && mp.role==="guest") mpApplySnap(o);
       break;
+    case EV.HITSTOP:
+      if(mp.active && mp.role==="guest" && o && Number.isFinite(+o.ms)){
+        // ゲストはホストから届いたミリ秒だけ停止。ゲスト側の設定値では上書きしない。
+        triggerHitStop(+o.ms, false);
+      }
+      break;
     case EV.INPUT:
       if(mp.active && mp.role==="host"){
         mp.lastRecv = performance.now();
@@ -5305,6 +5359,7 @@ function mpBeginGame(role, lv){
   resetAllControlInputs();
   customPlayActive = false; customPlayFromEditor = false; challengeStartNoRecord = false;
   gameMode = "normal"; lives = 3;
+  hitStopTimer = 0;
   setMenuLayout(false);
   try{ initAudio(); }catch(e){}
   try{ bgm.currentTime = 0; }catch(e){}
@@ -5327,6 +5382,7 @@ function mpBeginGame(role, lv){
 
 function mpEnd(msg){
   const wasActive = mp.active;
+  hitStopTimer = 0;
   mpStopClient();
   mp.active = false; mp.role = null; mp.searching = false; mp.joined = false;
   mp.p1 = null; mp.p2 = null; mp.fxq = []; mp.fighterTypes = null; mp.remoteFighterType = "A";
@@ -5727,15 +5783,25 @@ let lastTime = 0;
 function loop(ts){
   requestAnimationFrame(loop); // ★次のフレームを予約する（これが無いと1回描画しただけで止まり、真っ白になる）
   if(!lastTime) lastTime = ts;
-  let dt = (ts-lastTime)/1000;
+  let realDt = (ts-lastTime)/1000;
   lastTime = ts;
-  dt = Math.max(0, Math.min(dt, 0.05)); // 端末が重いときに一気に進みすぎない上限と、タイムスタンプ逆転時の下限(0)
+  realDt = Math.max(0, Math.min(realDt, 0.05)); // 端末が重いときに一気に進みすぎない上限と、タイムスタンプ逆転時の下限(0)
+  const hitStopActive = hitStopTimer > 0;
+  if(hitStopActive) hitStopTimer = Math.max(0, hitStopTimer - realDt);
+  const dt = hitStopActive ? 0 : realDt;
   if(state==="playing") mpTagAge += dt;
   updateAmmo(); // 弾数表示
 
-  // ★マルチのゲストは計算をせず、ホストから届いた状態を表示するだけ
-  if(mp.active && mp.role==="guest"){ guestFrame(dt); render(); return; }
+  // ★マルチのゲストは計算をせず、ホストから届いた状態を表示するだけ。
+  // ヒットストップ中は予測移動・弾の補間・エフェクト更新も止め、ホストの再開通知後に追従する。
+  if(mp.active && mp.role==="guest"){
+    if(!hitStopActive) guestFrame(dt);
+    else if(performance.now() - mp.lastRecv > MP_TIMEOUT_MS) mpEnd("通信が途切れたため、マルチプレイを終了しました。");
+    render(); return;
+  }
 
+  // ヒットストップ中は敵AI・プレイヤー・弾・ミサイル・各エフェクトの進行をすべて停止。
+  if(!hitStopActive){
   if(state==="playing"){
     updatePlayer(dt);
     updateSchemeB(dt);
@@ -5800,7 +5866,9 @@ function loop(ts){
     if(mp.overTimer<=0) mpShowOver();
   }
 
-  if(mp.active && mp.role==="host") mpHostTick(dt);
+  }
+  // ホストはヒットストップ中もスナップショットと切断監視を続ける（dtは実時間）。
+  if(mp.active && mp.role==="host") mpHostTick(realDt);
   render();
 }
 
@@ -6766,7 +6834,7 @@ seVolumeSlider.addEventListener("pointermove", e=>{
 seVolumeSlider.addEventListener("pointerup", ()=>{ seSliderDragging = false; });
 seVolumeSlider.addEventListener("pointercancel", ()=>{ seSliderDragging = false; });
 
-// 画面の揺れスライダー：0〜5を選ぶ（選んだときに軽く揺らして強さを確かめられる）
+// 画面の揺れスライダー：0〜6を選ぶ（選んだときに軽く揺らして強さを確かめられる）
 let shakeSliderDragging = false;
 function setShakeLevelFromClientX(clientX){
   const rect = shakeSlider.getBoundingClientRect();
@@ -7114,6 +7182,7 @@ function startGame(continueGame=false, selectedMode=null, startAtStage=1, noReco
   customPlayActive = false; hudStageCache = -1; hudMaxCache = -1; hudLivesCache = -1; // オリジナル表示を引きずらない
   // まずゲーム状態を初期化する。音声やセーブの問題で開始処理全体が止まらないようにする。
   state = "playing";
+  hitStopTimer = 0;
   try { initAudio(); } catch(e) { console.warn("audio init skipped", e); }
   try { bgm.currentTime = 0; } catch(e) {}
   const saved = continueGame ? loadContinueData() : null;
