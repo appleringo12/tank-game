@@ -505,6 +505,26 @@
   /* 残弾警告色を優先 */
   html.mofu #ammoBox.warn{ border-color:#f3d58b; background:rgba(255,251,239,.97); }
   html.mofu #ammoBox.empty{ border-color:#efb4c8; background:rgba(255,244,248,.97); }
+
+  /* ---- 雪のひさし付きボタン（.snow を付けたボタンだけ） ---- */
+  .btn.snow{ position:relative; --sn:8px; --o:5px; --v:6px; --x:calc(var(--sn) + var(--o)); --sd:var(--olive-dark); padding-top:15px; }
+  .btn.snow.alt{ --sd:var(--brick-dark); }
+  .btn.snow.info{ --sd:var(--steel-dark); }
+  .btn.snow.multi{ --sd:#78cfa5; }
+  /* 雪の下端を、重なった楕円ではなくベジェ曲線で描く。
+     端から端まで滑らかにつながるよう、各ふくらみの接線を水平にしている。 */
+  .btn.snow::before{ content:""; position:absolute; left:-4px; right:-4px; top:calc(var(--o)*-1); height:calc(var(--x) + var(--v) + 2px); pointer-events:none; border-radius:18px 18px 0 0;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 420 21' preserveAspectRatio='none'%3E%3Cpath fill='%23fff' d='M0 0H420V13 C408 13 408 18 398 18 C388 18 388 12 376 12 C364 12 360 16 350 16 C340 16 339 19 329 19 C319 19 318 13 306 13 C294 13 291 17 280 17 C269 17 268 11 256 11 C244 11 241 18 229 18 C217 18 217 13 205 13 C193 13 190 17 179 17 C168 17 166 10 154 10 C142 10 139 19 127 19 C115 19 115 13 103 13 C91 13 88 16 77 16 C66 16 64 11 52 11 C40 11 38 18 26 18 C14 18 12 13 0 13Z'/%3E%3C/svg%3E");
+    background-size:100% 100%; background-repeat:no-repeat;
+    filter:drop-shadow(0 2px 0 var(--sd)); }
+  /* 下の縁が太い分(+3px)だけ上の余白を足して、文字を四角形の中心に合わせる */
+  #startScreen .modeBtn.snow{ padding-top:17px; --o:4px; }
+  .pauseMenuBtn.snow,#pauseScreen .pauseMenuBtn.snow,.continueBtn.snow,#continueScreen .continueBtn.snow{ padding-top:19px; --sn:9px; }
+  @media (max-height:780px){ #startScreen .modeBtn.snow{ padding-top:12px; --o:3px; --sn:7px; } }
+
+  /* ---- 雪ボタンのある画面の背景は、ゲームプレイ中の背景(#gameArea)と同じ色。雪の輪郭は淡い青の縁取りで見分ける ---- */
+  html.mofu #startScreen,html.mofu #pauseScreen,html.mofu #continueScreen,html.mofu #gameOverScreen,html.mofu #mpOverScreen{ background:#e8f6fc; }
+  .btn.snow::before{ filter:drop-shadow(0 2px 0 var(--sd)) drop-shadow(0 -1px 0 #9fd0ea) drop-shadow(1px 0 0 #9fd0ea) drop-shadow(-1px 0 0 #9fd0ea); }
 </style>
 </head>
 <body>
@@ -529,18 +549,18 @@
     <div id="startScreen" class="overlay">
       <h1 class="title">もふもふバトル</h1>
       <div id="modeStats"></div>
-      <button class="btn modeBtn" id="normalModeBtn">通常モード</button>
-      <button class="btn modeBtn" id="rushModeBtn">爽快モード</button>
-      <button class="btn modeBtn multi" id="multiBtn">マルチプレイ</button>
-      <button class="btn modeBtn alt" id="stageCreateOpenBtn">ステージ作成</button>
-      <button class="btn modeBtn alt" id="stageLibraryOpenBtn">ステージ一覧</button>
+      <button class="btn modeBtn snow" id="normalModeBtn">通常モード</button>
+      <button class="btn modeBtn snow" id="rushModeBtn">爽快モード</button>
+      <button class="btn modeBtn multi snow" id="multiBtn">マルチプレイ</button>
+      <button class="btn modeBtn alt snow" id="stageCreateOpenBtn">ステージ作成</button>
+      <button class="btn modeBtn alt snow" id="stageLibraryOpenBtn">ステージ一覧</button>
       <div class="modeBtnRow">
-        <button class="btn modeBtn info" id="howToPlayBtn">ゲーム説明</button>
-        <button class="btn modeBtn info" id="designBtnTitle">デザイン</button>
-        <button class="btn modeBtn info" id="rewardBtnTitle">報酬<span class="redDot hidden" id="rewardDot"></span></button>
-        <button class="btn modeBtn info" id="settingsBtnTitle">設定</button>
+        <button class="btn modeBtn info snow" id="howToPlayBtn">ゲーム説明</button>
+        <button class="btn modeBtn info snow" id="designBtnTitle">デザイン</button>
+        <button class="btn modeBtn info snow" id="rewardBtnTitle">報酬<span class="redDot hidden" id="rewardDot"></span></button>
+        <button class="btn modeBtn info snow" id="settingsBtnTitle">設定</button>
       </div>
-      <button class="btn modeBtn info shareTitleBtn" id="shareGameBtnTitle" style="min-height:44px;font-size:clamp(14px,4vw,18px);">共有</button>
+      <button class="btn modeBtn info shareTitleBtn snow" id="shareGameBtnTitle" style="min-height:44px;font-size:clamp(14px,4vw,18px);">共有</button>
     </div>
 
     <!-- 長押しで開く途中ステージ選択 -->
@@ -556,8 +576,8 @@
       <h1 class="title">続きから再開</h1>
       <div class="subtitle">前回のステージクリア時のデータがあります。</div>
       <div id="continueStats"></div>
-      <button class="btn continueBtn" id="continueBtn">この状態から再開</button>
-      <button class="btn alt continueBtn" id="newGameBtn">タイトル画面に戻る</button>
+      <button class="btn continueBtn snow" id="continueBtn">この状態から再開</button>
+      <button class="btn alt continueBtn snow" id="newGameBtn">タイトル画面に戻る</button>
     </div>
 
     <!-- ステージクリア画面 -->
@@ -571,25 +591,25 @@
     <!-- ポーズ画面 -->
     <div id="pauseScreen" class="overlay hidden">
       <h1 class="title" style="font-size:clamp(22px,6vw,32px);">一時停止</h1>
-      <button class="btn pauseMenuBtn" id="resumeBtn">再開する</button>
-      <button class="btn alt pauseMenuBtn hidden" id="backToLibraryBtn">ステージ一覧に戻る</button>
-      <button class="btn alt pauseMenuBtn" id="restartFromPauseBtn">タイトルに戻る</button>
-      <button class="btn alt pauseMenuBtn" id="settingsBtnPause">設定</button>
+      <button class="btn pauseMenuBtn snow" id="resumeBtn">再開する</button>
+      <button class="btn alt pauseMenuBtn hidden snow" id="backToLibraryBtn">ステージ一覧に戻る</button>
+      <button class="btn alt pauseMenuBtn snow" id="restartFromPauseBtn">タイトルに戻る</button>
+      <button class="btn alt pauseMenuBtn snow" id="settingsBtnPause">設定</button>
     </div>
 
     <!-- ゲームオーバー画面 -->
     <div id="gameOverScreen" class="overlay hidden">
       <h1 class="title" style="color:var(--blood); text-shadow:3px 3px 0 #ffc9dc;">GAME OVER</h1>
       <p class="subtitle">モード: <b id="finalMode"></b><br>クリアステージ: <b id="finalStage"></b><br>最大クリアステージ: <b id="finalMaxStage"></b></p>
-      <button class="btn" id="retryBtn">同じモードでもう一度</button>
-      <button class="btn alt" id="gameOverTitleBtn">タイトル画面に戻る</button>
+      <button class="btn snow" id="retryBtn">同じモードでもう一度</button>
+      <button class="btn alt snow" id="gameOverTitleBtn">タイトル画面に戻る</button>
     </div>
 
     <!-- マルチプレイ用ゲームオーバー画面 -->
     <div id="mpOverScreen" class="overlay hidden">
       <h1 class="title" style="color:var(--blood); text-shadow:3px 3px 0 #ffc9dc;">GAME OVER</h1>
       <p class="subtitle">マルチプレイ<br>クリアステージ: <b id="mpFinalStage"></b></p>
-      <button class="btn alt" id="mpOverTitleBtn">タイトル画面に戻る</button>
+      <button class="btn alt snow" id="mpOverTitleBtn">タイトル画面に戻る</button>
     </div>
 
     <!-- ゲーム説明画面 -->
