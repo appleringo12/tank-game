@@ -689,6 +689,21 @@
             <div class="volumeSliderHandle" id="seVolumeHandle"></div>
           </div>
         </div>
+        <div class="settingsRow settingsRowVolume">
+          <span class="settingsLabel">画面の揺れ</span>
+          <div class="volumeSlider" id="shakeSlider">
+            <div class="volumeSliderLine"></div>
+            <div class="volumeSliderTicks">
+              <div class="volumeSliderTick" style="left:0%"><span class="tickMark"></span><span class="tickNum">0</span></div>
+              <div class="volumeSliderTick" style="left:20%"><span class="tickMark"></span><span class="tickNum">1</span></div>
+              <div class="volumeSliderTick" style="left:40%"><span class="tickMark"></span><span class="tickNum">2</span></div>
+              <div class="volumeSliderTick" style="left:60%"><span class="tickMark"></span><span class="tickNum">3</span></div>
+              <div class="volumeSliderTick" style="left:80%"><span class="tickMark"></span><span class="tickNum">4</span></div>
+              <div class="volumeSliderTick" style="left:100%"><span class="tickMark"></span><span class="tickNum">5</span></div>
+            </div>
+            <div class="volumeSliderHandle" id="shakeHandle"></div>
+          </div>
+        </div>
         <div class="settingsRow settingsRowVolume" id="schemeRow">
           <span class="settingsLabel">操作方法</span>
           <div class="schemeToggle">
@@ -1622,13 +1637,14 @@ function updateSchemeCAim(dt){
 // 方向はどちらも、常に自機（車体）が向いている方向。
 let cSecond = null; // {id, t, x, y, dragged, done}
 // 超距離ミサイル＝ただの長押し：下部エリアを、動かさずに通常操作の長押し(MISSILE_HOLD_TIME_FIRST)と同じ時間押し続ける
-const SCHEME_C_HOLD_MOVE = 20;  // この距離(px)以上ドラッグした指は「移動中」とみなし、長押しミサイルは出さない
+const SCHEME_C_HOLD_MOVE = 60;  // この距離(px)以上ドラッグした指は「移動中」とみなし、長押しミサイルは出さない（長押し中に指が少し動いても撃てるよう、以前の20から広げた。現在60）
 const cHolds = {};              // {指のid: {t, x, y, dragged, done}}
 // ステージ開始前（タイトル・クリア画面など）から押しっぱなしの指。開始後に動かしたら、そのまま移動スティックとして使う。
 const cCarry = {};
-function schemeCFireMissile(distance){
+function schemeCFireMissile(distance, ang){
   if(!player || !player.alive) return;
-  fireMissile(player.angle, distance);
+  // 方向は「長押しを始めた(指を置いた)時点」の自機の向き。長押し中に指がずれて自機が動いても変わらない。
+  fireMissile(ang !== undefined ? ang : player.angle, distance);
 }
 // 毎フレーム：2回目の指の長押し成立を見る（updateSchemeCAimから呼ぶ）
 function schemeCUpdateSecond(){
@@ -1640,13 +1656,13 @@ function schemeCUpdateSecond(){
     if(nowH - h.t >= MISSILE_HOLD_TIME_FIRST){
       h.done = true; // 1回の長押しにつき1発だけ
       // ステージ開始から数秒は、親指を置いただけで出てしまわないよう長押しミサイルを出さない（通常操作と同じ）
-      if(mpTagAge >= MISSILE_START_LOCK_TIME) schemeCFireMissile(MISSILE_DISTANCE);
+      if(mpTagAge >= MISSILE_START_LOCK_TIME) schemeCFireMissile(MISSILE_DISTANCE, h.ang);
     }
   }
   if(!cSecond || cSecond.done || cSecond.dragged) return;
   if(performance.now()/1000 - cSecond.t >= MISSILE_HOLD_TIME_SECOND){
     cSecond.done = true;
-    schemeCFireMissile(MISSILE_TRIPLE_DISTANCE); // 長押し成立＝短距離
+    schemeCFireMissile(MISSILE_TRIPLE_DISTANCE, cSecond.ang); // 長押し成立＝短距離
   }
 }
 function schemeCTouchOk(t){
@@ -1659,17 +1675,17 @@ function schemeCTouchOk(t){
 window.addEventListener("touchstart", e=>{
   if(IS_PC || controlScheme!=="C") return;
   for(const t of e.changedTouches){
-    if(state!=="playing"){ cCarry[t.identifier] = true; continue; } // ステージ開始前から押している指
+    if(state!=="playing" || performance.now() < schemeBIgnoreUntil){ cCarry[t.identifier] = true; continue; } // ステージ開始前（クリア画面のタップ直後を含む）から押している指
     if(!schemeCTouchOk(t)) continue;
     const now = performance.now()/1000;
     if(cTap.lastEnd>0 && now-cTap.lastEnd < SCHEME_C_DOUBLE_TAP){
       cTap.lastEnd = 0;
       cTap.ignore[t.identifier] = true; // この2回目の指は、新しいタップとして数えない
       // 2回目の指：長押しで短距離、短く離して超距離。ドラッグしたら移動（ミサイルなし）
-      cSecond = {id:t.identifier, t:now, x:t.clientX, y:t.clientY, dragged:false, done:false};
+      cSecond = {id:t.identifier, t:now, x:t.clientX, y:t.clientY, dragged:false, done:false, ang:player.angle};
     } else {
       cTap.touches[t.identifier] = {t:now, x:t.clientX, y:t.clientY};
-      cHolds[t.identifier] = {t:now, x:t.clientX, y:t.clientY, dragged:false, done:false};
+      cHolds[t.identifier] = {t:now, x:t.clientX, y:t.clientY, dragged:false, done:false, ang:player.angle};
     }
   }
 }, {passive:false, capture:true});
@@ -1694,7 +1710,7 @@ window.addEventListener("touchmove", e=>{
   if(IS_PC || controlScheme!=="C") return;
   for(const t of e.changedTouches){
     const id=t.identifier;
-    if(cSecond && id===cSecond.id && !cSecond.done && Math.hypot(t.clientX-cSecond.x, t.clientY-cSecond.y) > MISSILE_MOVE_DEADZONE) cSecond.dragged = true;
+    if(cSecond && id===cSecond.id && !cSecond.done && Math.hypot(t.clientX-cSecond.x, t.clientY-cSecond.y) > SCHEME_C_HOLD_MOVE) cSecond.dragged = true;
     const h = cHolds[id];
     if(h && !h.dragged && Math.hypot(t.clientX-h.x, t.clientY-h.y) > SCHEME_C_HOLD_MOVE) h.dragged = true;
     // ステージ開始前から押しっぱなしだった指を動かしたら、その場から移動スティックを始める
@@ -1824,6 +1840,8 @@ const SETTINGS_KEY = "tankBattleSettingsV1";
 const SFX_LEVEL_MAX = 6; // 効果音レベルの最大値（0〜6の7段階、3が真ん中＝デフォルト）
 let bgmEnabled = true;
 let seLevel = 3; // 0(無音)〜6。3が元々の音量（デフォルト）。
+const SHAKE_LEVEL_MAX = 5; // 画面の揺れの強さ（0〜5、デフォルト3）
+let shakeLevel = 3;
 let controlScheme = IS_PC ? "A" : "B"; // 初期設定：PCは通常操作、スマホ・タブレットは簡単操作
 let screenOrient = "auto"; // 画面の向き：auto(回転する) / portrait(縦固定) / landscape(横固定)
 function loadSettings(){
@@ -1833,12 +1851,13 @@ function loadSettings(){
     const d = JSON.parse(raw);
     if(typeof d.bgmEnabled === "boolean") bgmEnabled = d.bgmEnabled;
     if(Number.isFinite(d.seLevel)) seLevel = Math.max(0, Math.min(SFX_LEVEL_MAX, Math.floor(d.seLevel)));
+    if(Number.isFinite(d.shakeLevel)) shakeLevel = Math.max(0, Math.min(SHAKE_LEVEL_MAX, Math.floor(d.shakeLevel)));
     if(d.controlScheme === "A" || d.controlScheme === "B" || d.controlScheme === "C") controlScheme = d.controlScheme;
     if(d.screenOrient === "auto" || d.screenOrient === "portrait" || d.screenOrient === "landscape") screenOrient = d.screenOrient;
   }catch(e){}
 }
 function saveSettings(){
-  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bgmEnabled, seLevel, controlScheme, screenOrient })); }catch(e){}
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bgmEnabled, seLevel, shakeLevel, controlScheme, screenOrient })); }catch(e){}
 }
 loadSettings();
 
@@ -3171,8 +3190,29 @@ function spawnWaterSplash(x,y){
       life:rand(0.28,0.52),t:0,color:"#ffffff",r:rand(2.2,4.2)});
   }
 }
+// ---- 画面の揺れ（自機・敵が倒されたとき） ----
+// 強さは設定(shakeLevel 0〜5)で決まる。自機が倒されたとき(scaleF=1.4)は敵より大きく・長く揺れる。
+const shakeFx = { start:0, dur:0, amp:0 };
+function triggerScreenShake(scaleF){
+  if(shakeLevel <= 0) return;
+  const amp = shakeLevel * 1.6 * scaleF;          // 揺れの大きさ(px)。レベル3の敵撃破で約4.8px
+  const dur = 0.3 + (scaleF-1) * 0.5;             // 揺れる時間(秒)。敵0.3秒・自機0.5秒
+  const now = performance.now()/1000;
+  const remain = Math.max(0, shakeFx.dur - (now - shakeFx.start));
+  const curAmp = shakeFx.dur > 0 ? shakeFx.amp * (remain/shakeFx.dur) : 0;
+  if(amp < curAmp) return; // 今の揺れのほうが大きいときは上書きしない
+  shakeFx.start = now; shakeFx.dur = dur; shakeFx.amp = amp;
+}
+function getShakeOffset(){
+  if(shakeLevel <= 0 || shakeFx.dur <= 0) return null;
+  const k = 1 - (performance.now()/1000 - shakeFx.start) / shakeFx.dur;
+  if(k <= 0){ shakeFx.dur = 0; return null; }
+  const a = shakeFx.amp * k * k; // だんだん収まる
+  return { x:(Math.random()*2-1)*a, y:(Math.random()*2-1)*a };
+}
 function spawnExplosion(x,y,scaleF,quiet){
   if(!quiet) mpq("se", x, y, scaleF);
+  triggerScreenShake(scaleF);
   spawnIceBurst(x,y,scaleF); // 氷の破片＋雪の結晶＋キラキラ
 }
 function spawnMissileBlast(x,y){
@@ -5350,9 +5390,9 @@ function mpRenderClear(anyDead){
   for(const type of (next.enemies || [])) counts[type] = (counts[type] || 0) + 1;
   const icons = Object.entries(counts).map(([type,count])=>
     enemyFighterIcon(type).replace('COUNT_PLACEHOLDER', String(count))).join("");
-  clearStageTitle.textContent = `ステージ ${stageNum} CLEAR!`;
+  clearStageTitle.textContent = `次はステージ ${nextNum}`;
   clearStats.innerHTML = "";
-  nextStageInfo.innerHTML = `次のステージ：<b>ステージ ${nextNum}</b><br><span class="enemyLabel">${enemyClearLabel()}</span><div class="enemyIcons">${icons || "なし"}</div>`;
+  nextStageInfo.innerHTML = `<span class="enemyLabel">${enemyClearLabel()}</span><div class="enemyIcons">${icons || "なし"}</div>`;
   clearTapHint.textContent = "まもなく次のステージへ…";
   stageClearScreen.classList.remove("hidden");
 }
@@ -5823,6 +5863,7 @@ function render(){
   ctx.save();
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,canvas.width/dpr,canvas.height/dpr);
+  { const sh = getShakeOffset(); if(sh) ctx.translate(sh.x, sh.y); } // 撃破時の画面の揺れ
   // マップ全体を常時表示。
   const viewW = (canvas.width/dpr) / (scale * CAMERA_ZOOM);
   const viewH = (canvas.height/dpr) / (scale * CAMERA_ZOOM);
@@ -6301,9 +6342,9 @@ function showStageClear(){
     enemyFighterIcon(type).replace('COUNT_PLACEHOLDER', String(count))
   ).join("");
 
-  clearStageTitle.textContent = customPlayActive ? "オリジナルステージ CLEAR!" : `ステージ ${stageNum} CLEAR!`;
+  clearStageTitle.textContent = customPlayActive ? "オリジナルステージ CLEAR!" : (backToLib ? `ステージ ${stageNum} CLEAR!` : `次はステージ ${nextNum}`);
   clearStats.innerHTML = `残機：${Math.max(lives,0)}` + (gotExtraLife ? `　　<span style="color:var(--amber);">ライフ+1！</span>` : "");
-  nextStageInfo.innerHTML = (customPlayActive || backToLib) ? "ステージクリア！タップしてステージ一覧に戻ります。" : `次のステージ：<b>ステージ ${nextNum}</b><br><span class="enemyLabel">${enemyClearLabel()}</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
+  nextStageInfo.innerHTML = (customPlayActive || backToLib) ? "ステージクリア！タップしてステージ一覧に戻ります。" : `<span class="enemyLabel">${enemyClearLabel()}</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
   clearTapHint.textContent = backToLib ? "画面をタップするとステージ一覧へ" : "画面をタップすると次のステージへ";
   stageClearScreen.classList.remove("hidden");
 }
@@ -6349,6 +6390,10 @@ function startNextStage(){
 stageClearScreen.addEventListener("pointerdown", e=>{
   e.preventDefault();
   startNextStage();
+});
+// 片手操作のときだけ、下の操作エリアをタップしても次のステージへ進める（画面のどこでもOK）
+document.getElementById("controls").addEventListener("pointerdown", ()=>{
+  if(!IS_PC && controlScheme==="C" && state==="stageclear") startNextStage();
 });
 
 /* ================================================================
@@ -6438,6 +6483,8 @@ const CONTROL_SCHEME_DESC = {
 };
 const seVolumeSlider = document.getElementById("seVolumeSlider");
 const seVolumeHandle = document.getElementById("seVolumeHandle");
+const shakeSlider = document.getElementById("shakeSlider");
+const shakeHandle = document.getElementById("shakeHandle");
 let settingsReturnScreen = null;
 let settingsPrevMenuState = false;
 
@@ -6547,6 +6594,12 @@ function updateSeVolumeUI(){
     el.classList.toggle("active", i === seLevel);
   });
 }
+function updateShakeUI(){
+  shakeHandle.style.left = (shakeLevel/SHAKE_LEVEL_MAX*100) + "%";
+  shakeSlider.querySelectorAll(".volumeSliderTick").forEach((el,i)=>{
+    el.classList.toggle("active", i === shakeLevel);
+  });
+}
 function openSettings(returnScreen){
   settingsReturnScreen = returnScreen;
   settingsPrevMenuState = app.classList.contains("menu-state");
@@ -6556,6 +6609,7 @@ function openSettings(returnScreen){
   updateControlSchemeUI();
   updateOrientUI();
   updateSeVolumeUI();
+  updateShakeUI();
   settingsScreen.classList.remove("hidden");
 }
 function closeSettings(){
@@ -6691,6 +6745,31 @@ seVolumeSlider.addEventListener("pointermove", e=>{
 });
 seVolumeSlider.addEventListener("pointerup", ()=>{ seSliderDragging = false; });
 seVolumeSlider.addEventListener("pointercancel", ()=>{ seSliderDragging = false; });
+
+// 画面の揺れスライダー：0〜5を選ぶ（選んだときに軽く揺らして強さを確かめられる）
+let shakeSliderDragging = false;
+function setShakeLevelFromClientX(clientX){
+  const rect = shakeSlider.getBoundingClientRect();
+  const ratio = rect.width > 0 ? Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) : 0;
+  const level = Math.round(ratio * SHAKE_LEVEL_MAX);
+  if(level !== shakeLevel){
+    shakeLevel = level;
+    updateShakeUI();
+    saveSettings();
+    triggerScreenShake(1.0); // 強さの確認用
+  }
+}
+shakeSlider.addEventListener("pointerdown", e=>{
+  shakeSliderDragging = true;
+  try{ shakeSlider.setPointerCapture(e.pointerId); }catch(err){}
+  setShakeLevelFromClientX(e.clientX);
+});
+shakeSlider.addEventListener("pointermove", e=>{
+  if(!shakeSliderDragging) return;
+  setShakeLevelFromClientX(e.clientX);
+});
+shakeSlider.addEventListener("pointerup", ()=>{ shakeSliderDragging = false; });
+shakeSlider.addEventListener("pointercancel", ()=>{ shakeSliderDragging = false; });
 const hud = document.getElementById("hud");
 const pauseBtn = document.getElementById("pauseBtn");
 const bgm = document.getElementById("bgm");
