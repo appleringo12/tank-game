@@ -7527,12 +7527,20 @@ async function loadRanking(mode=rankingCurrentMode,period=rankingCurrentPeriod){
   updateRankingParticipationButton();
   if(!rankingApiReady()){status.textContent="ランキングサーバーの設定が必要です。";return;}
   await rankingSyncLocalRecords();
+  let stage="通信", data=null;
   try{
     const url=RANKING_API_BASE+"/api/ranking?mode="+encodeURIComponent(mode)+"&period="+encodeURIComponent(period)+"&player="+encodeURIComponent(rankingPlayerId);
-    const r=await fetch(url,{cache:"no-store"});
+    const r=await fetch(url);
     if(!r.ok)throw new Error("HTTP "+r.status);
-    renderRanking(await r.json());
-  }catch(e){status.textContent="ランキングサーバーに接続できません。サーバーの更新後、通信できる状態で再読み込みしてください。";}
+    stage="データ読み取り";
+    data=await r.json();
+    stage="表示";
+    renderRanking(data);
+  }catch(e){
+    // どの段階で失敗したかと、エラーの中身を表示（原因調査用）
+    const msg=String((e&&e.message)||e).slice(0,80);
+    status.textContent="ランキングを表示できませんでした。（"+stage+"でエラー："+msg+"）通信状態を確認して、再読み込みしてください。";
+  }
 }
 document.getElementById("rankingBtnTitle").addEventListener("click",()=>{
   startScreen.classList.add("hidden");
