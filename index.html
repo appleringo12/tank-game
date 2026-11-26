@@ -470,6 +470,24 @@
   .rwChip.claim{background:#fff4df;border-color:#f0c77a;color:#9a7130}
   .rwChip.locked{opacity:.42;cursor:default}
   .rwHint{ font-size:12px; color:#8a6f97; }
+  /* ---- オンラインランキング ---- */
+  #rankingScreen{z-index:28;overflow-y:auto;justify-content:flex-start;padding: max(22px,env(safe-area-inset-top,0px) + 12px) 14px 24px;gap:12px}
+  #rankingScreen .title{font-size:clamp(22px,6vw,32px)}
+  #rankingTabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:min(92vw,440px)}
+  .rankTab{font:700 13px/1.2 'Yu Gothic',sans-serif;letter-spacing:0;padding:9px 4px;border:2px solid #b9dcef;border-radius:14px;background:#fff;color:#3f6f93;opacity:.58}
+  .rankTab.active{opacity:1;background:#86c9ee;color:#fff;border-color:#5aaee0}
+  #rankingStatus{font-size:12px;color:#5d89a8;line-height:1.6;min-height:20px;text-align:center}
+  #rankingMine{width:min(92vw,440px)}
+  .rankMineCard{display:flex;align-items:center;gap:10px;background:#fff;border:2px solid #86c9ee;border-radius:14px;padding:9px 12px;color:#3f6f93}
+  #rankingList{display:flex;flex-direction:column;gap:7px;width:min(92vw,440px)}
+  .rankEntry{display:grid;grid-template-columns:32px 34px minmax(0,1fr) auto;align-items:center;gap:9px;background:rgba(255,255,255,.86);border:1px solid #c9e3f1;border-radius:13px;padding:8px 10px;color:#3f6f93;text-align:left}
+  .rankEntry.mine{border:2px solid #70bce5;background:#f0faff;padding:7px 9px}
+  .rankNo{font-weight:700;text-align:center;color:#7aa3be;font-variant-numeric:tabular-nums}
+  .rankColorDot{width:28px;height:28px;border-radius:50%;border:2px solid rgba(63,111,147,.34);box-shadow:inset 0 0 0 2px rgba(255,255,255,.6),0 1px 3px rgba(63,111,147,.14)}
+  .rankWho{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rankScore{font-size:13px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .rankEmpty{padding:20px 12px;text-align:center;background:rgba(255,255,255,.72);border:1px dashed #b9dcef;border-radius:14px;color:#5d89a8;font-size:13px;line-height:1.7}
+  html.mofu .rankEntry,html.mofu .rankMineCard{color:#3f6f93}
   /* ---- 弾数表示（ゲーム画面の下・右端） ---- */
   #ammoBox{ position:absolute; z-index:8; display:none; align-items:center; gap:6px; padding:5px 8px; background:rgba(255,249,253,.96); border:2px solid #d9c9f2; border-radius:11px; pointer-events:none; box-shadow:0 2px 6px rgba(180,150,210,.22); }
   #ammoBox.show{ display:flex; }
@@ -558,6 +576,7 @@
       <button class="btn modeBtn snow" id="normalModeBtn">通常モード</button>
       <button class="btn modeBtn snow" id="rushModeBtn">爽快モード</button>
       <button class="btn modeBtn multi snow" id="multiBtn">マルチプレイ</button>
+      <button class="btn modeBtn info snow" id="rankingBtnTitle">全世界ランキング</button>
       <button class="btn modeBtn alt snow" id="stageCreateOpenBtn">ステージ作成</button>
       <button class="btn modeBtn alt snow" id="stageLibraryOpenBtn">ステージ一覧</button>
       <div class="modeBtnRow">
@@ -682,6 +701,7 @@
       <div id="rwEquip"></div>
       <div id="fighterTypeBox"></div>
       <div id="bulletColorBox"></div>
+      <div id="playerColorBox"></div>
       <button class="btn alt" id="designCloseBtn">閉じる</button>
     </div>
 
@@ -690,6 +710,22 @@
       <h1 class="title" style="font-size:clamp(22px,6vw,32px);">報酬</h1>
       <div id="rewardList"></div>
       <button class="btn alt" id="rewardCloseBtn">閉じる</button>
+    </div>
+
+    <!-- 全世界ランキング：名前の代わりにデザインで選んだ自機カラーを表示 -->
+    <div id="rankingScreen" class="overlay hidden">
+      <h1 class="title">全世界ランキング</h1>
+      <div class="subtitle">最高クリアステージ順。プレイヤー名は表示せず、自機の色で表示します。</div>
+      <div id="rankingTabs">
+        <button class="rankTab active" data-rank-mode="normal">通常</button>
+        <button class="rankTab" data-rank-mode="rush">爽快</button>
+        <button class="rankTab" data-rank-mode="multi">マルチ</button>
+      </div>
+      <div id="rankingStatus">ランキングを読み込んでいます…</div>
+      <div id="rankingMine"></div>
+      <div id="rankingList"></div>
+      <button class="btn alt" id="rankingRefreshBtn">再読み込み</button>
+      <button class="btn alt" id="rankingCloseBtn">閉じる</button>
     </div>
 
     <!-- 設定画面 -->
@@ -868,6 +904,25 @@ const BULLET_COLORS = {
 };
 let bulletColor = "blue";
 try{ const v=localStorage.getItem(BULLET_COLOR_KEY); if(BULLET_COLORS[v]) bulletColor=v; }catch(e){}
+
+// 自機カラー：デザイン画面で選んだ色を、自分のアザラシ本体とランキング表示に使用する。
+const PLAYER_COLOR_KEY = "mofuPlayerColorV1";
+const PLAYER_COLORS = {
+  white:    {name:"しろ",       color:"#ffffff", dark:"#aeb8cc"},
+  ice:      {name:"こおり",     color:"#bfeaff", dark:"#66bce8"},
+  pink:     {name:"さくら",     color:"#ffd0e2", dark:"#dc8eaf"},
+  mint:     {name:"ミント",     color:"#c8f2df", dark:"#80c9a8"},
+  lavender: {name:"ラベンダー", color:"#dfd2ff", dark:"#a993df"},
+  lemon:    {name:"レモン",     color:"#fff0b8", dark:"#d7bd65"},
+  peach:    {name:"もも",       color:"#ffd9c4", dark:"#d69a7b"},
+  aqua:     {name:"アクア",     color:"#b9f0eb", dark:"#65bdb4"},
+  coral:    {name:"コーラル",   color:"#ffc5bd", dark:"#d8847c"},
+  grape:    {name:"ぶどう",     color:"#dfc3f0", dark:"#a17bbe"},
+};
+function normalizePlayerColorId(id){ return Object.prototype.hasOwnProperty.call(PLAYER_COLORS,id) ? id : "white"; }
+let playerColor = "white";
+try{ playerColor = normalizePlayerColorId(localStorage.getItem(PLAYER_COLOR_KEY)||"white"); }catch(e){}
+function getPlayerColorData(id=playerColor){ return PLAYER_COLORS[normalizePlayerColorId(id)] || PLAYER_COLORS.white; }
 function drawNormalBullet(g,x,y,R){
   const P=BULLET_COLORS[bulletColor]||BULLET_COLORS.blue;
   const gr=g.createRadialGradient(x-R*0.35,y-R*0.4,0,x,y,R);
@@ -906,7 +961,7 @@ const SCHEME_B_SHORT_RANGE = TILE * 3.5; // ★タップ位置が自機からこ
 // --- マルチプレイ（Cloudflare Workers + Durable Objects）の設定 ---
 // ★wrangler deploy で表示される Worker のURL（https:// を wss:// に変えたもの）を貼り付けてください。
 const MP_SERVER = "wss://puchi-tank-mp.frifrill.workers.dev";
-const MP_VERSION = "2";   // ★同期方式を変えたときは数字を上げる（旧バージョンの人とはマッチングしなくなる）
+const MP_VERSION = "3"; // 自機カラー同期を追加したため   // ★同期方式を変えたときは数字を上げる（旧バージョンの人とはマッチングしなくなる）
 const P_COLORS = [ {color:"#8ecbff", dark:"#5fa8e8"}, {color:"#ffaaaa", dark:"#e87888"} ]; // 1P=青 / 2P=赤
 // マルチプレイの状態（ホスト＝ゲームを計算する側 / ゲスト＝映像を受け取る側）
 const mp = {
@@ -918,6 +973,7 @@ const mp = {
   bidSeq:0, fireCd:0, prevMyMissiles:0, hudKey:"",
   inputSeq:0, sentLog:[], hist:[], rtt:0.1, pend:{x:0,y:0}, resumeGame:false, // ゲストの先行移動用／マルチ後に通常プレイへ戻る用
   fighterTypes:null, remoteFighterType:"A", // 1P・2Pそれぞれが選んだアザラシタイプ
+  playerColors:null, remotePlayerColor:"white", // 1P・2Pそれぞれの自機カラー
 };
 
 // --- 敵の種類ごとのパラメータ ---
@@ -2335,8 +2391,8 @@ function makePlayer(x,y,pidx=0){
     fireBuffered:false, // ★発射間隔制限中に押された入力を覚えておく（先行入力）
     invuln:2.0,  // ★復活直後の無敵時間(秒)
     blink:0,
-    color: SEAL_PLAYER_COLOR.color, // 自機は白固定
-    dark:  SEAL_PLAYER_COLOR.dark,
+    color: getPlayerColorData(mp.active && Array.isArray(mp.playerColors) ? mp.playerColors[pidx] : playerColor).color,
+    dark:  getPlayerColorData(mp.active && Array.isArray(mp.playerColors) ? mp.playerColors[pidx] : playerColor).dark,
     pidx, fireLock:1.0, // マルチ：2Pの開始直後の射撃ロック
   };
 }
@@ -5310,7 +5366,7 @@ function mpGuestHello(c){
     if(mp.client!==c || mp.active || !mp.searching) return;
     if(n++ >= 8){ mpRetry(); return; }
     // ゲストが選んでいるアザラシタイプをホストへ伝える。
-    mpSend(EV.HELLO, {tankType:activeFighterType()});
+    mpSend(EV.HELLO, {tankType:activeFighterType(), playerColor});
     mp.helloTimer = setTimeout(tick, 1000);
   };
   tick();
@@ -5353,6 +5409,7 @@ function mpOnEvent(code, data){
     case EV.HELLO: // ホスト：ゲストが入ってきた → アザラシタイプを受け取りゲーム開始
       if(mp.searching && !mp.active && mp.joined && mp.isHost){
         mp.remoteFighterType = normalizeFighterType(o && o.tankType);
+        mp.remotePlayerColor = normalizePlayerColorId(o && o.playerColor);
         mpBeginGame("host");
       }
       break;
@@ -5463,15 +5520,18 @@ function mpBeginGame(role, lv){
   // 1P＝ホスト、2P＝ゲスト。選択情報を共有してからアザラシを生成する。
   if(role === "host"){
     mp.fighterTypes = [activeFighterType(), normalizeFighterType(mp.remoteFighterType)];
+    mp.playerColors = [playerColor, normalizePlayerColorId(mp.remotePlayerColor)];
   } else {
     const receivedTypes = lv && Array.isArray(lv.pt) ? lv.pt : ["A", activeFighterType()];
     mp.fighterTypes = [normalizeFighterType(receivedTypes[0]), normalizeFighterType(receivedTypes[1])];
+    const receivedColors = lv && Array.isArray(lv.pc) ? lv.pc : ["white", playerColor];
+    mp.playerColors = [normalizePlayerColorId(receivedColors[0]), normalizePlayerColorId(receivedColors[1])];
   }
   mp.searching = false; mp.active = true; mp.role = role;
   setSpinner(false); updateMultiBtn();
   // 開いている画面をすべて閉じる
   for(const el of [startScreen, stageSelectScreen, continueScreen, pauseScreen, gameOverScreen, stageClearScreen,
-                   howToPlayScreen, designScreen, settingsScreen, editorScreen, libraryScreen, mpOverScreen, document.getElementById("rewardScreen"), document.getElementById("shareGameScreen")]) el.classList.add("hidden");
+                   howToPlayScreen, designScreen, settingsScreen, editorScreen, libraryScreen, mpOverScreen, document.getElementById("rewardScreen"), document.getElementById("shareGameScreen"), document.getElementById("rankingScreen")]) el.classList.add("hidden");
   document.getElementById("shareDialog").classList.add("hidden");
   document.getElementById("uiConfirm").classList.add("hidden");
   settingsReturnScreen = null;
@@ -5495,7 +5555,7 @@ function mpBeginGame(role, lv){
   flashStage(formatStageProgress(totalStageProgress));
   playBgm();
   playStageClear();
-  if(role==="host") mpSend(EV.LEVEL, {s:stageNum, l:lapNum, t:totalStageProgress, pt:mp.fighterTypes.slice()});
+  if(role==="host") mpSend(EV.LEVEL, {s:stageNum, l:lapNum, t:totalStageProgress, pt:mp.fighterTypes.slice(), pc:mp.playerColors.slice()});
   uiAlert(saved ? "マッチング成功！途中のデータは保存しました" : "マッチング成功！マルチプレイ開始");
 }
 
@@ -5504,7 +5564,7 @@ function mpEnd(msg){
   hitStopTimer = 0;
   mpStopClient();
   mp.active = false; mp.role = null; mp.searching = false; mp.joined = false;
-  mp.p1 = null; mp.p2 = null; mp.fxq = []; mp.fighterTypes = null; mp.remoteFighterType = "A";
+  mp.p1 = null; mp.p2 = null; mp.fxq = []; mp.fighterTypes = null; mp.remoteFighterType = "A"; mp.playerColors = null; mp.remotePlayerColor = "white";
   setSpinner(false); updateMultiBtn();
   resetAllControlInputs();
   mpOverScreen.classList.add("hidden");
@@ -5594,6 +5654,7 @@ function mpRenderClear(anyDead){
 function mpShowClear(){ // ホスト
   if(window.rwOnClear) rwOnClear(true);
   updateMultiRecord(totalStageProgress+1);
+  rankingSubmit("multi", totalStageProgress);
   const anyDead = !(mp.p1.alive && mp.p2.alive);
   mpRenderClear(anyDead);
   mp.clearTimer = MP_CLEAR_DELAY;
@@ -5617,7 +5678,7 @@ function mpHostNextStage(){
   mp.rin.mv = false;
   stageClearScreen.classList.add("hidden");
   flashStage(formatStageProgress(totalStageProgress));
-  mpSend(EV.LEVEL, {s:stageNum, l:lapNum, t:totalStageProgress, pt:mp.fighterTypes.slice()});
+  mpSend(EV.LEVEL, {s:stageNum, l:lapNum, t:totalStageProgress, pt:mp.fighterTypes.slice(), pc:(mp.playerColors||["white","white"]).slice()});
 }
 function mpShowOverScreen(progress){
   state = "mp_over";
@@ -5638,6 +5699,7 @@ function mpShowOver(){ // ホスト
 function mpGuestLoadLevel(o){
   stageNum = o.s; lapNum = o.l; totalStageProgress = o.t;
   if(Array.isArray(o.pt)) mp.fighterTypes = [normalizeFighterType(o.pt[0]), normalizeFighterType(o.pt[1])];
+  if(Array.isArray(o.pc)) mp.playerColors = [normalizePlayerColorId(o.pc[0]), normalizePlayerColorId(o.pc[1])];
   buildLevel(stageNum-1);
   mpResetPrediction();
   state = "playing";
@@ -5650,6 +5712,7 @@ function mpGuestLoadLevel(o){
 function mpGuestClear(o){
   if(window.rwOnClear) rwOnClear(true);
   updateMultiRecord(totalStageProgress+1);
+  rankingSubmit("multi", totalStageProgress);
   state = "stageclear";
   mpRenderClear(!!o.d);
   if(lapNum===1 && stageNum % STAGES_PER_EXTRA_LIFE === 0) playMilestoneClear(); else playStageClear();
@@ -6350,7 +6413,7 @@ function drawFighter(t){
   ctx.translate(t.x,t.y);
 
   // 親アザラシ（進む向き）＋背中の子アザラシ（照準の向き）
-  drawSealFighter(ctx, 0, 0, t.r, t.angle, t.turretAngle, t.isPlayer ? null : {color:t.color, dark:t.dark});
+  drawSealFighter(ctx, 0, 0, t.r, t.angle, t.turretAngle, {color:t.color || SEAL_PLAYER_COLOR.color, dark:t.dark || SEAL_PLAYER_COLOR.dark});
 
   // 耐久ゲージ（HPが2以上の敵のみ表示）
   if(!t.isPlayer && t.maxHp>1){
@@ -6525,6 +6588,7 @@ function showStageClear(){
   // ステージクリア成立時だけセーブ。次のステージから再開できる。
   const wasLastStage = (stageNum >= 50);
   updateMaxStage();
+  if(!challengeStartNoRecord && !customPlayActive) rankingSubmit(gameMode, totalStageProgress);
   if(!challengeStartNoRecord && !customPlayActive) saveContinueData({
     stageNum: nextNum,
     lapNum: wasLastStage ? lapNum + 1 : lapNum,
@@ -6673,7 +6737,7 @@ shareGameNativeBtn.addEventListener("click", async ()=>{
 });
 
 const designScreen=document.getElementById("designScreen");
-document.getElementById("designBtnTitle").addEventListener("click",()=>{designScreen.classList.remove("hidden");paintDesignPreview();renderFighterType();renderBulletColor();});
+document.getElementById("designBtnTitle").addEventListener("click",()=>{designScreen.classList.remove("hidden");paintDesignPreview();renderFighterType();renderBulletColor();renderPlayerColor();});
 document.getElementById("designCloseBtn").addEventListener("click",()=>{designScreen.classList.add("hidden");});
 
 
@@ -7146,16 +7210,126 @@ document.getElementById("bulletColorBox").addEventListener("click",e=>{
   renderBulletColor(); paintDesignPreview();
   try{ ammoDirty=true; }catch(err){}
 });
+function renderPlayerColor(){
+  const box=document.getElementById("playerColorBox"); if(!box) return;
+  box.innerHTML='<div class="rwRowLabel">自分のアザラシの色（ランキングにも表示）</div><div class="rwChips">'
+    +Object.entries(PLAYER_COLORS).map(([id,p])=>'<button class="rwChip'+(playerColor===id?' on':'')+'" data-player-color="'+id+'"><span style="display:inline-block;width:13px;height:13px;border-radius:50%;background:'+sealPastel(p.color)+';border:1.5px solid '+p.dark+';vertical-align:-2px;margin-right:5px"></span>'+p.name+'</button>').join("")
+    +'</div><div class="rwHint">選んだ色はゲーム中の自機と、全世界ランキングの色表示に使われます。</div>';
+}
+document.getElementById("playerColorBox").addEventListener("click",e=>{
+  const b=e.target.closest("[data-player-color]"); if(!b) return;
+  const id=normalizePlayerColorId(b.dataset.playerColor);
+  playerColor=id;
+  try{ localStorage.setItem(PLAYER_COLOR_KEY,id); }catch(err){}
+  const p=getPlayerColorData(id);
+  if(player && !mp.active){ player.color=p.color; player.dark=p.dark; }
+  renderPlayerColor(); paintDesignPreview();
+  // 既にランキング記録があるモードだけ、表示色を更新する。進行度そのものは増やさない。
+  rankingSyncLocalRecords();
+});
 function paintDesignPreview(){
   const cv=document.getElementById("designPreviewCanvas"); if(!cv) return;
   const x=cv.getContext("2d"); x.clearRect(0,0,cv.width,cv.height); x.save(); x.translate(cv.width/2,cv.height/2);
-  drawSealFighter(x,0,0,38,0,0);
+  const pc=getPlayerColorData();
+  drawSealFighter(x,0,0,38,0,0,{color:pc.color,dark:pc.dark});
   drawNormalBullet(x,78,0,BULLET_R*2); // 通常弾の色のプレビュー
   x.restore();
 }
 function updateMultiRecord(progress){
   try{const old=Number(localStorage.getItem("tankMultiMaxProgressV1"))||1;if(progress>old)localStorage.setItem("tankMultiMaxProgressV1",String(progress));}catch(e){}
 }
+
+// ================================================================
+// 全世界ランキング：プレイヤー名は保存せず、匿名ID・モード・最高クリア数・自機カラーだけを送る。
+// ================================================================
+const RANKING_API_BASE = "https://puchi-tank-ranking.frifrill.workers.dev";
+const RANKING_PLAYER_KEY = "mofuRankingPlayerIdV1";
+let rankingPlayerId = "";
+try{
+  rankingPlayerId = localStorage.getItem(RANKING_PLAYER_KEY) || "";
+  if(!/^[a-zA-Z0-9_-]{16,80}$/.test(rankingPlayerId)) rankingPlayerId = "";
+  if(!rankingPlayerId){
+    rankingPlayerId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : ("mofu_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2));
+    localStorage.setItem(RANKING_PLAYER_KEY,rankingPlayerId);
+  }
+}catch(e){ rankingPlayerId="mofu_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2); }
+function rankingApiReady(){ return !!RANKING_API_BASE && !RANKING_API_BASE.includes("YOUR-"); }
+async function rankingSubmit(mode,cleared){
+  const n=Math.max(0,Math.floor(Number(cleared)||0));
+  if(!rankingPlayerId || !["normal","rush","multi"].includes(mode) || n<=0) return false;
+  // オフライン中にクリアしても、次回オンライン時に送れるよう端末側にも最高値を残す。
+  try{
+    const key="mofuRankingBest_"+mode;
+    const old=Math.max(0,Number(localStorage.getItem(key))||0);
+    if(n>old) localStorage.setItem(key,String(n));
+  }catch(e){}
+  if(!rankingApiReady()) return false;
+  try{
+    const r=await fetch(RANKING_API_BASE+"/api/record",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({playerId:rankingPlayerId,mode,cleared:n,color:playerColor})});
+    return r.ok;
+  }catch(e){ return false; }
+}
+function rankingLocalProgress(mode){
+  let cached=0;
+  try{ cached=Math.max(0,Number(localStorage.getItem("mofuRankingBest_"+mode))||0); }catch(e){}
+  try{
+    if(mode==="multi") return Math.max(cached,(Number(localStorage.getItem("tankMultiMaxProgressV1"))||1)-1,0);
+    return Math.max(cached,(loadModeRecord("MaxStageProgress",mode,1)||1)-1,0);
+  }catch(e){ return cached; }
+}
+async function rankingSyncLocalRecords(){
+  const jobs=[];
+  for(const mode of ["normal","rush","multi"]){
+    const n=rankingLocalProgress(mode);
+    if(n>0) jobs.push(rankingSubmit(mode,n));
+  }
+  return Promise.all(jobs);
+}
+let rankingCurrentMode="normal";
+function rankingEsc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function renderRanking(data){
+  const status=document.getElementById("rankingStatus"), list=document.getElementById("rankingList"), mine=document.getElementById("rankingMine");
+  if(!data || !Array.isArray(data.entries)){ status.textContent="ランキングを取得できませんでした。通信状態を確認してください。"; list.innerHTML=""; mine.innerHTML=""; return; }
+  status.textContent=`登録プレイヤー：${Number(data.total)||0}人　／　上位50人を表示`;
+  const makeRow=(entry,isMine=false)=>{
+    const p=getPlayerColorData(entry.color);
+    const score=formatClearedStage(entry.cleared);
+    return `<div class="rankEntry${isMine?' mine':''}"><div class="rankNo">${Number(entry.rank)||"-"}</div><div class="rankColorDot" style="background:${sealPastel(p.color)};border-color:${p.dark}"></div><div class="rankWho">${isMine?"あなた":"プレイヤー"}</div><div class="rankScore">${rankingEsc(score)}</div></div>`;
+  };
+  if(data.mine){
+    mine.innerHTML='<div class="rwRowLabel">あなたの順位</div><div class="rankMineCard">'+makeRow(data.mine,true)+'</div>';
+  }else mine.innerHTML='<div class="rwHint">このモードの記録はまだありません。ステージをクリアするとランキングに登録されます。</div>';
+  list.innerHTML=data.entries.length?'<div class="rwRowLabel">全体ランキング</div>'+data.entries.map(e=>makeRow(e, e.isMine)).join(""):'<div class="rankEmpty">まだランキング記録がありません。<br>最初のランカーを目指そう！</div>';
+}
+async function loadRanking(mode=rankingCurrentMode){
+  rankingCurrentMode=mode;
+  document.querySelectorAll("[data-rank-mode]").forEach(b=>b.classList.toggle("active",b.dataset.rankMode===mode));
+  const status=document.getElementById("rankingStatus");
+  const list=document.getElementById("rankingList"), mine=document.getElementById("rankingMine");
+  status.textContent="ランキングを読み込んでいます…"; list.innerHTML=""; mine.innerHTML="";
+  if(!rankingApiReady()) { status.textContent="ランキングサーバーの設定が必要です。"; return; }
+  await rankingSyncLocalRecords();
+  try{
+    const url=RANKING_API_BASE+"/api/ranking?mode="+encodeURIComponent(mode)+"&player="+encodeURIComponent(rankingPlayerId)+"&limit=50";
+    const r=await fetch(url,{cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    renderRanking(await r.json());
+  }catch(e){ status.textContent="ランキングサーバーに接続できません。サーバーの公開後、通信できる状態で再読み込みしてください。"; }
+}
+document.getElementById("rankingBtnTitle").addEventListener("click",()=>{
+  startScreen.classList.add("hidden");
+  document.getElementById("rankingScreen").classList.remove("hidden");
+  loadRanking("normal");
+});
+document.getElementById("rankingTabs").addEventListener("click",e=>{
+  const b=e.target.closest("[data-rank-mode]"); if(b) loadRanking(b.dataset.rankMode);
+});
+document.getElementById("rankingRefreshBtn").addEventListener("click",()=>loadRanking(rankingCurrentMode));
+document.getElementById("rankingCloseBtn").addEventListener("click",()=>{
+  document.getElementById("rankingScreen").classList.add("hidden"); startScreen.classList.remove("hidden");
+});
+// ローカルに保存済みの最高記録は、ランキングサーバー導入後の初回アクセス時に同期する。
+rankingSyncLocalRecords();
 
 function showTitleScreen(keepSave=false){
   customPlayActive = false;
