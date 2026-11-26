@@ -283,6 +283,12 @@
   .designPickerRow{display:flex;align-items:center;justify-content:center;gap:18px;width:min(90vw,390px);margin:8px 0}
   .designPreview{color:var(--paper);font-size:12px;font-weight:700;text-align:center;min-width:110px}
   #designPreviewCanvas{width:150px;max-width:38vw;height:auto;background:rgba(255,255,255,.55);border-radius:14px}
+  .playerColorPicker{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;margin:8px auto;width:min(92vw,440px)}
+  #playerColorWheel{width:min(220px,58vw);height:auto;aspect-ratio:1;border-radius:50%;touch-action:none;cursor:crosshair;box-shadow:0 2px 10px rgba(100,130,170,.18)}
+  .playerColorActions{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:120px}
+  #playerColorSwatch{width:54px;height:54px;border-radius:50%;border:3px solid rgba(70,90,120,.25);box-shadow:inset 0 0 0 3px rgba(255,255,255,.55),0 2px 6px rgba(80,100,130,.15)}
+  #playerColorValue{font-size:12px;color:var(--paper);font-weight:700}
+  #playerColorReset{min-width:120px;padding:9px 12px;font-size:13px;letter-spacing:0}
   /* ---- 設定画面 ---- */
   #settingsScreen{ z-index:26; }
   .settingsBody{ display:flex; flex-direction:column; gap:26px; width:min(86vw,360px); margin:8px 0 2px; }
@@ -474,6 +480,7 @@
   #rankingScreen{z-index:28;overflow-y:auto;justify-content:flex-start;padding: max(22px,env(safe-area-inset-top,0px) + 12px) 14px 24px;gap:12px}
   #rankingScreen .title{font-size:clamp(22px,6vw,32px)}
   #rankingTabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:min(92vw,440px)}
+  #rankingPeriodTabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;width:min(92vw,300px)}
   .rankTab{font:700 13px/1.2 'Yu Gothic',sans-serif;letter-spacing:0;padding:9px 4px;border:2px solid #b9dcef;border-radius:14px;background:#fff;color:#3f6f93;opacity:.58}
   .rankTab.active{opacity:1;background:#86c9ee;color:#fff;border-color:#5aaee0}
   #rankingStatus{font-size:12px;color:#5d89a8;line-height:1.6;min-height:20px;text-align:center}
@@ -721,9 +728,13 @@
         <button class="rankTab" data-rank-mode="rush">爽快</button>
         <button class="rankTab" data-rank-mode="multi">マルチ</button>
       </div>
+      <div id="rankingPeriodTabs">
+        <button class="rankTab active" data-rank-period="monthly">今月</button>
+        <button class="rankTab" data-rank-period="overall">総合</button>
+      </div>
       <div id="rankingStatus">ランキングを読み込んでいます…</div>
-      <div id="rankingMine"></div>
       <div id="rankingList"></div>
+      <button class="btn alt" id="rankingParticipationBtn">ランキングに参加しない</button>
       <button class="btn alt" id="rankingRefreshBtn">再読み込み</button>
       <button class="btn alt" id="rankingCloseBtn">閉じる</button>
     </div>
@@ -919,10 +930,23 @@ const PLAYER_COLORS = {
   coral:    {name:"コーラル",   color:"#ffc5bd", dark:"#d8847c"},
   grape:    {name:"ぶどう",     color:"#dfc3f0", dark:"#a17bbe"},
 };
-function normalizePlayerColorId(id){ return Object.prototype.hasOwnProperty.call(PLAYER_COLORS,id) ? id : "white"; }
+function normalizePlayerColorId(id){
+  if(typeof id !== "string") return "white";
+  if(Object.prototype.hasOwnProperty.call(PLAYER_COLORS,id)) return id;
+  return /^#[0-9a-fA-F]{6}$/.test(id) ? id.toLowerCase() : "white";
+}
 let playerColor = "white";
 try{ playerColor = normalizePlayerColorId(localStorage.getItem(PLAYER_COLOR_KEY)||"white"); }catch(e){}
-function getPlayerColorData(id=playerColor){ return PLAYER_COLORS[normalizePlayerColorId(id)] || PLAYER_COLORS.white; }
+function darkenPlayerHex(hex){
+  const v=hex.replace("#","");
+  const rgb=[0,2,4].map(i=>Math.max(0,Math.round(parseInt(v.slice(i,i+2),16)*0.62)));
+  return "#"+rgb.map(n=>n.toString(16).padStart(2,"0")).join("");
+}
+function getPlayerColorData(id=playerColor){
+  const value=normalizePlayerColorId(id);
+  if(/^#[0-9a-f]{6}$/.test(value)) return {name:"カスタム",color:value,dark:darkenPlayerHex(value)};
+  return PLAYER_COLORS[value] || PLAYER_COLORS.white;
+}
 function drawNormalBullet(g,x,y,R){
   const P=BULLET_COLORS[bulletColor]||BULLET_COLORS.blue;
   const gr=g.createRadialGradient(x-R*0.35,y-R*0.4,0,x,y,R);
@@ -7212,20 +7236,82 @@ document.getElementById("bulletColorBox").addEventListener("click",e=>{
 });
 function renderPlayerColor(){
   const box=document.getElementById("playerColorBox"); if(!box) return;
-  box.innerHTML='<div class="rwRowLabel">自分のアザラシの色（ランキングにも表示）</div><div class="rwChips">'
-    +Object.entries(PLAYER_COLORS).map(([id,p])=>'<button class="rwChip'+(playerColor===id?' on':'')+'" data-player-color="'+id+'"><span style="display:inline-block;width:13px;height:13px;border-radius:50%;background:'+sealPastel(p.color)+';border:1.5px solid '+p.dark+';vertical-align:-2px;margin-right:5px"></span>'+p.name+'</button>').join("")
-    +'</div><div class="rwHint">選んだ色はゲーム中の自機と、全世界ランキングの色表示に使われます。</div>';
+  box.innerHTML='<div class="rwRowLabel">自分のアザラシの色（色の円環から自由に選択）</div>'
+    +'<div class="playerColorPicker"><canvas id="playerColorWheel" width="240" height="240" aria-label="色の円環"></canvas>'
+    +'<div class="playerColorActions"><div id="playerColorSwatch"></div><div id="playerColorValue"></div>'
+    +'<button type="button" class="rwChip" id="playerColorReset">デフォルトに戻す</button></div></div>'
+    +'<div class="rwHint">選んだ色は自機の色に反映されます。ランキングには最高記録を出した瞬間の色が保存されます。</div>';
+  drawPlayerColorWheel();
 }
+function hslToRgb(h,s,l){
+  h=((h%360)+360)%360; s=Math.max(0,Math.min(1,s)); l=Math.max(0,Math.min(1,l));
+  const c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2;
+  let r=0,g=0,b=0;
+  if(h<60){r=c;g=x;}else if(h<120){r=x;g=c;}else if(h<180){g=c;b=x;}else if(h<240){g=x;b=c;}else if(h<300){r=x;b=c;}else{r=c;b=x;}
+  return [r,g,b].map(v=>Math.round((v+m)*255));
+}
+function rgbToHsl(hex){
+  const v=hex.replace("#",""); const r=parseInt(v.slice(0,2),16)/255,g=parseInt(v.slice(2,4),16)/255,b=parseInt(v.slice(4,6),16)/255;
+  const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min; let h=0,s=0,l=(max+min)/2;
+  if(d){s=d/(1-Math.abs(2*l-1));if(max===r)h=60*(((g-b)/d)%6);else if(max===g)h=60*((b-r)/d+2);else h=60*((r-g)/d+4);}
+  return {h:(h+360)%360,s,l};
+}
+let playerColorWheelImageData=null;
+function drawPlayerColorWheel(){
+  const cv=document.getElementById("playerColorWheel"); if(!cv) return;
+  const ctx=cv.getContext("2d"),w=cv.width,h=cv.height,cx=w/2,cy=h/2,R=Math.min(w,h)/2-4;
+  if(!playerColorWheelImageData){
+    const img=ctx.createImageData(w,h);
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+      const dx=x-cx,dy=cy-y,dist=Math.hypot(dx,dy),i=(y*w+x)*4;
+      if(dist<=R){
+        const sat=dist/R, hue=(Math.atan2(dy,dx)*180/Math.PI+360)%360;
+        const light=1-0.25*Math.pow(sat,0.72);
+        const rgb=hslToRgb(hue,sat,light);
+        img.data[i]=rgb[0];img.data[i+1]=rgb[1];img.data[i+2]=rgb[2];img.data[i+3]=255;
+      }else{img.data[i+3]=0;}
+    }
+    playerColorWheelImageData=img;
+  }
+  ctx.putImageData(playerColorWheelImageData,0,0);
+  const color=getPlayerColorData().color, hsl=rgbToHsl(color), radius=R*hsl.s, angle=hsl.h*Math.PI/180;
+  const px=cx+Math.cos(angle)*radius,py=cy-Math.sin(angle)*radius;
+  ctx.beginPath();ctx.arc(px,py,8,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+  ctx.lineWidth=3;ctx.strokeStyle="#ffffff";ctx.stroke();
+  ctx.beginPath();ctx.arc(px,py,10,0,Math.PI*2);ctx.lineWidth=1.5;ctx.strokeStyle="rgba(60,75,100,.8)";ctx.stroke();
+  const sw=document.getElementById("playerColorSwatch"),val=document.getElementById("playerColorValue");
+  if(sw) sw.style.background=sealPastel(color);
+  if(val) val.textContent=color.toUpperCase();
+}
+function setPlayerColor(value){
+  playerColor=normalizePlayerColorId(value);
+  try{localStorage.setItem(PLAYER_COLOR_KEY,playerColor);}catch(e){}
+  const p=getPlayerColorData();
+  if(player && !mp.active){player.color=p.color;player.dark=p.dark;}
+  drawPlayerColorWheel();paintDesignPreview();
+}
+function choosePlayerColorFromWheel(e){
+  const cv=document.getElementById("playerColorWheel");if(!cv)return;
+  const rect=cv.getBoundingClientRect(),scaleX=cv.width/rect.width,scaleY=cv.height/rect.height;
+  const x=(e.clientX-rect.left)*scaleX-cv.width/2,y=cv.height/2-(e.clientY-rect.top)*scaleY;
+  const R=Math.min(cv.width,cv.height)/2-4,dist=Math.min(R,Math.hypot(x,y));
+  const sat=dist/R,hue=(Math.atan2(y,x)*180/Math.PI+360)%360,light=1-0.25*Math.pow(sat,0.72);
+  const rgb=hslToRgb(hue,sat,light),hex="#"+rgb.map(v=>v.toString(16).padStart(2,"0")).join("");
+  setPlayerColor(hex);
+}
+let playerColorWheelDragging=false;
+document.getElementById("playerColorBox").addEventListener("pointerdown",e=>{
+  if(e.target.id!=="playerColorWheel")return;
+  playerColorWheelDragging=true;try{e.target.setPointerCapture(e.pointerId);}catch(err){}
+  choosePlayerColorFromWheel(e);e.preventDefault();
+});
+document.getElementById("playerColorBox").addEventListener("pointermove",e=>{
+  if(!playerColorWheelDragging)return;choosePlayerColorFromWheel(e);e.preventDefault();
+});
+document.getElementById("playerColorBox").addEventListener("pointerup",()=>{playerColorWheelDragging=false;});
+document.getElementById("playerColorBox").addEventListener("pointercancel",()=>{playerColorWheelDragging=false;});
 document.getElementById("playerColorBox").addEventListener("click",e=>{
-  const b=e.target.closest("[data-player-color]"); if(!b) return;
-  const id=normalizePlayerColorId(b.dataset.playerColor);
-  playerColor=id;
-  try{ localStorage.setItem(PLAYER_COLOR_KEY,id); }catch(err){}
-  const p=getPlayerColorData(id);
-  if(player && !mp.active){ player.color=p.color; player.dark=p.dark; }
-  renderPlayerColor(); paintDesignPreview();
-  // 既にランキング記録があるモードだけ、表示色を更新する。進行度そのものは増やさない。
-  rankingSyncLocalRecords();
+  if(e.target.id==="playerColorReset") setPlayerColor("white");
 });
 function paintDesignPreview(){
   const cv=document.getElementById("designPreviewCanvas"); if(!cv) return;
@@ -7240,7 +7326,7 @@ function updateMultiRecord(progress){
 }
 
 // ================================================================
-// 全世界ランキング：プレイヤー名は保存せず、匿名ID・モード・最高クリア数・自機カラーだけを送る。
+// 全世界ランキング：匿名ID。最高記録時の色を保存し、今月／総合の上位3名を表示。
 // ================================================================
 const RANKING_API_BASE = "https://puchi-tank-ranking.frifrill.workers.dev";
 const RANKING_PLAYER_KEY = "mofuRankingPlayerIdV1";
@@ -7254,18 +7340,33 @@ try{
   }
 }catch(e){ rankingPlayerId="mofu_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2); }
 function rankingApiReady(){ return !!RANKING_API_BASE && !RANKING_API_BASE.includes("YOUR-"); }
-async function rankingSubmit(mode,cleared){
+function validRankingColor(value){return typeof value==="string" && /^#[0-9a-fA-F]{6}$/.test(value);}
+async function rankingSubmit(mode,cleared,options={}){
   const n=Math.max(0,Math.floor(Number(cleared)||0));
   if(!rankingPlayerId || !["normal","rush","multi"].includes(mode) || n<=0) return false;
-  // オフライン中にクリアしても、次回オンライン時に送れるよう端末側にも最高値を残す。
+  const syncOnly=!!options.syncOnly;
+  let historicColor="#ffffff";
+  const localKey="mofuRankingBest_"+mode, colorKey="mofuRankingBestColor_"+mode;
+  const currentColor=getPlayerColorData().color.toLowerCase();
   try{
-    const key="mofuRankingBest_"+mode;
-    const old=Math.max(0,Number(localStorage.getItem(key))||0);
-    if(n>old) localStorage.setItem(key,String(n));
-  }catch(e){}
+    const old=Math.max(0,Number(localStorage.getItem(localKey))||0);
+    if(n>old){
+      localStorage.setItem(localKey,String(n));
+      // 起動時の旧記録同期では記録当時の色を特定できないため白にする。
+      const saved=localStorage.getItem(colorKey);
+      historicColor=syncOnly?(validRankingColor(saved)?saved.toLowerCase():"#ffffff"):currentColor;
+      if(!syncOnly || !validRankingColor(saved)) localStorage.setItem(colorKey,historicColor);
+    }else{
+      const saved=localStorage.getItem(colorKey);
+      historicColor=validRankingColor(saved)?saved.toLowerCase():"#ffffff";
+    }
+  }catch(e){historicColor="#ffffff";}
   if(!rankingApiReady()) return false;
   try{
-    const r=await fetch(RANKING_API_BASE+"/api/record",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({playerId:rankingPlayerId,mode,cleared:n,color:playerColor})});
+    const r=await fetch(RANKING_API_BASE+"/api/record",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({playerId:rankingPlayerId,mode,cleared:n,color:syncOnly?historicColor:currentColor,syncOnly})
+    });
     return r.ok;
   }catch(e){ return false; }
 }
@@ -7278,57 +7379,85 @@ function rankingLocalProgress(mode){
   }catch(e){ return cached; }
 }
 async function rankingSyncLocalRecords(){
+  // 既存端末の過去記録は総合ランキングだけに同期。色の履歴が無ければ白で送る。
   const jobs=[];
   for(const mode of ["normal","rush","multi"]){
     const n=rankingLocalProgress(mode);
-    if(n>0) jobs.push(rankingSubmit(mode,n));
+    if(n>0) jobs.push(rankingSubmit(mode,n,{syncOnly:true}));
   }
   return Promise.all(jobs);
 }
 let rankingCurrentMode="normal";
+let rankingCurrentPeriod="monthly";
+let rankingParticipating=true;
+try{rankingParticipating=localStorage.getItem("mofuRankingParticipatingV1")!=="false";}catch(e){}
 function rankingEsc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-function renderRanking(data){
-  const status=document.getElementById("rankingStatus"), list=document.getElementById("rankingList"), mine=document.getElementById("rankingMine");
-  if(!data || !Array.isArray(data.entries)){ status.textContent="ランキングを取得できませんでした。通信状態を確認してください。"; list.innerHTML=""; mine.innerHTML=""; return; }
-  status.textContent=`登録プレイヤー：${Number(data.total)||0}人　／　上位50人を表示`;
-  const makeRow=(entry,isMine=false)=>{
-    const p=getPlayerColorData(entry.color);
-    const score=formatClearedStage(entry.cleared);
-    return `<div class="rankEntry${isMine?' mine':''}"><div class="rankNo">${Number(entry.rank)||"-"}</div><div class="rankColorDot" style="background:${sealPastel(p.color)};border-color:${p.dark}"></div><div class="rankWho">${isMine?"あなた":"プレイヤー"}</div><div class="rankScore">${rankingEsc(score)}</div></div>`;
-  };
-  if(data.mine){
-    mine.innerHTML='<div class="rwRowLabel">あなたの順位</div><div class="rankMineCard">'+makeRow(data.mine,true)+'</div>';
-  }else mine.innerHTML='<div class="rwHint">このモードの記録はまだありません。ステージをクリアするとランキングに登録されます。</div>';
-  list.innerHTML=data.entries.length?'<div class="rwRowLabel">全体ランキング</div>'+data.entries.map(e=>makeRow(e, e.isMine)).join(""):'<div class="rankEmpty">まだランキング記録がありません。<br>最初のランカーを目指そう！</div>';
+function updateRankingParticipationButton(){
+  const b=document.getElementById("rankingParticipationBtn");if(!b)return;
+  b.textContent=rankingParticipating?"ランキングに参加しない":"ランキングに参加する";
 }
-async function loadRanking(mode=rankingCurrentMode){
-  rankingCurrentMode=mode;
+function renderRanking(data){
+  const status=document.getElementById("rankingStatus"),list=document.getElementById("rankingList");
+  if(!data || !Array.isArray(data.entries)){status.textContent="ランキングを取得できませんでした。通信状態を確認してください。";list.innerHTML="";return;}
+  rankingParticipating=data.participating!==false;
+  try{localStorage.setItem("mofuRankingParticipatingV1",String(rankingParticipating));}catch(e){}
+  updateRankingParticipationButton();
+  const periodLabel=rankingCurrentPeriod==="monthly"?"今月":"総合";
+  status.textContent=`${periodLabel}の参加プレイヤー：${Number(data.total)||0}人　／　上位3名を表示`;
+  const makeRow=entry=>{
+    const p=getPlayerColorData(validRankingColor(entry.color)?entry.color:"#ffffff");
+    const score=formatClearedStage(entry.cleared);
+    return `<div class="rankEntry"><div class="rankNo">${Number(entry.rank)||"-"}</div><div class="rankColorDot" style="background:${sealPastel(p.color)};border-color:${p.dark}"></div><div class="rankWho">プレイヤー</div><div class="rankScore">${rankingEsc(score)}</div></div>`;
+  };
+  list.innerHTML=data.entries.length?data.entries.slice(0,3).map(makeRow).join(""):'<div class="rankEmpty">まだランキング記録がありません。<br>最初のランカーを目指そう！</div>';
+}
+async function loadRanking(mode=rankingCurrentMode,period=rankingCurrentPeriod){
+  rankingCurrentMode=mode;rankingCurrentPeriod=period;
   document.querySelectorAll("[data-rank-mode]").forEach(b=>b.classList.toggle("active",b.dataset.rankMode===mode));
-  const status=document.getElementById("rankingStatus");
-  const list=document.getElementById("rankingList"), mine=document.getElementById("rankingMine");
-  status.textContent="ランキングを読み込んでいます…"; list.innerHTML=""; mine.innerHTML="";
-  if(!rankingApiReady()) { status.textContent="ランキングサーバーの設定が必要です。"; return; }
+  document.querySelectorAll("[data-rank-period]").forEach(b=>b.classList.toggle("active",b.dataset.rankPeriod===period));
+  const status=document.getElementById("rankingStatus"),list=document.getElementById("rankingList");
+  status.textContent="ランキングを読み込んでいます…";list.innerHTML="";
+  updateRankingParticipationButton();
+  if(!rankingApiReady()){status.textContent="ランキングサーバーの設定が必要です。";return;}
   await rankingSyncLocalRecords();
   try{
-    const url=RANKING_API_BASE+"/api/ranking?mode="+encodeURIComponent(mode)+"&player="+encodeURIComponent(rankingPlayerId)+"&limit=50";
+    const url=RANKING_API_BASE+"/api/ranking?mode="+encodeURIComponent(mode)+"&period="+encodeURIComponent(period)+"&player="+encodeURIComponent(rankingPlayerId);
     const r=await fetch(url,{cache:"no-store"});
-    if(!r.ok) throw new Error("HTTP "+r.status);
+    if(!r.ok)throw new Error("HTTP "+r.status);
     renderRanking(await r.json());
-  }catch(e){ status.textContent="ランキングサーバーに接続できません。サーバーの公開後、通信できる状態で再読み込みしてください。"; }
+  }catch(e){status.textContent="ランキングサーバーに接続できません。サーバーの更新後、通信できる状態で再読み込みしてください。";}
 }
 document.getElementById("rankingBtnTitle").addEventListener("click",()=>{
   startScreen.classList.add("hidden");
   document.getElementById("rankingScreen").classList.remove("hidden");
-  loadRanking("normal");
+  loadRanking("normal","monthly");
 });
 document.getElementById("rankingTabs").addEventListener("click",e=>{
-  const b=e.target.closest("[data-rank-mode]"); if(b) loadRanking(b.dataset.rankMode);
+  const b=e.target.closest("[data-rank-mode]");if(b)loadRanking(b.dataset.rankMode,rankingCurrentPeriod);
 });
-document.getElementById("rankingRefreshBtn").addEventListener("click",()=>loadRanking(rankingCurrentMode));
+document.getElementById("rankingPeriodTabs").addEventListener("click",e=>{
+  const b=e.target.closest("[data-rank-period]");if(b)loadRanking(rankingCurrentMode,b.dataset.rankPeriod);
+});
+document.getElementById("rankingRefreshBtn").addEventListener("click",()=>loadRanking(rankingCurrentMode,rankingCurrentPeriod));
+document.getElementById("rankingParticipationBtn").addEventListener("click",async()=>{
+  const button=document.getElementById("rankingParticipationBtn");
+  if(!rankingApiReady()||!rankingPlayerId)return;
+  const next=!rankingParticipating;
+  button.disabled=true;button.textContent="更新中…";
+  try{
+    const r=await fetch(RANKING_API_BASE+"/api/participation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({playerId:rankingPlayerId,participating:next})});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    rankingParticipating=next;
+    try{localStorage.setItem("mofuRankingParticipatingV1",String(next));}catch(e){}
+    updateRankingParticipationButton();
+    await loadRanking(rankingCurrentMode,rankingCurrentPeriod);
+  }catch(e){button.textContent=rankingParticipating?"ランキングに参加しない":"ランキングに参加する";document.getElementById("rankingStatus").textContent="参加設定を更新できませんでした。通信状態を確認してください。";}
+  finally{button.disabled=false;updateRankingParticipationButton();}
+});
 document.getElementById("rankingCloseBtn").addEventListener("click",()=>{
-  document.getElementById("rankingScreen").classList.add("hidden"); startScreen.classList.remove("hidden");
+  document.getElementById("rankingScreen").classList.add("hidden");startScreen.classList.remove("hidden");
 });
-// ローカルに保存済みの最高記録は、ランキングサーバー導入後の初回アクセス時に同期する。
+// ローカルに保存済みの最高記録を、総合ランキングへ同期する（色履歴が無い場合は白）。
 rankingSyncLocalRecords();
 
 function showTitleScreen(keepSave=false){
