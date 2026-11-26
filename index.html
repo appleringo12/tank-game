@@ -207,6 +207,8 @@
   #stageClearScreen .clearTitle{font-size:clamp(24px,7vw,38px); letter-spacing:4px; color:#ff9ecb; font-weight:700; text-shadow:3px 3px 0 var(--brick-dark);}
   #stageClearScreen .clearStats{font-size:clamp(14px,4vw,18px); line-height:1.9;}
   #stageClearScreen .nextInfo{font-size:clamp(12px,3.5vw,16px); line-height:1.8; color:#8a6f97; max-width:390px;}
+  #stageClearScreen .clearNextPreview{display:block; width:clamp(150px,46vw,260px); height:auto; margin:0 auto 8px; border:2px solid #e5d4ee; border-radius:10px; box-shadow:0 2px 8px rgba(122,92,138,.25);}
+  html.mofu #stageClearScreen .clearNextPreview{ border-color:#b9dcef; }
   #stageClearScreen .enemyLabel{display:block; margin-top:3px; color:#a98bb0;}
   #stageClearScreen .enemyIcons{display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:10px 14px; margin-top:7px;}
   #stageClearScreen .enemyIconWrap{display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:58px;}
@@ -357,7 +359,7 @@
   .editorHint{font-size:12px;color:#8a6f97;text-align:center;max-width:700px;line-height:1.6}
   #stageCards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;width:min(96vw,760px)}
   .stageCard{background:#fff9fd;border:2px solid #e9c9e5;border-radius:14px;padding:10px;color:var(--paper);text-align:left}
-  .stageCard canvas{width:100%;height:auto;border:1px solid #e5d4ee;border-radius:8px}
+  .stageCard canvas{width:100%;height:auto;border:1px solid #e5d4ee;border-radius:8px;touch-action:pan-y}  /* ★canvas共通の touch-action:none を上書きして、画像の上でも縦スクロールできるようにする */
   .stageCardTitle{font-weight:700;margin:4px 0 8px}
   .stageCardActions{display:flex;flex-wrap:wrap;gap:6px}
   #uiToast{position:absolute;left:50%;bottom:max(24px,env(safe-area-inset-bottom,0px) + 16px);transform:translateX(-50%);z-index:60;max-width:90vw;padding:12px 18px;border-radius:16px;background:#7a5c8a;color:#fff;font-size:14px;font-weight:700;line-height:1.5;text-align:center;box-shadow:0 4px 14px rgba(120,80,140,.35);pointer-events:none}
@@ -1881,7 +1883,7 @@ let stageClearDelay = 0;
 
 // 敵を倒した瞬間だけ300ms停止する。射撃時のヒットストップは使用しない。
 const HIT_STOP_MAX_MS = 500;
-const ENEMY_KILL_HIT_STOP_MS = 200;
+const ENEMY_KILL_HIT_STOP_MS = 300;
 let hitStopTimer = 0;         // 実際にゲーム進行を止める残り時間（秒）
 function sanitizeHitStopMs(value, fallback){
   if(!Number.isFinite(value)) return fallback;
@@ -3443,9 +3445,9 @@ function drawConfettiFx(e){
     ctx.save(); ctx.translate(px,py); ctx.rotate(fxRn(e.ph,i,3)*6.28+u*5);
     ctx.scale(1,Math.cos(u*11+i));
     ctx.fillStyle=e.cols[i%e.cols.length];
-    ctx.fillRect(-2,-1.2,4,2.4); // 紙の大きさ
+    ctx.fillRect(-4,-2.4,8,4.8); // 紙の大きさ
     ctx.strokeStyle=e.white?"#a9cfe6":"rgba(0,0,0,0.14)"; ctx.lineWidth=0.6;
-    ctx.strokeRect(-2,-1.2,4,2.4);
+    ctx.strokeRect(-4,-2.4,8,4.8);
     ctx.restore();
   }
   ctx.restore(); ctx.globalAlpha=1;
@@ -4988,11 +4990,33 @@ shareCopyBtn.onclick=async()=>{
 document.getElementById("shareCloseBtn").onclick=()=>shareDialog.classList.add("hidden");
 shareDialog.addEventListener("click",e=>{ if(e.target===shareDialog) shareDialog.classList.add("hidden"); });
 // ステージ一覧のプレビュー画像（通常ステージ・オリジナルステージ共通）
-function makeStagePreview(map,bg){
+function makeStagePreview(map,bg,lv){
   const preview=document.createElement("canvas");preview.width=364;preview.height=252;
   const pc=preview.getContext("2d"),rows=STAGE_ROWS,cols=STAGE_COLS,cw=364/cols,ch=252/rows;
   pc.fillStyle=bg||"#fffafc";pc.fillRect(0,0,364,252);
-  map.forEach((line,r)=>Array.from(line).forEach((v,c)=>{const x=c*cw,y=r*ch;if(v==="#"){drawSealSprite(pc,SEAL_BRICK_IMG,x,y,cw,ch);}else if(v==="X"){drawIceTile(pc,x,y,cw,ch);}else if(v==="G"){drawPyramidTile(pc,x,y,cw,ch);}else if(v==="P"||CUSTOM_CHAR_TO_ENEMY[v]){drawSealFighter(pc,x+cw/2,y+ch/2,Math.min(cw,ch)*.38,-Math.PI/2,-Math.PI/2);}}));
+  // ★敵の色：オリジナルステージ（lv省略）と colored:true のステージは、マスの数字がそのまま敵の色。
+  //   それ以外の通常ステージは、数字の順番に lv.enemies の順で敵の種類が決まる（ゲーム本体と同じ割り当て）。
+  const colored=!lv || !!lv.colored;
+  const orderType={}; // "r,c" → 敵の種類（colored でない通常ステージ用）
+  if(!colored){
+    const spawns=[];
+    map.forEach((line,r)=>Array.from(line).forEach((v,c)=>{ if(/[1-6]/.test(v)) spawns.push({r,c,order:parseInt(v,10)}); }));
+    spawns.sort((a,b)=>a.order-b.order);
+    const comp=lv.enemies||[];
+    for(let i=0;i<comp.length && i<spawns.length;i++){ const sp=spawns[i]; if(!orderType[sp.r+","+sp.c]) orderType[sp.r+","+sp.c]=comp[i]; }
+  }
+  const colOf=type=>{ const t=ENEMY_TYPES[type]; return t?{color:t.color,dark:t.dark}:null; };
+  map.forEach((line,r)=>Array.from(line).forEach((v,c)=>{
+    const x=c*cw,y=r*ch;
+    if(v==="#"){drawSealSprite(pc,SEAL_BRICK_IMG,x,y,cw,ch);}
+    else if(v==="X"){drawIceTile(pc,x,y,cw,ch);}
+    else if(v==="G"){drawPyramidTile(pc,x,y,cw,ch);}
+    else if(v==="P"){drawSealFighter(pc,x+cw/2,y+ch/2,Math.min(cw,ch)*.38,-Math.PI/2,-Math.PI/2);} // 自機は白
+    else if(colored ? CUSTOM_CHAR_TO_ENEMY[v] : orderType[r+","+c]){
+      const type=colored?CUSTOM_CHAR_TO_ENEMY[v]:orderType[r+","+c];
+      drawSealFighter(pc,x+cw/2,y+ch/2,Math.min(cw,ch)*.38,-Math.PI/2,-Math.PI/2,colOf(type));
+    }
+  }));
   const wp=buildWaterPaths((c,r)=>map[r]?.[c]==="W");
   if(wp){pc.save();pc.scale(cw/TILE,ch/TILE);drawWaterLayer(pc,wp,0);pc.restore();}
   return preview;
@@ -5031,7 +5055,7 @@ function renderNormalStages(){
     const b=document.createElement("button");b.className="btn";b.textContent="遊ぶ";
     b.onclick=()=>{rememberLibraryScroll();libraryScreen.classList.add("hidden");safeStartGame(false,"normal",n,true);libraryPlayActive=true;};
     actions.append(b);
-    card.append(makeStagePreview(lv.map,stageBackgroundColorFor(n)),title,meta,actions);stageCards.append(card);
+    card.append(makeStagePreview(lv.map,stageBackgroundColorFor(n),lv),title,meta,actions);stageCards.append(card);
   }
 }
 function showCustomLibrary(){
@@ -6525,6 +6549,14 @@ function showStageClear(){
   clearStats.innerHTML = `残機：${Math.max(lives,0)}` + (gotExtraLife ? `　　<span style="color:var(--amber);">ライフ+1！</span>` : "");
   nextStageInfo.innerHTML = (customPlayActive || backToLib) ? "ステージクリア！タップしてステージ一覧に戻ります。" : `<span class="enemyLabel">${enemyClearLabel()}</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
   clearTapHint.textContent = backToLib ? "画面をタップするとステージ一覧へ" : "画面をタップすると次のステージへ";
+  // ★次のステージのプレビュー画像（ステージ一覧と同じ絵。敵の色つき）
+  if(!(customPlayActive || backToLib) && next && next.map){
+    try{
+      const pv=makeStagePreview(next.map, stageBackgroundColorFor(nextNum), next);
+      pv.className="clearNextPreview";
+      nextStageInfo.prepend(pv);
+    }catch(err){}
+  }
   stageClearScreen.classList.remove("hidden");
 }
 
