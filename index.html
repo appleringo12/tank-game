@@ -384,7 +384,6 @@
   #shareGameScreen .btn.sline{background:#3ec35a;border-color:#2a9a43;border-bottom-color:#2a9a43}
   #shareGameScreen .btn.sfb{background:#4a7be0;border-color:#3359b0;border-bottom-color:#3359b0}
   #shareGameScreen .btn.sdiscord{background:#5865f2;border-color:#4752c4;border-bottom-color:#4752c4}
-  #startScreen .shareTitleBtn{ position:relative; }
   #shareDialog{position:absolute;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;background:rgba(122,92,138,.45)}
   #shareDialog.hidden{display:none}
   #shareDialog .box{background:#fff9fd;border:3px solid #e9c9e5;border-radius:18px;padding:18px 20px;width:min(88vw,420px);color:var(--paper);text-align:center}
@@ -484,10 +483,11 @@
   .rankTab{font:700 13px/1.2 'Yu Gothic',sans-serif;letter-spacing:0;padding:9px 4px;border:2px solid #b9dcef;border-radius:14px;background:#fff;color:#3f6f93;opacity:.58}
   .rankTab.active{opacity:1;background:#86c9ee;color:#fff;border-color:#5aaee0}
   #rankingStatus{font-size:12px;color:#5d89a8;line-height:1.6;min-height:20px;text-align:center}
+  #rankingStatus:empty{display:none}
   #rankingMine{width:min(92vw,440px)}
   .rankMineCard{display:flex;align-items:center;gap:10px;background:#fff;border:2px solid #86c9ee;border-radius:14px;padding:9px 12px;color:#3f6f93}
   #rankingList{display:flex;flex-direction:column;gap:7px;width:min(92vw,440px)}
-  .rankEntry{display:grid;grid-template-columns:32px 34px minmax(0,1fr) auto;align-items:center;gap:9px;background:rgba(255,255,255,.86);border:1px solid #c9e3f1;border-radius:13px;padding:8px 10px;color:#3f6f93;text-align:left}
+  .rankEntry{display:grid;grid-template-columns:32px 34px minmax(0,1fr);align-items:center;gap:9px;background:rgba(255,255,255,.86);border:1px solid #c9e3f1;border-radius:13px;padding:8px 10px;color:#3f6f93;text-align:left}
   .rankEntry.mine{border:2px solid #70bce5;background:#f0faff;padding:7px 9px}
   .rankNo{font-weight:700;text-align:center;color:#7aa3be;font-variant-numeric:tabular-nums}
   .rankColorDot{width:28px;height:28px;border-radius:50%;border:2px solid rgba(63,111,147,.34);box-shadow:inset 0 0 0 2px rgba(255,255,255,.6),0 1px 3px rgba(63,111,147,.14)}
@@ -556,6 +556,38 @@
   /* ---- 雪ボタンのある画面の背景は、ゲームプレイ中の背景(#gameArea)と同じ色。雪の輪郭は淡い青の縁取りで見分ける ---- */
   html.mofu #startScreen,html.mofu #pauseScreen,html.mofu #continueScreen,html.mofu #gameOverScreen,html.mofu #mpOverScreen{ background:#e8f6fc; }
   .btn.snow::before{ filter:drop-shadow(0 2px 0 var(--sd)) drop-shadow(0 -1px 0 #9fd0ea) drop-shadow(1px 0 0 #9fd0ea) drop-shadow(-1px 0 0 #9fd0ea); }
+
+  /* タイトルの補助メニュー：4列×2段でコンパクトに配置 */
+  #titleUtilityGrid{
+    display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;
+    width:min(94vw,560px);margin-top:2px;align-items:stretch;
+  }
+  #titleUtilityGrid .modeBtn{
+    width:100%;min-width:0;min-height:46px;height:46px;margin:0;
+    padding:11px 2px 6px;font-size:clamp(11px,2.8vw,14px);
+    line-height:1.1;letter-spacing:0;border-radius:14px;
+    border-width:2px;border-bottom-width:4px;white-space:nowrap;
+  }
+  #titleUtilityGrid .modeBtn + .modeBtn{margin-top:0;}
+  #titleUtilityGrid .modeBtn.snow{padding-top:11px;}
+
+  /* デザイン画面は左右にはみ出さず、上下方向だけスクロール可能 */
+  #designScreen{overflow-x:hidden;overscroll-behavior-x:none;touch-action:pan-y;}
+  #designScreen > *{max-width:100%;box-sizing:border-box;}
+  #playerColorBox{width:100%;max-width:100%;overflow-x:hidden;}
+  #designScreen .playerColorPicker{max-width:100%;}
+  @media (max-width:700px){
+    #startScreen{gap:8px;padding:12px 10px max(12px,env(safe-area-inset-bottom,0px));}
+    #startScreen > .modeBtn{
+      width:min(78vw,330px);min-height:53px;padding:9px 14px;
+      font-size:clamp(16px,4.8vw,21px);letter-spacing:1px;border-radius:20px;
+    }
+    #startScreen > .modeBtn + .modeBtn{margin-top:4px;}
+    #startScreen .title{font-size:clamp(24px,7vw,34px);letter-spacing:3px;}
+    #modeStats{font-size:13px;line-height:1.5;margin:0;}
+    #titleUtilityGrid{width:min(94vw,500px);gap:6px;}
+    #titleUtilityGrid .modeBtn{height:44px;min-height:44px;font-size:clamp(10px,2.9vw,13px);border-radius:12px;padding-left:1px;padding-right:1px;}
+  }
 </style>
 </head>
 <body>
@@ -583,16 +615,16 @@
       <button class="btn modeBtn snow" id="normalModeBtn">通常モード</button>
       <button class="btn modeBtn snow" id="rushModeBtn">爽快モード</button>
       <button class="btn modeBtn multi snow" id="multiBtn">マルチプレイ</button>
-      <button class="btn modeBtn info snow" id="rankingBtnTitle">全世界ランキング</button>
-      <button class="btn modeBtn alt snow" id="stageCreateOpenBtn">ステージ作成</button>
-      <button class="btn modeBtn alt snow" id="stageLibraryOpenBtn">ステージ一覧</button>
-      <div class="modeBtnRow">
-        <button class="btn modeBtn info snow" id="howToPlayBtn">ゲーム説明</button>
+      <div id="titleUtilityGrid">
+        <button class="btn modeBtn info snow" id="rankingBtnTitle">ランキング</button>
         <button class="btn modeBtn info snow" id="designBtnTitle">デザイン</button>
+        <button class="btn modeBtn alt snow" id="stageLibraryOpenBtn">ステージ一覧</button>
+        <button class="btn modeBtn alt snow" id="stageCreateOpenBtn">ステージ作成</button>
         <button class="btn modeBtn info snow" id="rewardBtnTitle">報酬<span class="redDot hidden" id="rewardDot"></span></button>
+        <button class="btn modeBtn info snow" id="howToPlayBtn">ゲーム説明</button>
+        <button class="btn modeBtn info snow" id="shareGameBtnTitle">共有</button>
         <button class="btn modeBtn info snow" id="settingsBtnTitle">設定</button>
       </div>
-      <button class="btn modeBtn info shareTitleBtn snow" id="shareGameBtnTitle" style="min-height:44px;font-size:clamp(14px,4vw,18px);">共有</button>
     </div>
 
     <!-- 長押しで開く途中ステージ選択 -->
@@ -719,10 +751,9 @@
       <button class="btn alt" id="rewardCloseBtn">閉じる</button>
     </div>
 
-    <!-- 全世界ランキング：名前の代わりにデザインで選んだ自機カラーを表示 -->
+    <!-- ランキング：順位・最高記録・記録時の自機カラーを表示 -->
     <div id="rankingScreen" class="overlay hidden">
-      <h1 class="title">全世界ランキング</h1>
-      <div class="subtitle">最高クリアステージ順。プレイヤー名は表示せず、自機の色で表示します。</div>
+      <h1 class="title">ランキング</h1>
       <div id="rankingTabs">
         <button class="rankTab active" data-rank-mode="normal">通常</button>
         <button class="rankTab" data-rank-mode="rush">爽快</button>
@@ -7236,11 +7267,9 @@ document.getElementById("bulletColorBox").addEventListener("click",e=>{
 });
 function renderPlayerColor(){
   const box=document.getElementById("playerColorBox"); if(!box) return;
-  box.innerHTML='<div class="rwRowLabel">自分のアザラシの色（色の円環から自由に選択）</div>'
-    +'<div class="playerColorPicker"><canvas id="playerColorWheel" width="240" height="240" aria-label="色の円環"></canvas>'
+  box.innerHTML='<div class="playerColorPicker"><canvas id="playerColorWheel" width="240" height="240" aria-label="色の円環"></canvas>'
     +'<div class="playerColorActions"><div id="playerColorSwatch"></div><div id="playerColorValue"></div>'
-    +'<button type="button" class="rwChip" id="playerColorReset">デフォルトに戻す</button></div></div>'
-    +'<div class="rwHint">選んだ色は自機の色に反映されます。ランキングには最高記録を出した瞬間の色が保存されます。</div>';
+    +'<button type="button" class="rwChip" id="playerColorReset">デフォルトに戻す</button></div></div>';
   drawPlayerColorWheel();
 }
 function hslToRgb(h,s,l){
@@ -7326,7 +7355,7 @@ function updateMultiRecord(progress){
 }
 
 // ================================================================
-// 全世界ランキング：匿名ID。最高記録時の色を保存し、今月／総合の上位3名を表示。
+// ランキング：匿名ID。最高記録時の色を保存し、今月／総合の記録を表示。
 // ================================================================
 const RANKING_API_BASE = "https://puchi-tank-ranking.frifrill.workers.dev";
 const RANKING_PLAYER_KEY = "mofuRankingPlayerIdV1";
@@ -7402,12 +7431,11 @@ function renderRanking(data){
   rankingParticipating=data.participating!==false;
   try{localStorage.setItem("mofuRankingParticipatingV1",String(rankingParticipating));}catch(e){}
   updateRankingParticipationButton();
-  const periodLabel=rankingCurrentPeriod==="monthly"?"今月":"総合";
-  status.textContent=`${periodLabel}の参加プレイヤー：${Number(data.total)||0}人　／　上位3名を表示`;
+  status.textContent="";
   const makeRow=entry=>{
     const p=getPlayerColorData(validRankingColor(entry.color)?entry.color:"#ffffff");
     const score=formatClearedStage(entry.cleared);
-    return `<div class="rankEntry"><div class="rankNo">${Number(entry.rank)||"-"}</div><div class="rankColorDot" style="background:${sealPastel(p.color)};border-color:${p.dark}"></div><div class="rankWho">プレイヤー</div><div class="rankScore">${rankingEsc(score)}</div></div>`;
+    return `<div class="rankEntry"><div class="rankNo">${Number(entry.rank)||"-"}</div><div class="rankColorDot" style="background:${sealPastel(p.color)};border-color:${p.dark}"></div><div class="rankScore">${rankingEsc(score)}</div></div>`;
   };
   list.innerHTML=data.entries.length?data.entries.slice(0,3).map(makeRow).join(""):'<div class="rankEmpty">まだランキング記録がありません。<br>最初のランカーを目指そう！</div>';
 }
