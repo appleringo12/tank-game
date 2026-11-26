@@ -679,6 +679,7 @@
       </div>
       <div id="rwEquip"></div>
       <div id="fighterTypeBox"></div>
+      <div id="bulletColorBox"></div>
       <button class="btn alt" id="designCloseBtn">閉じる</button>
     </div>
 
@@ -857,6 +858,22 @@ const PLAYER_FIRE_INTERVAL = 0.3; // ★自機の射撃間隔（秒）
 // --- 弾のパラメータ ---
 // 自機は画面上の最大弾数に加えて、0.2秒の射撃間隔制限を設ける。
 const BULLET_R = 4;         // 弾の半径（当たり判定）
+// ★通常弾の色（デザイン画面で選べる。高速弾は対象外）。自分・敵どちらの通常弾にも適用。
+const BULLET_COLOR_KEY = "mofuBulletColorV1";
+const BULLET_COLORS = {
+  blue:  { name:"水色", trail:"#cdeefb", g:["#ffffff","#d9f2fc","#a6dcf3"], edge:"#7cc6e8" },
+  green: { name:"緑色", trail:"#d3f5d7", g:["#ffffff","#dff7e1","#a9e6b3"], edge:"#6fcf88" },
+};
+let bulletColor = "blue";
+try{ const v=localStorage.getItem(BULLET_COLOR_KEY); if(BULLET_COLORS[v]) bulletColor=v; }catch(e){}
+function drawNormalBullet(g,x,y,R){
+  const P=BULLET_COLORS[bulletColor]||BULLET_COLORS.blue;
+  const gr=g.createRadialGradient(x-R*0.35,y-R*0.4,0,x,y,R);
+  gr.addColorStop(0,P.g[0]); gr.addColorStop(0.5,P.g[1]); gr.addColorStop(1,P.g[2]);
+  g.fillStyle=gr; g.beginPath(); g.arc(x,y,R,0,7); g.fill();
+  g.strokeStyle=P.edge; g.lineWidth=1.2; g.beginPath(); g.arc(x,y,R,0,7); g.stroke();
+  g.fillStyle="rgba(255,255,255,.95)"; g.beginPath(); g.arc(x-R*0.35,y-R*0.4,R*0.3,0,7); g.fill();
+}
 const BULLET_SPEED = 80;
 const BULLET_MAX_BOUNCE = 1;// 弾が壁で跳ね返れる回数（0にすると跳ね返らない）
 const ENEMY_FIRE_INTERVAL = 2.4; // ★通常の敵アザラシの最低発射間隔（秒）
@@ -2299,7 +2316,7 @@ function drawSealFighter(g, x, y, r, bodyAng, turretAng, plateCol){
   const fill = plateCol ? sealPastel(plateCol.color) : "#ffffff";   // 自機は白、敵はそれぞれの色
   drawSealOne(g, fill, x, y, r, bodyAng, 1.12, 60, 1.35);    // 大きなアザラシ（車体）：従来より少し大きく
   // 子どもは大人の色と白の中間色。自機は大人と同じ白色になる。
-  drawSealOne(g, sealChildColor(fill), x-Math.cos(bodyAng)*r*0.25, y-Math.sin(bodyAng)*r*0.25, r, turretAng, 0.60, 88, 1.7);
+  drawSealOne(g, sealChildColor(fill), x-Math.cos(bodyAng)*r*0.25, y-Math.sin(bodyAng)*r*0.25, r, turretAng, 0.72, 88, 1.7); // ★子どもは従来(0.60)の1.2倍（1.5倍にしたあと80%）
   return true;
 }
 function makePlayer(x,y,pidx=0){
@@ -2904,6 +2921,7 @@ function damageFighter(t){
     // 自機が倒れた場合ではなく、敵を倒した瞬間だけ撃破用ヒットストップを発生させる。
     if(!t.isPlayer) triggerHitStop(ENEMY_KILL_HIT_STOP_MS);
     spawnExplosion(t.x,t.y, t.isPlayer?1.4:1.0);
+    spawnConfettiFx(t.x,t.y, t.isPlayer?-1:Object.keys(ENEMY_TYPES).indexOf(t.type)); // ★撃破の紙吹雪（敵の色／自機は白）
     if(t.isPlayer) {
       playExplosion();
       if(mp.active) onMpPlayerDeath(t); else onPlayerDeath();
@@ -3399,6 +3417,37 @@ function drawReflectSparkFx(e){
     ctx.beginPath(); ctx.moveTo(Math.cos(a)*d,Math.sin(a)*d); ctx.lineTo(Math.cos(a)*(d+l),Math.sin(a)*(d+l)); ctx.stroke();
   }
   fxStar4(9*(1-u),"#ffffff"); // 当たった位置のきらっ
+  ctx.restore(); ctx.globalAlpha=1;
+}
+
+// ---- 撃破の紙吹雪（敵の色／自機は白） ----
+// 最初から少し飛び散った状態（CONFETTI_START_T 秒ぶん進んだ状態）から再生する。
+// ヒットストップ中は時間が止まるので、止まっている間も「どの色の敵を倒したか」が見える。
+const CONFETTI_DUR = 1.5, CONFETTI_START_T = 0.35;
+function spawnConfettiFx(x,y,typeIdx){
+  mpq("cf", x, y, typeIdx);
+  const key = typeIdx>=0 ? Object.keys(ENEMY_TYPES)[typeIdx] : null;
+  const et = key ? ENEMY_TYPES[key] : null;
+  const cols = et ? [et.color, et.dark] : ["#ffffff"];
+  explosions.push({x,y,t:CONFETTI_START_T,dur:CONFETTI_DUR,confetti:true,white:!et,cols,ph:Math.random()*100});
+}
+function drawConfettiFx(e){
+  const u=clamp(e.t/e.dur,0,1);
+  ctx.save(); ctx.translate(e.x,e.y);
+  ctx.globalAlpha=1-clamp((u-0.7)/0.3,0,1);
+  for(let i=0;i<26;i++){
+    // ★飛距離は氷の破片（drawIceBurst）と同じ式：v=50〜150、k=敵1.0／自機1.2
+    const a=fxRn(e.ph,i,1)*Math.PI*2, v=50+fxRn(e.ph,i,2)*100, q=e.t, kk=e.white?1.2:1.0;
+    const pd=v*kk/6*(1-Math.exp(-6*q))*1.5; // ★範囲は氷の破片の1.5倍
+    const px=Math.cos(a)*pd, py=Math.sin(a)*pd + q*q*26*1.5;
+    ctx.save(); ctx.translate(px,py); ctx.rotate(fxRn(e.ph,i,3)*6.28+u*5);
+    ctx.scale(1,Math.cos(u*11+i));
+    ctx.fillStyle=e.cols[i%e.cols.length];
+    ctx.fillRect(-2,-1.2,4,2.4); // 紙の大きさ
+    ctx.strokeStyle=e.white?"#a9cfe6":"rgba(0,0,0,0.14)"; ctx.lineWidth=0.6;
+    ctx.strokeRect(-2,-1.2,4,2.4);
+    ctx.restore();
+  }
   ctx.restore(); ctx.globalAlpha=1;
 }
 function updateFx(dt){
@@ -5069,7 +5118,7 @@ const MP_FX = {
   d0:()=>playFighterDefeat(), d1:()=>playFighterDefeatSlowRetro(), d2:()=>playFighterDefeatRichRetro(),
   rf:(a)=>playBulletReflectSoundFor({reflectSfx:a?"cyan":null}), bi:(a)=>playBulletImpactSound(!!a),
   se:(x,y,s)=>spawnExplosion(x,y,s), sm:(x,y)=>spawnMissileBlast(x,y), sf:(x,y)=>spawnHitFx(x,y), sb:(x,y)=>spawnFastBulletImpactFx(x,y), sw:(x,y)=>spawnWaterSplash(x,y),
-  mz:(x,y,a)=>spawnMuzzleFx(x,y,a), rs:(x,y,a)=>spawnReflectSparkFx(x,y,a),
+  mz:(x,y,a)=>spawnMuzzleFx(x,y,a), rs:(x,y,a)=>spawnReflectSparkFx(x,y,a), cf:(x,y,k)=>spawnConfettiFx(x,y,k),
 };
 function mpq(k,a,b,c){
   if(!mp.active || mp.role!=="host") return;
@@ -6056,18 +6105,11 @@ function render(){
     for(let i=0;i<b.trail.length;i++){
       const pt=b.trail[i];
       ctx.globalAlpha = (i+1)/b.trail.length*0.4;
-      ctx.fillStyle="#cdeefb";
+      ctx.fillStyle=(BULLET_COLORS[bulletColor]||BULLET_COLORS.blue).trail;
       ctx.beginPath(); ctx.arc(pt.x,pt.y,BULLET_R*0.7,0,7); ctx.fill();
     }
     ctx.globalAlpha=1;
-    const gr=ctx.createRadialGradient(b.x-BULLET_R*0.35,b.y-BULLET_R*0.4,0,b.x,b.y,BULLET_R);
-    gr.addColorStop(0,"#ffffff"); gr.addColorStop(0.5,"#d9f2fc"); gr.addColorStop(1,"#a6dcf3");
-    ctx.fillStyle=gr;
-    ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_R,0,7); ctx.fill();
-    ctx.strokeStyle="#7cc6e8"; ctx.lineWidth=1.2;
-    ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_R,0,7); ctx.stroke();
-    ctx.fillStyle="rgba(255,255,255,.95)";
-    ctx.beginPath(); ctx.arc(b.x-BULLET_R*0.35,b.y-BULLET_R*0.4,BULLET_R*0.3,0,7); ctx.fill();
+    drawNormalBullet(ctx,b.x,b.y,BULLET_R);
   }
 
   // 自機の砲塔方向と、壁で1回反射した弾道を点線で表示（操作Bでは照準そのものが不要なので出さない）
@@ -6100,6 +6142,7 @@ function render(){
   for(const e of explosions){
     if(e.flake){ drawFlakeBurst(e); continue; }
     if(e.muzzle){ drawMuzzleFx(e); continue; }
+    if(e.confetti){ drawConfettiFx(e); continue; }
     if(e.spark){ drawReflectSparkFx(e); continue; }
     if(e.iceBurst){ drawIceBurst(e); continue; }
     const prog = e.t/e.dur;
@@ -6598,7 +6641,7 @@ shareGameNativeBtn.addEventListener("click", async ()=>{
 });
 
 const designScreen=document.getElementById("designScreen");
-document.getElementById("designBtnTitle").addEventListener("click",()=>{designScreen.classList.remove("hidden");paintDesignPreview();renderFighterType();});
+document.getElementById("designBtnTitle").addEventListener("click",()=>{designScreen.classList.remove("hidden");paintDesignPreview();renderFighterType();renderBulletColor();});
 document.getElementById("designCloseBtn").addEventListener("click",()=>{designScreen.classList.add("hidden");});
 
 
@@ -6938,7 +6981,7 @@ var ammoEl = null, ammoKey = "", ammoDirty = true; // varにして、読み込�
 function ammoBulletSvg(isFast, on){
   if(!isFast){
     // 実際の通常弾（直径8px・水色の水滴）と同じ大きさ
-    return `<svg viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="4" fill="${on?"#cdeefb":"#c4c4c4"}" stroke="${on?"#7cc6e8":"#9a9a9a"}" stroke-width=".8"/><circle cx="2.7" cy="2.6" r="1.1" fill="${on?"#ffffff":"#ececec"}" opacity=".95"/></svg>`;
+    return `<svg viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="4" fill="${on?(BULLET_COLORS[bulletColor]||BULLET_COLORS.blue).trail:"#c4c4c4"}" stroke="${on?(BULLET_COLORS[bulletColor]||BULLET_COLORS.blue).edge:"#9a9a9a"}" stroke-width=".8"/><circle cx="2.7" cy="2.6" r="1.1" fill="${on?"#ffffff":"#ececec"}" opacity=".95"/></svg>`;
   }
   // 高速弾：紫色の氷柱アイコン
   return `<svg viewBox="0 0 8 14" width="8" height="14"><path d="M4 0 L7.5 10.5 L4 14 L.5 10.5 Z" fill="${on?"#bca4ff":"#c4c4c4"}" stroke="${on?"#795bc7":"#9a9a9a"}" stroke-width=".8" stroke-linejoin="round"/><path d="M4 1.5 L4 11.8 L1.6 10 Z" fill="${on?"#eee7ff":"#ececec"}"/></svg>`;
@@ -6978,7 +7021,7 @@ function updateAmmo(){
     }
     used = Math.max(0, Math.min(max, used));
     const isFast = !!(player.fighterType && player.fighterType !== "A");
-    const key = max + "|" + used + "|" + (isFast?1:0) + "|" + (player.dark||"");
+    const key = max + "|" + used + "|" + (isFast?1:0) + "|" + (player.dark||"") + "|" + bulletColor;
     if(key !== ammoKey){
       ammoKey = key;
       const remain = max - used;
@@ -7055,10 +7098,27 @@ document.getElementById("fighterTypeBox").addEventListener("click",e=>{
   try{ localStorage.setItem(FIGHTER_TYPE_KEY,id); }catch(err){}
   renderFighterType();
 });
+function renderBulletColor(){
+  const box=document.getElementById("bulletColorBox"); if(!box) return;
+  box.innerHTML='<div class="rwRowLabel">通常弾の色</div><div class="rwChips">'
+    +Object.keys(BULLET_COLORS).map(id=>{
+      const P=BULLET_COLORS[id];
+      return '<button class="rwChip'+(bulletColor===id?' on':'')+'" data-bcolor="'+id+'"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:'+P.g[2]+';border:1.5px solid '+P.edge+';vertical-align:-1px;margin-right:5px"></span>'+P.name+'</button>';
+    }).join("")+'</div><div class="rwHint">高速弾の色は変わりません。</div>';
+}
+document.getElementById("bulletColorBox").addEventListener("click",e=>{
+  const b=e.target.closest("[data-bcolor]"); if(!b) return;
+  const id=b.dataset.bcolor; if(!BULLET_COLORS[id]) return;
+  bulletColor=id;
+  try{ localStorage.setItem(BULLET_COLOR_KEY,id); }catch(err){}
+  renderBulletColor(); paintDesignPreview();
+  try{ ammoDirty=true; }catch(err){}
+});
 function paintDesignPreview(){
   const cv=document.getElementById("designPreviewCanvas"); if(!cv) return;
   const x=cv.getContext("2d"); x.clearRect(0,0,cv.width,cv.height); x.save(); x.translate(cv.width/2,cv.height/2);
   drawSealFighter(x,0,0,38,0,0);
+  drawNormalBullet(x,78,0,BULLET_R*2); // 通常弾の色のプレビュー
   x.restore();
 }
 function updateMultiRecord(progress){
