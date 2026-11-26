@@ -1864,7 +1864,7 @@ let stageClearDelay = 0;
 
 // 敵を倒した瞬間だけ300ms停止する。射撃時のヒットストップは使用しない。
 const HIT_STOP_MAX_MS = 500;
-const ENEMY_KILL_HIT_STOP_MS = 300;
+const ENEMY_KILL_HIT_STOP_MS = 200;
 let hitStopTimer = 0;         // 実際にゲーム進行を止める残り時間（秒）
 function sanitizeHitStopMs(value, fallback){
   if(!Number.isFinite(value)) return fallback;
@@ -2691,6 +2691,7 @@ function spawnBullet(owner, options = {}){
   });
   owner.bulletCount = (owner.bulletCount || 0) + 1;
   playShot(fastBullet);
+  spawnMuzzleFx(sx,sy,owner.turretAngle); // ★通常弾・高速弾どちらも発射時に銃口キラッ
 }
 // 弾の当たり判定半径（弾 vs 弾の判定専用）。自分が撃った弾は、1ブロック進むまでの間だけ5倍（見た目の大きさは変えない）。
 function bulletHitR(b){
@@ -2781,7 +2782,7 @@ function updateBullets(dt){
       } else if(b.y>WORLD_H-BULLET_R){
         b.y=WORLD_H-BULLET_R; b.vy*=-1; b.bounces++; reflected=true;
       }
-      if(reflected){ cTrailPush(b); playBulletReflectSoundFor(b); }
+      if(reflected){ cTrailPush(b); playBulletReflectSoundFor(b); if(!b.fastBullet) spawnReflectSparkFx(b.x,b.y,Math.atan2(b.vy,b.vx)); }
     }
 
     // タイル（障害物）との当たり判定。
@@ -2799,6 +2800,7 @@ function updateBullets(dt){
           reflectBulletOnTile(b,dt,col,row);
           b.bounces++;
           playBulletReflectSoundFor(b);
+          if(!b.fastBullet) spawnReflectSparkFx(b.x,b.y,Math.atan2(b.vy,b.vx));
         } else {
           if(b.fastBullet) spawnFastBulletImpactFx(b.x,b.y); else spawnHitFx(b.x,b.y);
           playBulletImpactSound(!!b.fastBullet);
@@ -2818,6 +2820,7 @@ function updateBullets(dt){
           reflectBulletOnTile(b,dt,col,row);
           b.bounces++;
           playBulletReflectSoundFor(b);
+          if(!b.fastBullet) spawnReflectSparkFx(b.x,b.y,Math.atan2(b.vy,b.vx));
         } else {
           if(b.fastBullet) spawnFastBulletImpactFx(b.x,b.y); else spawnHitFx(b.x,b.y);
           playBulletImpactSound(!!b.fastBullet);
@@ -3355,6 +3358,48 @@ function spawnFastBulletImpactFx(x,y){
     particles.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:rand(0.12,0.28), t:0, color:i%2?"#a8efb2":"#ffffff"});
   }
   explosions.push({x,y,t:0,dur:0.16,scaleF:0.45, fast:true});
+}
+
+// ---- 銃口キラッ（発射時）／反射スパーク（通常弾が壁で跳ね返るとき） ----
+function spawnMuzzleFx(x,y,ang){
+  mpq("mz", x, y, ang);
+  explosions.push({x,y,t:0,dur:0.5,muzzle:true,ang,ph:Math.random()*100});
+}
+function spawnReflectSparkFx(x,y,ang){
+  mpq("rs", x, y, ang);
+  explosions.push({x,y,t:0,dur:0.45,spark:true,ang,ph:Math.random()*100});
+}
+function fxRn(ph,i,k){ const q=Math.sin(i*127.1+k*311.7+ph)*43758.5453; return q-Math.floor(q); }
+function fxStar4(r,col){
+  if(r<0.3) return;
+  ctx.fillStyle=col; ctx.beginPath();
+  for(let i=0;i<8;i++){ const rr=i%2?r*0.28:r, an=-Math.PI/2+i*Math.PI/4; ctx.lineTo(Math.cos(an)*rr,Math.sin(an)*rr); }
+  ctx.closePath(); ctx.fill();
+}
+function drawMuzzleFx(e){
+  const u=clamp(e.t/e.dur,0,1), sgf=(a,b)=>clamp((u-a)/(b-a),0,1), eo=v=>1-Math.pow(1-clamp(v),3);
+  ctx.save(); ctx.translate(e.x,e.y); ctx.scale(2,2); // ★銃口キラッは2倍の大きさ
+  const fl=Math.sin(Math.PI*sgf(0,0.45)); // 星形の閃光
+  ctx.save(); ctx.rotate(u*3); fxStar4(12*fl,"#ffffff"); fxStar4(7.5*fl,"#bfe6ff"); ctx.restore();
+  for(let i=0;i<8;i++){ // 前方へ飛ぶ水滴
+    const a=e.ang+(fxRn(e.ph,i,1)-0.5)*0.9, d=(14+fxRn(e.ph,i,2)*30)*eo(sgf(0,0.7)), rr=1.6+fxRn(e.ph,i,3)*1.4;
+    ctx.globalAlpha=1-sgf(0.3,1);
+    ctx.fillStyle="#8bc9ec"; ctx.beginPath(); ctx.arc(Math.cos(a)*d,Math.sin(a)*d,rr,0,7); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(Math.cos(a)*d-rr*0.3,Math.sin(a)*d-rr*0.3,rr*0.35,0,7); ctx.fill();
+  }
+  ctx.restore(); ctx.globalAlpha=1;
+}
+function drawReflectSparkFx(e){
+  const u=clamp(e.t/e.dur,0,1);
+  ctx.save(); ctx.translate(e.x,e.y); ctx.lineCap="round";
+  ctx.globalAlpha=1-u;
+  for(let i=0;i<10;i++){ // 跳ね返った向きへ細い火花が走る
+    const a=e.ang+(fxRn(e.ph,i,1)-0.5)*1.7, d=u*(14+fxRn(e.ph,i,2)*22), l=8*(1-u);
+    ctx.strokeStyle=i%2?"#ffffff":"#72bde4"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(Math.cos(a)*d,Math.sin(a)*d); ctx.lineTo(Math.cos(a)*(d+l),Math.sin(a)*(d+l)); ctx.stroke();
+  }
+  fxStar4(9*(1-u),"#ffffff"); // 当たった位置のきらっ
+  ctx.restore(); ctx.globalAlpha=1;
 }
 function updateFx(dt){
   for(const p of particles){ p.t+=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.9; p.vy*=0.9; }
@@ -5024,6 +5069,7 @@ const MP_FX = {
   d0:()=>playFighterDefeat(), d1:()=>playFighterDefeatSlowRetro(), d2:()=>playFighterDefeatRichRetro(),
   rf:(a)=>playBulletReflectSoundFor({reflectSfx:a?"cyan":null}), bi:(a)=>playBulletImpactSound(!!a),
   se:(x,y,s)=>spawnExplosion(x,y,s), sm:(x,y)=>spawnMissileBlast(x,y), sf:(x,y)=>spawnHitFx(x,y), sb:(x,y)=>spawnFastBulletImpactFx(x,y), sw:(x,y)=>spawnWaterSplash(x,y),
+  mz:(x,y,a)=>spawnMuzzleFx(x,y,a), rs:(x,y,a)=>spawnReflectSparkFx(x,y,a),
 };
 function mpq(k,a,b,c){
   if(!mp.active || mp.role!=="host") return;
@@ -6053,6 +6099,8 @@ function render(){
   // 爆発の輪
   for(const e of explosions){
     if(e.flake){ drawFlakeBurst(e); continue; }
+    if(e.muzzle){ drawMuzzleFx(e); continue; }
+    if(e.spark){ drawReflectSparkFx(e); continue; }
     if(e.iceBurst){ drawIceBurst(e); continue; }
     const prog = e.t/e.dur;
     const rad = 10 + prog*30*e.scaleF;
