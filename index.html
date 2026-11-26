@@ -288,6 +288,13 @@
   .playerColorActions{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:120px}
   #playerColorSwatch{width:54px;height:54px;border-radius:50%;border:3px solid rgba(70,90,120,.25);box-shadow:inset 0 0 0 3px rgba(255,255,255,.55),0 2px 6px rgba(80,100,130,.15)}
   #playerColorValue{font-size:12px;color:var(--paper);font-weight:700}
+  #presetBox{width:min(92vw,440px);margin:6px 0 4px}
+  .presetSlot{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.86);border:1px solid #c9e3f1;border-radius:13px;padding:7px 10px;margin-top:6px;color:#3f6f93}
+  .presetName{font-size:13px;font-weight:700;white-space:nowrap}
+  .presetInfo{flex:1;min-width:0;font-size:12px;color:#5d89a8;display:flex;align-items:center;gap:6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .presetDot{flex:none;width:18px;height:18px;border-radius:50%;border:2px solid rgba(63,111,147,.34)}
+  .presetSlot .rwChip{padding:5px 9px;font-size:12px;flex:none}
+  .presetSlot .rwChip:disabled{opacity:.4;cursor:default}
   #playerColorReset{min-width:120px;padding:9px 12px;font-size:13px;letter-spacing:0}
   /* ---- 設定画面 ---- */
   #settingsScreen{ z-index:26; }
@@ -487,12 +494,12 @@
   #rankingMine{width:min(92vw,440px)}
   .rankMineCard{display:flex;align-items:center;gap:10px;background:#fff;border:2px solid #86c9ee;border-radius:14px;padding:9px 12px;color:#3f6f93}
   #rankingList{display:flex;flex-direction:column;gap:7px;width:min(92vw,440px)}
-  .rankEntry{display:grid;grid-template-columns:32px 34px minmax(0,1fr);align-items:center;gap:9px;background:rgba(255,255,255,.86);border:1px solid #c9e3f1;border-radius:13px;padding:8px 10px;color:#3f6f93;text-align:left}
+  .rankEntry{display:grid;grid-template-columns:32px 34px minmax(0,1fr) auto;align-items:center;gap:9px;background:rgba(255,255,255,.86);border:1px solid #c9e3f1;border-radius:13px;padding:8px 10px;color:#3f6f93;text-align:left}
   .rankEntry.mine{border:2px solid #70bce5;background:#f0faff;padding:7px 9px}
   .rankNo{font-weight:700;text-align:center;color:#7aa3be;font-variant-numeric:tabular-nums}
   .rankColorDot{width:28px;height:28px;border-radius:50%;border:2px solid rgba(63,111,147,.34);box-shadow:inset 0 0 0 2px rgba(255,255,255,.6),0 1px 3px rgba(63,111,147,.14)}
   .rankWho{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .rankScore{font-size:13px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .rankScore{font-size:13px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right;justify-self:end}
   .rankEmpty{padding:20px 12px;text-align:center;background:rgba(255,255,255,.72);border:1px dashed #b9dcef;border-radius:14px;color:#5d89a8;font-size:13px;line-height:1.7}
   html.mofu .rankEntry,html.mofu .rankMineCard{color:#3f6f93}
   /* ---- 弾数表示（ゲーム画面の下・右端） ---- */
@@ -557,10 +564,10 @@
   html.mofu #startScreen,html.mofu #pauseScreen,html.mofu #continueScreen,html.mofu #gameOverScreen,html.mofu #mpOverScreen{ background:#e8f6fc; }
   .btn.snow::before{ filter:drop-shadow(0 2px 0 var(--sd)) drop-shadow(0 -1px 0 #9fd0ea) drop-shadow(1px 0 0 #9fd0ea) drop-shadow(-1px 0 0 #9fd0ea); }
 
-  /* タイトルの補助メニュー：4列×2段でコンパクトに配置 */
+  /* タイトルの補助メニュー：3列×2段。横幅は通常モードなどの大きいボタンに合わせる */
   #titleUtilityGrid{
-    display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;
-    width:min(94vw,560px);margin-top:2px;align-items:stretch;
+    display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;
+    width:min(86vw,390px);margin-top:2px;align-items:stretch;
   }
   #titleUtilityGrid .modeBtn{
     width:100%;min-width:0;min-height:46px;height:46px;margin:0;
@@ -585,8 +592,8 @@
     #startScreen > .modeBtn + .modeBtn{margin-top:4px;}
     #startScreen .title{font-size:clamp(24px,7vw,34px);letter-spacing:3px;}
     #modeStats{font-size:13px;line-height:1.5;margin:0;}
-    #titleUtilityGrid{width:min(94vw,500px);gap:6px;}
-    #titleUtilityGrid .modeBtn{height:44px;min-height:44px;font-size:clamp(10px,2.9vw,13px);border-radius:12px;padding-left:1px;padding-right:1px;}
+    #titleUtilityGrid{width:min(78vw,330px);gap:6px;}
+    #titleUtilityGrid .modeBtn{height:44px;min-height:44px;font-size:clamp(11px,3.2vw,14px);border-radius:12px;padding-left:1px;padding-right:1px;}
   }
 </style>
 </head>
@@ -615,11 +622,11 @@
       <button class="btn modeBtn snow" id="normalModeBtn">通常モード</button>
       <button class="btn modeBtn snow" id="rushModeBtn">爽快モード</button>
       <button class="btn modeBtn multi snow" id="multiBtn">マルチプレイ</button>
+      <button class="btn modeBtn alt snow" id="stageLibraryOpenBtn">ステージ一覧</button>
+      <button class="btn modeBtn alt snow" id="stageCreateOpenBtn">ステージ作成</button>
       <div id="titleUtilityGrid">
         <button class="btn modeBtn info snow" id="rankingBtnTitle">ランキング</button>
         <button class="btn modeBtn info snow" id="designBtnTitle">デザイン</button>
-        <button class="btn modeBtn alt snow" id="stageLibraryOpenBtn">ステージ一覧</button>
-        <button class="btn modeBtn alt snow" id="stageCreateOpenBtn">ステージ作成</button>
         <button class="btn modeBtn info snow" id="rewardBtnTitle">報酬<span class="redDot hidden" id="rewardDot"></span></button>
         <button class="btn modeBtn info snow" id="howToPlayBtn">ゲーム説明</button>
         <button class="btn modeBtn info snow" id="shareGameBtnTitle">共有</button>
@@ -741,6 +748,7 @@
       <div id="fighterTypeBox"></div>
       <div id="bulletColorBox"></div>
       <div id="playerColorBox"></div>
+      <div id="presetBox"></div>
       <button class="btn alt" id="designCloseBtn">閉じる</button>
     </div>
 
@@ -6792,7 +6800,7 @@ shareGameNativeBtn.addEventListener("click", async ()=>{
 });
 
 const designScreen=document.getElementById("designScreen");
-document.getElementById("designBtnTitle").addEventListener("click",()=>{designScreen.classList.remove("hidden");paintDesignPreview();renderFighterType();renderBulletColor();renderPlayerColor();});
+document.getElementById("designBtnTitle").addEventListener("click",()=>{designScreen.classList.remove("hidden");paintDesignPreview();renderFighterType();renderBulletColor();renderPlayerColor();renderPresets();});
 document.getElementById("designCloseBtn").addEventListener("click",()=>{designScreen.classList.add("hidden");});
 
 
@@ -7342,6 +7350,53 @@ document.getElementById("playerColorBox").addEventListener("pointercancel",()=>{
 document.getElementById("playerColorBox").addEventListener("click",e=>{
   if(e.target.id==="playerColorReset") setPlayerColor("white");
 });
+// ---- デザインのプリセット（3つまで保存。自機の色・通常弾の色・アザラシのタイプ・エフェクトをまとめて保存） ----
+const PRESET_KEY="mofuDesignPresetsV1", PRESET_COUNT=3;
+function loadPresets(){
+  let a=[];
+  try{const v=JSON.parse(localStorage.getItem(PRESET_KEY)||"[]"); if(Array.isArray(v)) a=v;}catch(e){}
+  const out=[]; for(let i=0;i<PRESET_COUNT;i++){const p=a[i]; out.push(p&&typeof p==="object"?p:null);}
+  return out;
+}
+function savePresets(a){ try{localStorage.setItem(PRESET_KEY,JSON.stringify(a));}catch(e){} }
+function renderPresets(){
+  const box=document.getElementById("presetBox"); if(!box) return;
+  const list=loadPresets();
+  box.innerHTML='<div class="rwRowLabel" style="text-align:center">プリセット（3つまで保存）</div>'+list.map((p,i)=>{
+    let info='<span>未保存</span>';
+    if(p){
+      const c=getPlayerColorData(p.color);
+      const bn=(BULLET_COLORS[p.bullet]||BULLET_COLORS.blue).name;
+      info='<span class="presetDot" style="background:'+sealPastel(c.color)+';border-color:'+c.dark+'"></span><span>弾：'+bn+(p.fighter==="B"||p.fighter==="C"?'・アザラシ'+p.fighter:'')+'</span>';
+    }
+    return '<div class="presetSlot"><div class="presetName">プリセット'+(i+1)+'</div><div class="presetInfo">'+info+'</div>'
+      +'<button type="button" class="rwChip" data-preset-save="'+i+'">保存</button>'
+      +'<button type="button" class="rwChip" data-preset-load="'+i+'"'+(p?'':' disabled')+'>呼び出す</button></div>';
+  }).join("");
+}
+document.getElementById("presetBox").addEventListener("click",e=>{
+  const sb=e.target.closest("[data-preset-save]"), lb=e.target.closest("[data-preset-load]");
+  const list=loadPresets();
+  if(sb){
+    const i=Number(sb.dataset.presetSave);
+    if(list[i] && !confirm("プリセット"+(i+1)+"を上書きしますか？")) return;
+    const eq=(window.rwGetEq?rwGetEq():{aura:"",trail:""});
+    list[i]={color:playerColor,bullet:bulletColor,fighter:activeFighterType(),aura:eq.aura,trail:eq.trail};
+    savePresets(list); renderPresets();
+  }else if(lb){
+    const p=list[Number(lb.dataset.presetLoad)]; if(!p) return;
+    bulletColor=BULLET_COLORS[p.bullet]?p.bullet:"blue";
+    try{localStorage.setItem(BULLET_COLOR_KEY,bulletColor);}catch(err){}
+    if(unlockedFighterTypes().includes(p.fighter)){
+      fighterType=p.fighter;
+      try{localStorage.setItem(FIGHTER_TYPE_KEY,fighterType);}catch(err){}
+    }
+    if(window.rwSetEq) rwSetEq(p.aura||"",p.trail||"");
+    setPlayerColor(p.color);
+    renderFighterType(); renderBulletColor(); renderPlayerColor(); paintDesignPreview();
+    try{ammoDirty=true;}catch(err){}
+  }
+});
 function paintDesignPreview(){
   const cv=document.getElementById("designPreviewCanvas"); if(!cv) return;
   const x=cv.getContext("2d"); x.clearRect(0,0,cv.width,cv.height); x.save(); x.translate(cv.width/2,cv.height/2);
@@ -7432,12 +7487,35 @@ function renderRanking(data){
   try{localStorage.setItem("mofuRankingParticipatingV1",String(rankingParticipating));}catch(e){}
   updateRankingParticipationButton();
   status.textContent="";
-  const makeRow=entry=>{
+  const entries=data.entries;
+  const mode=rankingCurrentMode;
+  // 自分の記録かどうか：サーバーの印（isMe など）→ プレイヤーID → 端末の最高記録と色の一致、の順で判定
+  const idOf=e=>e&&(e.playerId||e.player_id);
+  const flagged=e=>!!e&&(e.isMe===true||e.me===true||e.mine===true||e.isMine===true||e.self===true||e.you===true||e.isYou===true||(idOf(e)&&idOf(e)===rankingPlayerId));
+  const hasServerMark=entries.some(e=>e&&(("isMe" in e)||("me" in e)||("mine" in e)||("isMine" in e)||("self" in e)||("you" in e)||("isYou" in e)||idOf(e)));
+  const localN=rankingLocalProgress(mode);
+  let localColor="#ffffff";
+  try{const c=localStorage.getItem("mofuRankingBestColor_"+mode);if(validRankingColor(c))localColor=c.toLowerCase();}catch(e){}
+  const sameAsLocal=e=>!!e&&localN>0&&Number(e.cleared)===localN&&String(e.color||"#ffffff").toLowerCase()===localColor;
+  const isMine=e=>flagged(e)||(!hasServerMark&&sameAsLocal(e));
+  const top=entries.slice(0,3);
+  const makeRow=(entry,mine)=>{
     const p=getPlayerColorData(validRankingColor(entry.color)?entry.color:"#ffffff");
     const score=formatClearedStage(entry.cleared);
-    return `<div class="rankEntry"><div class="rankNo">${Number(entry.rank)||"-"}</div><div class="rankColorDot" style="background:${sealPastel(p.color)};border-color:${p.dark}"></div><div class="rankScore">${rankingEsc(score)}</div></div>`;
+    return `<div class="rankEntry${mine?" mine":""}"><div class="rankNo">${Number(entry.rank)||"-"}</div><div class="rankColorDot" style="background:${sealPastel(p.color)};border-color:${p.dark}"></div><div class="rankWho">${mine?"あなた":"プレイヤー"}</div><div class="rankScore">${rankingEsc(score)}</div></div>`;
   };
-  list.innerHTML=data.entries.length?data.entries.slice(0,3).map(makeRow).join(""):'<div class="rankEmpty">まだランキング記録がありません。<br>最初のランカーを目指そう！</div>';
+  if(!top.length){list.innerHTML='<div class="rankEmpty">まだランキング記録がありません。<br>最初のランカーを目指そう！</div>';return;}
+  let html=top.map(e=>makeRow(e,isMine(e))).join("");
+  // 上位3人に自分がいなければ、4番目に「あなた」を表示
+  if(rankingParticipating && !top.some(isMine)){
+    let mine=entries.slice(3).find(isMine)||data.me||data.mine||data.self||data.you||data.myEntry||null;
+    if(mine && typeof mine==="object" && Number(mine.cleared)>0){
+      html+=makeRow(mine,true);
+    }else if(top.length>=3 && localN>0){
+      html+=makeRow({rank:data.myRank||data.my_rank||null,cleared:localN,color:localColor},true); // サーバーに自分の順位情報が無い場合は端末の記録で表示
+    }
+  }
+  list.innerHTML=html;
 }
 async function loadRanking(mode=rankingCurrentMode,period=rankingCurrentPeriod){
   rankingCurrentMode=mode;rankingCurrentPeriod=period;
@@ -7811,6 +7889,12 @@ function renderEquip(){
   const rows=row("纏う系エフェクト","aura")+row("軌跡系エフェクト","trail");
   box.innerHTML=rows?'<div class="rwRowLabel">自機エフェクト</div>'+rows:"";
 }
+// デザインのプリセット用：エフェクトの装備を読み書きする
+window.rwGetEq=()=>({aura:rw.eq.aura||"",trail:rw.eq.trail||""});
+window.rwSetEq=(a,t)=>{
+  const ok=(id,kind)=>{const it=item(id);return (it&&it.kind===kind&&rw.got[id])?id:"";};
+  rw.eq.aura=ok(a,"aura"); rw.eq.trail=ok(t,"trail"); save(); renderEquip();
+};
 document.getElementById("rwEquip").addEventListener("click",e=>{
   const b=e.target.closest(".rwChip"); if(!b||b.disabled) return;
   if(b.dataset.claim){
