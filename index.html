@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja" class="mofu">
+<html lang="ja" class="fuwa">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
@@ -8,21 +8,21 @@
 <meta name="theme-color" content="#cfeaf8">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="もふもふバトル">
-<meta name="application-name" content="Mofumofu-Battle">
+<meta name="apple-mobile-web-app-title" content="ふわふわバトル">
+<meta name="application-name" content="Fuwafuwa-Battle">
 <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
-<title>もふもふバトル</title>
+<title>ふわふわバトル</title>
 <!-- URLを送ったときにSNSやLINEのプレビューに表示される情報 -->
-<meta property="og:title" content="もふもふバトル">
-<meta property="og:description" content="かわいいアザラシのアクションゲーム「もふもふバトル」で遊ぼう！">
+<meta property="og:title" content="ふわふわバトル">
+<meta property="og:description" content="かわいいアザラシのアクションゲーム「ふわふわバトル」で遊ぼう！">
 <meta property="og:image" content="https://appleringo12.github.io/tank-game/icon-512.png">
 <meta property="og:image:width" content="512">
 <meta property="og:image:height" content="512">
 <meta property="og:url" content="https://appleringo12.github.io/tank-game/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="もふもふバトル">
-<meta name="twitter:description" content="かわいいアザラシのアクションゲーム「もふもふバトル」で遊ぼう！">
+<meta name="twitter:title" content="ふわふわバトル">
+<meta name="twitter:description" content="かわいいアザラシのアクションゲーム「ふわふわバトル」で遊ぼう！">
 <meta name="twitter:image" content="https://appleringo12.github.io/tank-game/icon-512.png">
 <style>
   /* ============================================================
@@ -206,10 +206,12 @@
   }
   #stageClearScreen .clearTitle{font-size:clamp(24px,7vw,38px); letter-spacing:4px; color:#ff9ecb; font-weight:700; text-shadow:3px 3px 0 var(--brick-dark);}
   #stageClearScreen .clearStats{font-size:clamp(14px,4vw,18px); line-height:1.9;}
+  #stageClearScreen .clearLives{display:inline-flex; align-items:center; gap:5px; vertical-align:middle;}
+  #stageClearScreen .clearLives .heart{width:22px; height:19px;}
+  #stageClearScreen .clearLives .livesCount{font-size:clamp(14px,4vw,18px); margin-left:3px;}
   #stageClearScreen .nextInfo{font-size:clamp(12px,3.5vw,16px); line-height:1.8; color:#8a6f97; max-width:390px;}
-  #stageClearScreen .clearNextPreview{display:block; width:clamp(150px,46vw,260px); height:auto; margin:0 auto 8px; border:2px solid #e5d4ee; border-radius:10px; box-shadow:0 2px 8px rgba(122,92,138,.25);}
-  html.mofu #stageClearScreen .clearNextPreview{ border-color:#b9dcef; }
-  #stageClearScreen .enemyLabel{display:block; margin-top:3px; color:#a98bb0;}
+  #stageClearScreen .clearNextPreview{display:block; width:clamp(180px,58vw,300px); height:auto; margin:0 auto 8px; border:2px solid #e5d4ee; border-radius:10px; box-shadow:0 2px 8px rgba(122,92,138,.25);}
+  html.fuwa #stageClearScreen .clearNextPreview{ border-color:#b9dcef; }
   #stageClearScreen .enemyIcons{display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:10px 14px; margin-top:7px;}
   #stageClearScreen .enemyIconWrap{display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:58px;}
   #stageClearScreen .enemyFighterIcon{width:clamp(52px,15vw,72px); height:auto; image-rendering:auto; filter:drop-shadow(2px 2px 0 rgba(210,150,230,.35));}
@@ -501,7 +503,7 @@
   .rankWho{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .rankScore{font-size:13px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right;justify-self:end}
   .rankEmpty{padding:20px 12px;text-align:center;background:rgba(255,255,255,.72);border:1px dashed #b9dcef;border-radius:14px;color:#5d89a8;font-size:13px;line-height:1.7}
-  html.mofu .rankEntry,html.mofu .rankMineCard{color:#3f6f93}
+  html.fuwa .rankEntry,html.fuwa .rankMineCard{color:#3f6f93}
   /* ---- 弾数表示（ゲーム画面の下・右端） ---- */
   #ammoBox{ position:absolute; z-index:8; display:none; align-items:center; gap:6px; padding:5px 8px; background:rgba(255,249,253,.96); border:2px solid #d9c9f2; border-radius:11px; pointer-events:none; box-shadow:0 2px 6px rgba(180,150,210,.22); }
   #ammoBox.show{ display:flex; }
@@ -510,39 +512,39 @@
   #ammoBox svg{ display:block; }
 
   /* ================================================================
-     氷と海のデザイン（html.mofu に適用）
+     氷と海のデザイン（html.fuwa に適用）
      ================================================================ */
-  html.mofu{ --bg-deep:#cfeaf8; --bg-mid:#dcefff; --olive:#86c9ee; --olive-dark:#5aaee0; --brick:#a9def4; --brick-dark:#7cc3e3; --steel:#b4c8f0; --steel-dark:#889fd6; --amber:#fff2b8; --paper:#3f6f93; }
-  html.mofu, html.mofu body{ background:linear-gradient(160deg,#eaf8fe 0%,#d6edfa 45%,#c2e2f6 100%); }
-  html.mofu #gameArea{ background:#e8f6fc; border-bottom-color:#b7dff2; }
-  html.mofu canvas{ background:#e3f4fc; }
-  html.mofu canvas#game, html.mofu #app.pc-mode #game{ box-shadow:0 0 0 3px #c4e6f6, 0 4px 18px rgba(80,155,210,.28); }
-  html.mofu #controls{ background:#edf8fe; }
-  html.mofu .zone{ border-top-color:rgba(110,180,225,.3); }
-  html.mofu #leftZone{ border-right-color:rgba(110,180,225,.45); }
-  html.mofu .zone-label{ color:rgba(60,115,160,.65); }
-  html.mofu .joy-base{ border-color:rgba(140,200,240,.95); background:rgba(160,212,242,.35); box-shadow:0 2px 10px rgba(90,165,220,.25); }
-  html.mofu .joy-stick, html.mofu #app > .joy-stick.fire-ready, html.mofu #app > .joy-stick.missile-charging{ background:rgba(140,200,240,.95); box-shadow:0 2px 6px rgba(90,165,220,.4); }
-  html.mofu #pauseBtn{ border-color:rgba(100,175,225,.8); box-shadow:0 2px 6px rgba(90,165,220,.35); }
-  html.mofu #fullscreenBtn{ border-color:#7cc3e8; color:#3f6f93; box-shadow:0 2px 7px rgba(80,150,200,.25); }
-  html.mofu .overlay, html.mofu #stageClearScreen{ background:rgba(235,248,254,.94); }
-  html.mofu .title, html.mofu #stageClearScreen .clearTitle, html.mofu .editorTitle{ color:#6ab6e4; text-shadow:3px 3px 0 var(--brick-dark), 0 0 22px rgba(180,230,255,.7); }
-  html.mofu .subtitle, html.mofu #stageClearScreen .nextInfo, html.mofu .editorHint, html.mofu .rwCond, html.mofu .rwDone, html.mofu .rwRowLabel, html.mofu .rwHint, html.mofu #shareDialog .shareHint{ color:#5d89a8; }
-  html.mofu .subtitle b, html.mofu .rwSec, html.mofu #stageClearScreen .enemyCount{ color:#4a9fd2; }
-  html.mofu #stageClearScreen .enemyLabel, html.mofu #stageClearScreen .tapHint{ color:#7aa3be; }
-  html.mofu #stageClearScreen .enemyFighterIcon{ filter:drop-shadow(0 2px 4px rgba(90,165,220,.4)); }
-  html.mofu #editorCanvas, html.mofu .stageCard canvas{ border-color:#b9dcef; }
-  html.mofu .editorSettings input, html.mofu .editorSettings select, html.mofu .codeImport input{ border-color:#b9dcef; }
-  html.mofu .editorTools .selected{ outline-color:#3f6f93; }
-  html.mofu .stageCard, html.mofu #uiConfirm .box, html.mofu #shareDialog .box{ background:#f4fbff; border-color:#bfe0f0; }
-  html.mofu #uiConfirm, html.mofu #shareDialog{ background:rgba(50,100,145,.4); }
-  html.mofu .rwCard{ border-color:#bfe0f0; }
-  html.mofu .rwChip{ border-color:#a9d3ec; color:#3f6f93; }
-  html.mofu .rwChip.on{ background:#86c9ee; color:#fff; }
-  html.mofu #ammoBox{ border-color:#b9dcef; background:rgba(244,251,255,.96); }
+  html.fuwa{ --bg-deep:#cfeaf8; --bg-mid:#dcefff; --olive:#86c9ee; --olive-dark:#5aaee0; --brick:#a9def4; --brick-dark:#7cc3e3; --steel:#b4c8f0; --steel-dark:#889fd6; --amber:#fff2b8; --paper:#3f6f93; }
+  html.fuwa, html.fuwa body{ background:linear-gradient(160deg,#eaf8fe 0%,#d6edfa 45%,#c2e2f6 100%); }
+  html.fuwa #gameArea{ background:#e8f6fc; border-bottom-color:#b7dff2; }
+  html.fuwa canvas{ background:#e3f4fc; }
+  html.fuwa canvas#game, html.fuwa #app.pc-mode #game{ box-shadow:0 0 0 3px #c4e6f6, 0 4px 18px rgba(80,155,210,.28); }
+  html.fuwa #controls{ background:#edf8fe; }
+  html.fuwa .zone{ border-top-color:rgba(110,180,225,.3); }
+  html.fuwa #leftZone{ border-right-color:rgba(110,180,225,.45); }
+  html.fuwa .zone-label{ color:rgba(60,115,160,.65); }
+  html.fuwa .joy-base{ border-color:rgba(140,200,240,.95); background:rgba(160,212,242,.35); box-shadow:0 2px 10px rgba(90,165,220,.25); }
+  html.fuwa .joy-stick, html.fuwa #app > .joy-stick.fire-ready, html.fuwa #app > .joy-stick.missile-charging{ background:rgba(140,200,240,.95); box-shadow:0 2px 6px rgba(90,165,220,.4); }
+  html.fuwa #pauseBtn{ border-color:rgba(100,175,225,.8); box-shadow:0 2px 6px rgba(90,165,220,.35); }
+  html.fuwa #fullscreenBtn{ border-color:#7cc3e8; color:#3f6f93; box-shadow:0 2px 7px rgba(80,150,200,.25); }
+  html.fuwa .overlay, html.fuwa #stageClearScreen{ background:rgba(235,248,254,.94); }
+  html.fuwa .title, html.fuwa #stageClearScreen .clearTitle, html.fuwa .editorTitle{ color:#6ab6e4; text-shadow:3px 3px 0 var(--brick-dark), 0 0 22px rgba(180,230,255,.7); }
+  html.fuwa .subtitle, html.fuwa #stageClearScreen .nextInfo, html.fuwa .editorHint, html.fuwa .rwCond, html.fuwa .rwDone, html.fuwa .rwRowLabel, html.fuwa .rwHint, html.fuwa #shareDialog .shareHint{ color:#5d89a8; }
+  html.fuwa .subtitle b, html.fuwa .rwSec, html.fuwa #stageClearScreen .enemyCount{ color:#4a9fd2; }
+  html.fuwa #stageClearScreen .tapHint{ color:#7aa3be; }
+  html.fuwa #stageClearScreen .enemyFighterIcon{ filter:drop-shadow(0 2px 4px rgba(90,165,220,.4)); }
+  html.fuwa #editorCanvas, html.fuwa .stageCard canvas{ border-color:#b9dcef; }
+  html.fuwa .editorSettings input, html.fuwa .editorSettings select, html.fuwa .codeImport input{ border-color:#b9dcef; }
+  html.fuwa .editorTools .selected{ outline-color:#3f6f93; }
+  html.fuwa .stageCard, html.fuwa #uiConfirm .box, html.fuwa #shareDialog .box{ background:#f4fbff; border-color:#bfe0f0; }
+  html.fuwa #uiConfirm, html.fuwa #shareDialog{ background:rgba(50,100,145,.4); }
+  html.fuwa .rwCard{ border-color:#bfe0f0; }
+  html.fuwa .rwChip{ border-color:#a9d3ec; color:#3f6f93; }
+  html.fuwa .rwChip.on{ background:#86c9ee; color:#fff; }
+  html.fuwa #ammoBox{ border-color:#b9dcef; background:rgba(244,251,255,.96); }
   /* 残弾警告色を優先 */
-  html.mofu #ammoBox.warn{ border-color:#f3d58b; background:rgba(255,251,239,.97); }
-  html.mofu #ammoBox.empty{ border-color:#efb4c8; background:rgba(255,244,248,.97); }
+  html.fuwa #ammoBox.warn{ border-color:#f3d58b; background:rgba(255,251,239,.97); }
+  html.fuwa #ammoBox.empty{ border-color:#efb4c8; background:rgba(255,244,248,.97); }
 
   /* ---- 雪のひさし付きボタン（.snow を付けたボタンだけ） ---- */
   .btn.snow{ position:relative; --sn:8px; --o:5px; --v:6px; --x:calc(var(--sn) + var(--o)); --sd:var(--olive-dark); padding-top:15px; }
@@ -561,7 +563,7 @@
   @media (max-height:780px){ #startScreen .modeBtn.snow{ padding-top:12px; --o:3px; --sn:7px; } }
 
   /* ---- 雪ボタンのある画面の背景は、ゲームプレイ中の背景(#gameArea)と同じ色。雪の輪郭は淡い青の縁取りで見分ける ---- */
-  html.mofu #startScreen,html.mofu #pauseScreen,html.mofu #continueScreen,html.mofu #gameOverScreen,html.mofu #mpOverScreen{ background:#e8f6fc; }
+  html.fuwa #startScreen,html.fuwa #pauseScreen,html.fuwa #continueScreen,html.fuwa #gameOverScreen,html.fuwa #mpOverScreen{ background:#e8f6fc; }
   .btn.snow::before{ filter:drop-shadow(0 2px 0 var(--sd)) drop-shadow(0 -1px 0 #9fd0ea) drop-shadow(1px 0 0 #9fd0ea) drop-shadow(-1px 0 0 #9fd0ea); }
 
   /* タイトルの補助メニュー：3列×2段。横幅は通常モードなどの大きいボタンに合わせる */
@@ -618,7 +620,7 @@
 
     <!-- スタート画面 -->
     <div id="startScreen" class="overlay">
-      <h1 class="title">もふもふバトル</h1>
+      <h1 class="title">ふわふわバトル</h1>
       <div id="modeStats"></div>
       <button class="btn modeBtn snow" id="normalModeBtn">通常モード</button>
       <button class="btn modeBtn snow" id="rushModeBtn">爽快モード</button>
@@ -818,10 +820,6 @@
             </div>
             <div class="volumeSliderHandle" id="shakeHandle"></div>
           </div>
-        </div>
-        <div class="settingsRow settingsRowVolume">
-          <span class="settingsLabel">敵撃破時のヒットストップ</span>
-          <span class="settingsLabel" style="font-size:15px;">300 ms（固定）</span>
         </div>
         <div class="settingsRow settingsRowVolume" id="schemeRow">
           <span class="settingsLabel">操作方法</span>
@@ -3043,7 +3041,7 @@ function damageFighter(t){
     // 自機が倒れた場合ではなく、敵を倒した瞬間だけ撃破用ヒットストップを発生させる。
     if(!t.isPlayer) triggerHitStop(ENEMY_KILL_HIT_STOP_MS);
     spawnExplosion(t.x,t.y, t.isPlayer?1.4:1.0);
-    spawnConfettiFx(t.x,t.y, t.isPlayer?-1:Object.keys(ENEMY_TYPES).indexOf(t.type)); // ★撃破の紙吹雪（敵の色／自機は白）
+    if(!t.isPlayer) spawnDoubleRingFx(t.x,t.y, Object.keys(ENEMY_TYPES).indexOf(t.type)); // ★敵撃破のダブルリング（倒した敵の色。自機には出さない）
     if(t.isPlayer) {
       playExplosion();
       if(mp.active) onMpPlayerDeath(t); else onPlayerDeath();
@@ -3542,34 +3540,30 @@ function drawReflectSparkFx(e){
   ctx.restore(); ctx.globalAlpha=1;
 }
 
-// ---- 撃破の紙吹雪（敵の色／自機は白） ----
-// 最初から少し飛び散った状態（CONFETTI_START_T 秒ぶん進んだ状態）から再生する。
-// ヒットストップ中は時間が止まるので、止まっている間も「どの色の敵を倒したか」が見える。
-const CONFETTI_DUR = 1.5, CONFETTI_START_T = 0.35;
-function spawnConfettiFx(x,y,typeIdx){
-  mpq("cf", x, y, typeIdx);
-  const key = typeIdx>=0 ? Object.keys(ENEMY_TYPES)[typeIdx] : null;
+// ---- 敵撃破のダブルリング（倒した敵の色の単色。自機には出さない） ----
+// 外側のリングが半径4.5ブロック分（以前の1.5倍）まで広がる。少し進んだ状態から再生するので、ヒットストップ中も見える。
+const DR_DUR = 0.8, DR_START_T = 0.15, DR_R = TILE * 4.5;
+function spawnDoubleRingFx(x,y,typeIdx){
+  mpq("dr", x, y, typeIdx);
+  const key = Object.keys(ENEMY_TYPES)[typeIdx];
   const et = key ? ENEMY_TYPES[key] : null;
-  const cols = et ? [et.color, et.dark] : ["#ffffff"];
-  explosions.push({x,y,t:CONFETTI_START_T,dur:CONFETTI_DUR,confetti:true,white:!et,cols,ph:Math.random()*100});
+  explosions.push({x,y,t:DR_START_T,dur:DR_DUR,dring:true,col:et?et.color:"#ffffff"});
 }
-function drawConfettiFx(e){
-  const u=clamp(e.t/e.dur,0,1);
+function drawDoubleRingFx(e){
+  const p=clamp(e.t/e.dur,0,1), q=1-p, eo=v=>1-(1-v)*(1-v);
+  const rgb=[1,3,5].map(i=>parseInt(e.col.substr(i,2),16)).join(",");
   ctx.save(); ctx.translate(e.x,e.y);
-  ctx.globalAlpha=1-clamp((u-0.7)/0.3,0,1);
-  for(let i=0;i<26;i++){
-    // ★飛距離は氷の破片（drawIceBurst）と同じ式：v=50〜150、k=敵1.0／自機1.2
-    const a=fxRn(e.ph,i,1)*Math.PI*2, v=50+fxRn(e.ph,i,2)*100, q=e.t, kk=e.white?1.2:1.0;
-    const pd=v*kk/6*(1-Math.exp(-6*q))*1.5; // ★範囲は氷の破片の1.5倍
-    const px=Math.cos(a)*pd, py=Math.sin(a)*pd + q*q*26*1.5;
-    ctx.save(); ctx.translate(px,py); ctx.rotate(fxRn(e.ph,i,3)*6.28+u*5);
-    ctx.scale(1,Math.cos(u*11+i));
-    ctx.fillStyle=e.cols[i%e.cols.length];
-    ctx.fillRect(-4,-2.4,8,4.8); // 紙の大きさ
-    ctx.strokeStyle=e.white?"#a9cfe6":"rgba(0,0,0,0.14)"; ctx.lineWidth=0.6;
-    ctx.strokeRect(-4,-2.4,8,4.8);
-    ctx.restore();
-  }
+  // 中心の光
+  const gr=DR_R*(0.11+0.28*eo(p));
+  const g=ctx.createRadialGradient(0,0,0,0,0,gr);
+  g.addColorStop(0,"rgba("+rgb+",1)"); g.addColorStop(1,"rgba("+rgb+",0)");
+  ctx.globalAlpha=q*q; ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,gr,0,Math.PI*2); ctx.fill();
+  // 1つ目のリング
+  ctx.strokeStyle=e.col; ctx.globalAlpha=q; ctx.lineWidth=Math.max(0.1,6*q);
+  ctx.beginPath(); ctx.arc(0,0,DR_R*(0.05+0.72*eo(p)),0,Math.PI*2); ctx.stroke();
+  // 2つ目のリング（少し遅れて、半径3ブロックまで広がる）
+  const p2=clamp((p-0.18)/0.82,0,1);
+  if(p>0.18){ ctx.globalAlpha=1-p2; ctx.lineWidth=Math.max(0.1,3*(1-p2)); ctx.beginPath(); ctx.arc(0,0,DR_R*(0.05+0.95*eo(p2)),0,Math.PI*2); ctx.stroke(); }
   ctx.restore(); ctx.globalAlpha=1;
 }
 function updateFx(dt){
@@ -5262,7 +5256,7 @@ const MP_FX = {
   d0:()=>playFighterDefeat(), d1:()=>playFighterDefeatSlowRetro(), d2:()=>playFighterDefeatRichRetro(),
   rf:(a)=>playBulletReflectSoundFor({reflectSfx:a?"cyan":null}), bi:(a)=>playBulletImpactSound(!!a),
   se:(x,y,s)=>spawnExplosion(x,y,s), sm:(x,y)=>spawnMissileBlast(x,y), sf:(x,y)=>spawnHitFx(x,y), sb:(x,y)=>spawnFastBulletImpactFx(x,y), sw:(x,y)=>spawnWaterSplash(x,y),
-  mz:(x,y,a)=>spawnMuzzleFx(x,y,a), rs:(x,y,a)=>spawnReflectSparkFx(x,y,a), cf:(x,y,k)=>spawnConfettiFx(x,y,k),
+  mz:(x,y,a)=>spawnMuzzleFx(x,y,a), rs:(x,y,a)=>spawnReflectSparkFx(x,y,a), dr:(x,y,k)=>spawnDoubleRingFx(x,y,k),
 };
 function mpq(k,a,b,c){
   if(!mp.active || mp.role!=="host") return;
@@ -5711,7 +5705,7 @@ function mpRenderClear(anyDead){
     enemyFighterIcon(type).replace('COUNT_PLACEHOLDER', String(count))).join("");
   clearStageTitle.textContent = `次はステージ ${nextNum}`;
   clearStats.innerHTML = "";
-  nextStageInfo.innerHTML = `<span class="enemyLabel">${enemyClearLabel()}</span><div class="enemyIcons">${icons || "なし"}</div>`;
+  nextStageInfo.innerHTML = `<div class="enemyIcons">${icons || "なし"}</div>`;
   clearTapHint.textContent = "まもなく次のステージへ…";
   stageClearScreen.classList.remove("hidden");
 }
@@ -6293,7 +6287,7 @@ function render(){
   for(const e of explosions){
     if(e.flake){ drawFlakeBurst(e); continue; }
     if(e.muzzle){ drawMuzzleFx(e); continue; }
-    if(e.confetti){ drawConfettiFx(e); continue; }
+    if(e.dring){ drawDoubleRingFx(e); continue; }
     if(e.spark){ drawReflectSparkFx(e); continue; }
     if(e.iceBurst){ drawIceBurst(e); continue; }
     const prog = e.t/e.dur;
@@ -6594,6 +6588,12 @@ function flashStage(text){
 const stageClearScreen = document.getElementById("stageClearScreen");
 const clearStageTitle = document.getElementById("clearStageTitle");
 const clearStats = document.getElementById("clearStats");
+// クリア画面の残機表示：ゲーム中のHUDと同じハートアイコン（5個まで。6個以上はハート1個＋「×数字」）
+function clearLivesHtml(n){
+  const safe = Math.max(n,0), cnt = safe > MAX_HEART_ICONS ? 1 : safe;
+  const heart = '<svg class="heart" viewBox="0 0 16 14"><path d="M8 13 L2 7.5 C0 5.5 0.5 2 3.5 1.5 C5.5 1.2 7 2.3 8 3.8 C9 2.3 10.5 1.2 12.5 1.5 C15.5 2 16 5.5 14 7.5 Z" fill="#ff6f91" stroke="#ffffff" stroke-width="0.8"/></svg>';
+  return '<span class="clearLives">' + heart.repeat(cnt) + (safe > MAX_HEART_ICONS ? '<span class="livesCount">×' + safe + '</span>' : '') + '</span>';
+}
 const nextStageInfo = document.getElementById("nextStageInfo");
 const clearTapHint = document.getElementById("clearTapHint");
 
@@ -6618,9 +6618,6 @@ function enemySealIcon(type){
   // ゲーム中と同じ描画関数を使うため、敵の色・親子アザラシの見た目も一致する。
   drawSealFighter(c, 48, 48, 27, -Math.PI/2, -Math.PI/2, {color:t.color, dark:t.dark});
   return (ENEMY_SEAL_ICON_CACHE[type] = cv.toDataURL("image/png"));
-}
-function enemyClearLabel(){
-  return "敵アザラシ";
 }
 function enemyFighterIcon(type){
   const label = ENEMY_NAMES[type] || type;
@@ -6674,8 +6671,8 @@ function showStageClear(){
   ).join("");
 
   clearStageTitle.textContent = customPlayActive ? "オリジナルステージ CLEAR!" : (backToLib ? `ステージ ${stageNum} CLEAR!` : `次はステージ ${nextNum}`);
-  clearStats.innerHTML = `残機：${Math.max(lives,0)}` + (gotExtraLife ? `　　<span style="color:var(--amber);">ライフ+1！</span>` : "");
-  nextStageInfo.innerHTML = (customPlayActive || backToLib) ? "ステージクリア！タップしてステージ一覧に戻ります。" : `<span class="enemyLabel">${enemyClearLabel()}</span><div class="enemyIcons">${enemyIcons || "なし"}</div>`;
+  clearStats.innerHTML = clearLivesHtml(lives) + (gotExtraLife ? `　　<span style="color:var(--amber);">ライフ+1！</span>` : "");
+  nextStageInfo.innerHTML = (customPlayActive || backToLib) ? "ステージクリア！タップしてステージ一覧に戻ります。" : `<div class="enemyIcons">${enemyIcons || "なし"}</div>`;
   clearTapHint.textContent = backToLib ? "画面をタップするとステージ一覧へ" : "画面をタップすると次のステージへ";
   // ★次のステージのプレビュー画像（ステージ一覧と同じ絵。敵の色つき）
   if(!(customPlayActive || backToLib) && next && next.map){
